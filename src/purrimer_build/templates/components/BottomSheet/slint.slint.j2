@@ -2,6 +2,7 @@
 // {{ c.summary }}
 import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
 import { Button } from "button.slint";
+import { Icon } from "icon.slint";
 
 // A full-width button under the body. variant is "default", "primary" or "danger"; put the accepting one last.
 export struct BottomSheetAction {
@@ -15,6 +16,9 @@ export component BottomSheet inherits Rectangle {
     in-out property <bool> open;
     in property <string> title;
     in property <string> description;
+    // Octicon path commands (PurrimerIcons.alert-16) for a 32px tile before the title, coloured by tone.
+    in property <string> icon;
+    in property <string> tone: "accent";
     in property <[BottomSheetAction]> actions;
     // "auto" fits the content; "half" and "full" set the height.
     in property <string> size: "auto";
@@ -117,14 +121,29 @@ export component BottomSheet inherits Rectangle {
                     padding-top: 4px;
                     padding-bottom: 12px;
                     spacing: 4px;
+                    HorizontalLayout {
+                        spacing: 12px;
+                        if root.icon != "": Rectangle {
+                            width: 32px;
+                            height: 32px;
+                            y: (parent.height - self.height) / 2;
+                            border-radius: {{ "borderRadius-medium" | tok }};
+                            background: {% for t in ["info", "success", "attention", "danger"] %}root.tone == "{{ t }}" ? {{ ("bgColor-" ~ t ~ "-muted") | tok }} : {% endfor %}root.tone == "neutral" ? {{ "bgColor-neutral-muted" | tok }} : {{ "bgColor-accent-muted" | tok }};
+                            Icon {
+                                path: root.icon;
+                                color: {% for t in ["info", "success", "attention", "danger"] %}root.tone == "{{ t }}" ? {{ ("fgColor-" ~ t) | tok }} : {% endfor %}root.tone == "neutral" ? {{ "fgColor-muted" | tok }} : {{ "fgColor-accent" | tok }};
+                            }
+                        }
                     Text {
                         text: root.title;
                         wrap: word-wrap;
+                        vertical-alignment: center;
                         color: {{ "fgColor-default" | tok }};
                         font-family: {{ "text-mobile-title" | tok }}.font-family;
                         font-size: {{ "text-mobile-title" | tok }}.font-size;
                         font-weight: {{ "text-mobile-title" | tok }}.font-weight;
                         accessible-role: text;
+                    }
                     }
                     if root.description != "": Text {
                         text: root.description;

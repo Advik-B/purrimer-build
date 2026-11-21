@@ -6,8 +6,9 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from ..icons import paint_icon
 from ..motion import Spring, VelocityTracker, rubber_band
 from ..theme import theme
 
@@ -15,6 +16,38 @@ DISMISS_DISTANCE = 96
 FLICK_VELOCITY = 600
 GUTTER = {{ px("mobile-gutter") | int }}
 RADIUS = {{ px("borderRadius-xlarge") | num }}
+
+
+TONES = {
+{% for t in ["accent", "info", "success", "attention", "danger"] %}    "{{ t }}": ({{ ("fgColor-" ~ t) | tok }}, {{ ("bgColor-" ~ t ~ "-muted") | tok }}),
+{% endfor %}    "neutral": ({{ "fgColor-muted" | tok }}, {{ "bgColor-neutral-muted" | tok }}),
+}
+
+
+# The four message-box icons and the tone each one takes.
+ALERT_ICONS = {"information": ("info", "info"), "warning": ("alert", "attention"), "critical": ("stop", "danger"),
+               "question": ("question", "accent")}
+
+
+class IconTile(QWidget):
+    """A 32px rounded tile holding a 16px Octicon in a tone's colours."""
+
+    def __init__(self, icon: str, tone: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        known = ALERT_ICONS.get(icon)
+        self.icon = known[0] if known else icon
+        self.tone = tone or (known[1] if known else "accent")
+        self.setFixedSize(32, 32)
+        theme.changed.connect(self.update)
+
+    def paintEvent(self, event) -> None:
+        ink, fill = TONES.get(self.tone, TONES["accent"])
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(fill))
+        painter.drawRoundedRect(QRectF(self.rect()), {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+        paint_icon(painter, QRectF(8, 8, 16, 16), self.icon, theme.color(ink))
 
 
 def _muted_css() -> str:
@@ -64,13 +97,17 @@ class _Sheet(QWidget):
 class BottomSheet(QWidget):
     """A sheet that rises over its parent. Add widgets to `body` and buttons with `add_action`.
 
+    `icon` puts an Octicon in a tile before the title; information, warning, critical and question pick their own
+    glyph and tone.
+
     Drag the handle down, tap outside or press Escape to dismiss. With `inline`, the sheet is drawn in place
     as an ordinary widget, for docs and previews.
     """
 
     closed = Signal()
 
-    def __init__(self, parent: QWidget, title: str = "", description: str = "", size: str = "auto",
+    def __init__(self, parent: QWidget, title: str = "", description: str = "", icon: str = "", tone: str = "",
+                 size: str = "auto",
                  dismissible: bool = True, grabber: bool = True, inline: bool = False,
                  sheet_height: int | None = None) -> None:
         super().__init__(parent)
@@ -84,6 +121,10 @@ class BottomSheet(QWidget):
         self._open = inline
         self._offset = 0.0
         self.sheet = _Sheet(self)
+        # Qt's drop shadow is clipped to the widget, so an inline sheet goes without one.
+        self._shadow = None if inline else {{ "shadow-floating-large" | tok }}
+        if self._shadow:
+            theme.apply_shadow(self.sheet, self._shadow)
         outer = QVBoxLayout(self.sheet)
         outer.setContentsMargins(0, 21 if grabber else 8, 0, 0)
         outer.setSpacing(0)
@@ -94,7 +135,13 @@ class BottomSheet(QWidget):
         self.title.setWordWrap(True)
         self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
         self.title.setVisible(bool(title))
-        head.addWidget(self.title)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+        self.tile = IconTile(icon, tone) if icon else None
+        if self.tile:
+            title_row.addWidget(self.tile)
+        title_row.addWidget(self.title, 1)
+        head.addLayout(title_row)
         self.description = QLabel(description)
         self.description.setWordWrap(True)
         self.description.setStyleSheet(_muted_css())
@@ -197,6 +244,8 @@ class BottomSheet(QWidget):
             self.hide()
 
     def _restyle(self) -> None:
+        if self._shadow:
+            theme.apply_shadow(self.sheet, self._shadow)
         self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
         self.description.setStyleSheet(_muted_css())
         self.update()

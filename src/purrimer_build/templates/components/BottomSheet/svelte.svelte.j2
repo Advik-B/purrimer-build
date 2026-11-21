@@ -2,12 +2,15 @@
 <!-- {{ c.summary }} -->
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import Icon from "./Icon.svelte";
   import { Spring, VelocityTracker, buzz, motionKind, reducedMotion, rubberBand, springs } from "../motion";
 
   let {
     open = $bindable(false),
     title = "",
     description = "",
+    icon = "",
+    tone = "accent",
     size = "auto",
     dismissible = true,
     grabber = true,
@@ -20,6 +23,8 @@
     open?: boolean;
     title?: string;
     description?: string;
+    icon?: string;
+    tone?: "accent" | "info" | "success" | "attention" | "danger" | "neutral";
     size?: "auto" | "half" | "full";
     dismissible?: boolean;
     grabber?: boolean;
@@ -149,7 +154,14 @@
     {#if grabber}<span class="pm-sheet__grabber" aria-hidden="true"></span>{/if}
     {#if title}
       <div class="pm-sheet__head">
-        <h2 class="pm-sheet__title" id={titleId}>{title}</h2>
+        {#if icon}
+          <div class="pm-sheet__title-row">
+            <span class={["pm-sheet__tile", `pm-sheet__tile--${tone}`]} aria-hidden="true"><Icon name={icon} /></span>
+            <h2 class="pm-sheet__title" id={titleId}>{title}</h2>
+          </div>
+        {:else}
+          <h2 class="pm-sheet__title" id={titleId}>{title}</h2>
+        {/if}
         {#if description}<p class="pm-sheet__desc">{description}</p>{/if}
       </div>
     {/if}

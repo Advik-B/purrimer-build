@@ -8,6 +8,17 @@ T.Popup {
     id: control
     property string title
     property string description
+    // An Octicon in a 32px tile before the title, coloured by tone.
+    // information, warning, critical and question pick their own glyph and tone.
+    property string icon
+    property string tone
+    readonly property var alertIcons: ({ "information": ["info", "info"], "warning": ["alert", "attention"], "critical": ["stop", "danger"], "question": ["question", "accent"] })
+    readonly property string tileIcon: alertIcons[icon] ? alertIcons[icon][0] : icon
+    readonly property string tileTone: tone !== "" ? tone : alertIcons[icon] ? alertIcons[icon][1] : "accent"
+    readonly property var toneColors: ({
+{% for t in ["accent", "info", "success", "attention", "danger"] %}        "{{ t }}": [{{ ("fgColor-" ~ t) | tok }}, {{ ("bgColor-" ~ t ~ "-muted") | tok }}],
+{% endfor %}        "neutral": [{{ "fgColor-muted" | tok }}, {{ "bgColor-neutral-muted" | tok }}]
+    })
     // "auto" fits the content; "half" and "full" set the height.
     property string size: "auto"
     property bool dismissible: true
@@ -29,7 +40,7 @@ T.Popup {
     width: inline ? (parent ? parent.width : 360) : parent ? Math.min(parent.width, {{ "mobile-sheet-maxWidth" | tok }}) : 360
     x: inline || !parent ? 0 : (parent.width - width) / 2
     y: inline || !parent ? 0 : parent.height - height + Math.max(drag.value, 0)
-    implicitHeight: size === "half" && parent ? parent.height / 2 : size === "full" ? maxHeight : Math.min(column.implicitHeight, maxHeight)
+    implicitHeight: inline ? column.implicitHeight : size === "half" && parent ? parent.height / 2 : size === "full" ? maxHeight : Math.min(column.implicitHeight, maxHeight)
     padding: 0
     closePolicy: inline || !dismissible ? T.Popup.NoAutoClose : T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
 
@@ -100,14 +111,32 @@ T.Popup {
                 topPadding: control.title !== "" ? 4 : 0
                 bottomPadding: control.title !== "" ? 12 : 0
                 spacing: 4
-                Text {
+                Row {
                     visible: control.title !== ""
                     width: parent.width
-                    wrapMode: Text.Wrap
-                    text: control.title
-                    font: {{ "text-mobile-title" | tok }}
-                    color: {{ "fgColor-default" | tok }}
-                    Accessible.role: Accessible.Heading
+                    spacing: 12
+                    Rectangle {
+                        visible: control.icon !== ""
+                        width: 32
+                        height: 32
+                        radius: {{ "borderRadius-medium" | tok }}
+                        color: (control.toneColors[control.tileTone] || control.toneColors.accent)[1]
+                        anchors.verticalCenter: parent.verticalCenter
+                        Icon {
+                            anchors.centerIn: parent
+                            name: control.tileIcon
+                            color: (control.toneColors[control.tileTone] || control.toneColors.accent)[0]
+                        }
+                    }
+                    Text {
+                        width: parent.width - (control.icon !== "" ? 44 : 0)
+                        wrapMode: Text.Wrap
+                        text: control.title
+                        font: {{ "text-mobile-title" | tok }}
+                        color: {{ "fgColor-default" | tok }}
+                        anchors.verticalCenter: parent.verticalCenter
+                        Accessible.role: Accessible.Heading
+                    }
                 }
                 Text {
                     visible: control.description !== ""

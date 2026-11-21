@@ -37,8 +37,16 @@
                         IsVisible="{TemplateBinding ShowGrabber}" />
                 <StackPanel Margin="{{ px("mobile-gutter") | num }},4,{{ px("mobile-gutter") | num }},12" Spacing="4"
                             IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
-                  <TextBlock Text="{TemplateBinding Title}" TextWrapping="Wrap"
-                             FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}" />
+                  <DockPanel>
+                    <Border Name="PART_Tile" DockPanel.Dock="Left" Width="32" Height="32" Margin="0,0,12,0"
+                            CornerRadius="{{ px("borderRadius-medium") | num }}" Background="{{ "bgColor-accent-muted" | tok }}"
+                            IsVisible="{TemplateBinding IconName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                      <pm:Icon Name="PART_TileIcon" IconName="{TemplateBinding TileIcon}" Foreground="{{ "fgColor-accent" | tok }}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{TemplateBinding Title}" TextWrapping="Wrap" VerticalAlignment="Center"
+                               FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}" />
+                  </DockPanel>
                   <TextBlock Text="{TemplateBinding Description}" TextWrapping="Wrap" FontSize="14" LineHeight="20"
                              Foreground="{{ "fgColor-muted" | tok }}"
                              IsVisible="{TemplateBinding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
@@ -68,8 +76,37 @@
     <Style Selector="^:dragging /template/ StackPanel#PART_Handle">
       <Setter Property="Cursor" Value="SizeNorthSouth" />
     </Style>
+    <Style Selector="^:info /template/ Border#PART_Tile">
+      <Setter Property="Background" Value="{{ "bgColor-info-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:info /template/ pm|Icon#PART_TileIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-info" | tok }}" />
+    </Style>
+    <Style Selector="^:success /template/ Border#PART_Tile">
+      <Setter Property="Background" Value="{{ "bgColor-success-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:success /template/ pm|Icon#PART_TileIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-success" | tok }}" />
+    </Style>
+    <Style Selector="^:attention /template/ Border#PART_Tile">
+      <Setter Property="Background" Value="{{ "bgColor-attention-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:attention /template/ pm|Icon#PART_TileIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-attention" | tok }}" />
+    </Style>
+    <Style Selector="^:danger /template/ Border#PART_Tile">
+      <Setter Property="Background" Value="{{ "bgColor-danger-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:danger /template/ pm|Icon#PART_TileIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^:neutral /template/ Border#PART_Tile">
+      <Setter Property="Background" Value="{{ "bgColor-neutral-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:neutral /template/ pm|Icon#PART_TileIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
+    </Style>
     <Style Selector="^:inline">
-      <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="VerticalAlignment" Value="Top" />
     </Style>
     <Style Selector="^:inline /template/ Border#PART_Backdrop">

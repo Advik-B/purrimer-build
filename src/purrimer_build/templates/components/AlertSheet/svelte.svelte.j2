@@ -1,0 +1,78 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  // The four message-box icons and the tone each one takes.
+  export const alertIcons: Record<string, [string, "info" | "attention" | "danger" | "accent"]> = {
+    information: ["info", "info"],
+    warning: ["alert", "attention"],
+    critical: ["stop", "danger"],
+    question: ["question", "accent"],
+  };
+</script>
+
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import BottomSheet from "./BottomSheet.svelte";
+  import Button from "./Button.svelte";
+
+  type Tone = "accent" | "info" | "success" | "attention" | "danger" | "neutral";
+  type AlertButton = { label: string; variant?: "default" | "primary" | "danger" };
+
+  let {
+    open = $bindable(false),
+    title = "",
+    message = "",
+    description = "",
+    icon = "",
+    tone,
+    buttons = [],
+    dismissible = true,
+    inline = false,
+    onbutton,
+    onclose,
+    children,
+  }: {
+    open?: boolean;
+    title?: string;
+    message?: string;
+    description?: string;
+    icon?: string;
+    tone?: Tone;
+    buttons?: AlertButton[];
+    dismissible?: boolean;
+    inline?: boolean;
+    onbutton?: (index: number, button: AlertButton) => void;
+    onclose?: () => void;
+    children?: Snippet;
+  } = $props();
+
+  const known = $derived(alertIcons[icon]);
+
+  function press(index: number) {
+    onbutton?.(index, buttons[index]);
+    open = false;
+  }
+</script>
+
+{#snippet buttonStack()}
+  {#each buttons as button, i (i)}
+    <Button variant={button.variant ?? "default"} block label={button.label} onclick={() => press(i)} />
+  {/each}
+{/snippet}
+
+<BottomSheet
+  bind:open
+  {title}
+  {description}
+  icon={known ? known[0] : icon}
+  tone={tone ?? (known ? known[1] : "accent")}
+  {dismissible}
+  {inline}
+  {onclose}
+  actions={buttons.length ? buttonStack : undefined}
+>
+  <div class="pm-alert-sheet__body">
+    {#if message}<p class="pm-alert-sheet__message">{message}</p>{/if}
+    {@render children?.()}
+  </div>
+</BottomSheet>

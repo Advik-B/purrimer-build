@@ -1,0 +1,46 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QLabel, QWidget
+
+from ..theme import theme
+from .bottom_sheet import BottomSheet
+from .button import Button
+
+
+class AlertSheet(BottomSheet):
+    """A short decision in a bottom sheet. `buttons` are (label, variant) pairs from top to bottom: help and reset
+    first, destructive and rejecting next, the accepting one last. A press emits `button_clicked(index)` and closes.
+
+    `icon` takes information, warning, critical, question or any Octicon.
+    """
+
+    button_clicked = Signal(int)
+
+    def __init__(self, parent: QWidget, title: str, message: str = "", icon: str = "", tone: str = "",
+                 buttons: list[tuple[str, str]] | None = None, description: str = "", dismissible: bool = True,
+                 inline: bool = False) -> None:
+        super().__init__(parent, title, description, icon=icon, tone=tone, dismissible=dismissible, inline=inline)
+        self.body.setSpacing(12)
+        self.message = QLabel(message)
+        self.message.setWordWrap(True)
+        self._style_message()
+        self.message.setVisible(bool(message))
+        self.body.addWidget(self.message)
+        for index, (label, variant) in enumerate(buttons or []):
+            button = Button(label, variant or "default", block=True)
+            button.clicked.connect(lambda _checked=False, i=index: self._press(i))
+            self.add_action(button)
+        theme.changed.connect(self._style_message)
+
+    def _style_message(self) -> None:
+        self.message.setStyleSheet(theme.text_css({{ "text-body-medium" | tok }}) + "font-size: 16px; color: "
+                                   + theme.color({{ "fgColor-default" | tok }}).name() + ";")
+
+    def _press(self, index: int) -> None:
+        self.button_clicked.emit(index)
+        self.close_sheet()

@@ -14,7 +14,7 @@ namespace {{ ns }};
 
 // A sheet that rises from the bottom. Place it last in a Panel that covers the screen. Drag the handle down, tap the
 // scrim or press Escape to dismiss; IsInline draws it in place as an ordinary control, for docs and previews.
-[PseudoClasses(":open", ":inline", ":dragging")]
+[PseudoClasses(":open", ":inline", ":dragging", ":info", ":success", ":attention", ":danger", ":neutral")]
 [TemplatePart("PART_Sheet", typeof(Border))]
 [TemplatePart("PART_Handle", typeof(Control))]
 [TemplatePart("PART_Backdrop", typeof(Control))]
@@ -28,6 +28,19 @@ public class BottomSheet : ContentControl
 
     public static readonly StyledProperty<string?> DescriptionProperty =
         AvaloniaProperty.Register<BottomSheet, string?>(nameof(Description));
+
+    // An Octicon in a 32px tile before the title, coloured by Tone.
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<BottomSheet, string?>(nameof(IconName));
+
+    // accent, info, success, attention, danger or neutral. Empty picks the named icon's tone, or accent.
+    public static readonly StyledProperty<string> ToneProperty =
+        AvaloniaProperty.Register<BottomSheet, string>(nameof(Tone), "");
+
+    public static readonly DirectProperty<BottomSheet, string?> TileIconProperty =
+        AvaloniaProperty.RegisterDirect<BottomSheet, string?>(nameof(TileIcon), o => o.TileIcon);
+
+    private string? _tileIcon;
 
     public static readonly StyledProperty<object?> ActionsProperty =
         AvaloniaProperty.Register<BottomSheet, object?>(nameof(Actions));
@@ -91,6 +104,25 @@ public class BottomSheet : ContentControl
     {
         get => GetValue(DescriptionProperty);
         set => SetValue(DescriptionProperty, value);
+    }
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    // The glyph in the title tile: IconName, with information, warning, critical and question resolved.
+    public string? TileIcon
+    {
+        get => _tileIcon;
+        private set => SetAndRaise(TileIconProperty, ref _tileIcon, value);
+    }
+
+    public string Tone
+    {
+        get => GetValue(ToneProperty);
+        set => SetValue(ToneProperty, value);
     }
 
     // Buttons under the body, stacked full width with the accepting one last.
@@ -192,6 +224,7 @@ public class BottomSheet : ContentControl
             _backdrop.PointerPressed += OnBackdropPressed;
         PseudoClasses.Set(":inline", IsInline);
         PseudoClasses.Set(":open", IsOpen || IsInline);
+        UpdateTone();
         ApplySize();
         UpdatePosition();
     }
@@ -201,6 +234,8 @@ public class BottomSheet : ContentControl
         base.OnPropertyChanged(change);
         if (change.Property == IsOpenProperty || change.Property == IsInlineProperty)
         {
+            // An inline sheet lets its shadow spill out; an overlay clips the sheet as it slides off the bottom.
+            ClipToBounds = !IsInline;
             PseudoClasses.Set(":inline", IsInline);
             PseudoClasses.Set(":open", IsOpen || IsInline);
             if (IsOpen && change.Property == IsOpenProperty)
@@ -211,6 +246,10 @@ public class BottomSheet : ContentControl
                 Focus();
             }
             UpdatePosition();
+        }
+        else if (change.Property == ToneProperty || change.Property == IconNameProperty)
+        {
+            UpdateTone();
         }
         else if (change.Property == SizeProperty || change.Property == SheetHeightProperty || change.Property == BoundsProperty)
         {
@@ -227,6 +266,24 @@ public class BottomSheet : ContentControl
             e.Handled = true;
             Dismiss();
         }
+    }
+
+    private static (string Glyph, string Tone)? Known(string? icon) => icon switch
+    {
+        "information" => ("info", "info"),
+        "warning" => ("alert", "attention"),
+        "critical" => ("stop", "danger"),
+        "question" => ("question", "accent"),
+        _ => null,
+    };
+
+    private void UpdateTone()
+    {
+        var known = Known(IconName);
+        TileIcon = known?.Glyph ?? IconName;
+        var tone = !string.IsNullOrEmpty(Tone) ? Tone : known?.Tone ?? "accent";
+        foreach (var name in new[] { "info", "success", "attention", "danger", "neutral" })
+            PseudoClasses.Set(":" + name, tone == name);
     }
 
     private void ApplySize()

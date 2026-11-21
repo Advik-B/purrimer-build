@@ -29,6 +29,14 @@
 .pm-sheet__grabber { display: block; width: 36px; height: 5px; margin: 0 auto 8px; border-radius: {{ "borderRadius-full" | tok }}; background: {{ "borderColor-emphasis" | tok }}; }
 .pm-sheet__head { padding: 4px 0 12px; }
 .pm-sheet__title { margin: 0; font: 600 18px/24px var(--font-heading); }
+.pm-sheet__title-row { display: flex; align-items: center; gap: 12px; }
+.pm-sheet__tile { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: {{ "borderRadius-medium" | tok }}; }
+.pm-sheet__tile .pm-icon { fill: currentColor; }
+{% for tone in ["accent", "info", "success", "attention", "danger"] %}.pm-sheet__tile--{{ tone }} { color: {{ ("fgColor-" ~ tone) | tok }}; background: {{ ("bgColor-" ~ tone ~ "-muted") | tok }}; }
+{% endfor %}.pm-sheet__tile--neutral { color: {{ "fgColor-muted" | tok }}; background: {{ "bgColor-neutral-muted" | tok }}; }
+@supports (corner-shape: squircle) {
+  .pm-sheet__tile { border-radius: calc({{ "borderRadius-medium" | tok }} * 1.5); corner-shape: squircle; }
+}
 .pm-sheet__desc { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: {{ "fgColor-muted" | tok }}; }
 .pm-sheet__body { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; padding: 0 {{ "mobile-gutter" | tok }} 16px; }
 .pm-sheet__actions { flex: none; display: flex; flex-direction: column; gap: 8px; padding: 12px {{ "mobile-gutter" | tok }} 16px; border-top: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-muted" | tok }}; }

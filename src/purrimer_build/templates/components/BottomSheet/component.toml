@@ -19,6 +19,17 @@ type = "string"
 default = ""
 doc = "A line under the title in fgColor-muted."
 
+[props.icon]
+type = "icon"
+default = ""
+doc = "An Octicon in a 32px tile before the title."
+
+[props.tone]
+type = "enum"
+default = "accent"
+doc = "Colours the icon tile."
+values = ["accent", "info", "success", "attention", "danger", "neutral"]
+
 [props.size]
 type = "enum"
 default = "auto"

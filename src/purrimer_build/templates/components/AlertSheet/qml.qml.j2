@@ -1,0 +1,41 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+// A press emits buttonClicked(index) and closes the sheet. icon takes information, warning, critical, question or
+// any Octicon.
+BottomSheet {
+    id: alert
+    property string message
+    // Buttons top to bottom, { label, variant }: help and reset first, destructive and rejecting next, the
+    // accepting one last.
+    property var buttons: []
+    signal buttonClicked(int index)
+
+    Text {
+        visible: alert.message !== ""
+        width: parent ? parent.width : 0
+        wrapMode: Text.Wrap
+        text: alert.message
+        font.family: {{ "text-body-medium" | tok }}.family
+        font.pixelSize: 16
+        lineHeight: 24
+        lineHeightMode: Text.FixedHeight
+        color: {{ "fgColor-default" | tok }}
+    }
+
+    actions: Repeater {
+        model: alert.buttons
+        Button {
+            required property var modelData
+            required property int index
+            text: modelData.label
+            variant: modelData.variant || "default"
+            onClicked: {
+                alert.buttonClicked(index)
+                alert.close()
+            }
+        }
+    }
+}

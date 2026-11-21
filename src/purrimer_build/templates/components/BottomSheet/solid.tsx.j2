@@ -2,6 +2,7 @@
 // {{ c.summary }}
 import { Show, createEffect, createSignal } from "solid-js";
 import { Portal, type JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
 import { Spring, VelocityTracker, buzz, motionKind, reducedMotion, rubberBand, springs } from "../motion";
 
 const DISMISS = 96;
@@ -11,6 +12,8 @@ export type BottomSheetProps = {
   open: boolean;
   title?: string;
   description?: string;
+  icon?: string;
+  tone?: "accent" | "info" | "success" | "attention" | "danger" | "neutral";
   size?: "auto" | "half" | "full";
   dismissible?: boolean;
   grabber?: boolean;
@@ -139,7 +142,14 @@ export function BottomSheet(props: BottomSheetProps): JSX.Element {
         <Show when={props.grabber !== false}><span class="pm-sheet__grabber" aria-hidden="true" /></Show>
         <Show when={props.title}>
           <div class="pm-sheet__head">
-            <h2 class="pm-sheet__title" id={titleId}>{props.title}</h2>
+            <Show when={props.icon} fallback={<h2 class="pm-sheet__title" id={titleId}>{props.title}</h2>}>
+              {(icon) => (
+                <div class="pm-sheet__title-row">
+                  <span class={`pm-sheet__tile pm-sheet__tile--${props.tone ?? "accent"}`} aria-hidden="true"><Icon name={icon()} /></span>
+                  <h2 class="pm-sheet__title" id={titleId}>{props.title}</h2>
+                </div>
+              )}
+            </Show>
             <Show when={props.description}><p class="pm-sheet__desc">{props.description}</p></Show>
           </div>
         </Show>
