@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:WheelPicker VerticalAlignment="Top">
+    <pm:WheelColumn Label="Hour" Options="01,02,03,04,05,06,07,08,09,10,11,12" Value="07" Align="end" />
+    <pm:WheelColumn Label="Minute" Options="00,05,10,15,20,25,30,35,40,45,50,55" Value="30" />
+    <pm:WheelColumn Label="AM or PM" Options="AM,PM" Value="AM" Align="start" />
+  </pm:WheelPicker>
+</UserControl>

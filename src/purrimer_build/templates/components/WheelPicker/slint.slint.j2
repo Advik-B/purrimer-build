@@ -1,0 +1,161 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+
+// One wheel: its options, the chosen index, an optional fixed width (0px shares the space) and an align of
+// "start", "center" or "end".
+export struct WheelColumn {
+    label: string,
+    options: [string],
+    index: int,
+    width: length,
+    align: string,
+}
+
+component Wheel inherits Rectangle {
+    in property <WheelColumn> column;
+    out property <int> index: Math.clamp(Math.round(spring.value / 44), 0, Math.max(0, self.column.options.length - 1));
+    callback changed(int);
+    property <length> grab;
+    property <length> last-y;
+    property <duration> last-t;
+    property <float> velocity;
+    property <bool> dragging;
+    property <int> reported: -1;
+
+    public function go(i: int, v: float) {
+        spring.to(Math.clamp(i, 0, Math.max(0, root.column.options.length - 1)) * 44, v);
+    }
+
+    init => {
+        spring.set(root.column.index * 44);
+        root.reported = root.column.index;
+    }
+    changed index => {
+        if root.index != root.reported {
+            root.reported = root.index;
+            root.changed(root.index);
+        }
+    }
+
+    clip: true;
+    forward-focus: keys;
+    accessible-role: spinbox;
+    accessible-label: root.column.label;
+    accessible-value: root.column.options[root.index];
+
+    spring := PmSpring { precision: 0.5; }
+
+    for option[i] in root.column.options: Text {
+        property <length> top: root.height / 2 - 22px + i * 44px - spring.value * 1px;
+        property <float> distance: Math.abs(self.top + 22px - root.height / 2) / (root.height / 2);
+        x: 8px;
+        y: self.top;
+        width: root.width - 16px;
+        height: 44px;
+        text: option;
+        horizontal-alignment: root.column.align == "start" ? left : root.column.align == "end" ? right : center;
+        vertical-alignment: center;
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 20px;
+        font-weight: i == root.index ? 600 : 400;
+        color: i == root.index ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }};
+        opacity: Math.clamp(1.6 - 1.6 * self.distance, 0, 1);
+    }
+
+    TouchArea {
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                spring.stop();
+                root.grab = spring.value * 1px;
+                root.last-y = 0;
+                root.last-t = animation-tick();
+                root.velocity = 0;
+                root.dragging = false;
+            } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                if root.dragging {
+                    let projected = spring.value - root.velocity * 0.998 / 0.002 / 1000;
+                    root.go(Math.round(projected / 44), -root.velocity);
+                } else {
+                    // A tap on a row rolls it to the band.
+                    root.go(root.index + Math.round((self.mouse-y - root.height / 2) / 44px), 0);
+                }
+                root.dragging = false;
+            }
+        }
+        moved => {
+            let dy = self.mouse-y - self.pressed-y;
+            if !root.dragging && Math.abs(dy) > PurrimerMotion.slop {
+                root.dragging = true;
+            }
+            if root.dragging {
+                let now = animation-tick();
+                let dt = (now - root.last-t) / 1s;
+                if dt > 0 {
+                    root.velocity = (dy - root.last-y) / 1px / dt;
+                }
+                root.last-y = dy;
+                root.last-t = now;
+                let limit = Math.max(0px, (root.column.options.length - 1) * 44px);
+                let raw = root.grab - dy;
+                let next = raw < 0px ? PurrimerMotion.rubber-band(raw, root.height) : raw > limit ? limit + PurrimerMotion.rubber-band(raw - limit, root.height) : raw;
+                spring.set(next / 1px);
+            }
+        }
+        scroll-event(event) => {
+            if event.delta-y != 0 {
+                root.go(Math.round(spring.target / 44) + (event.delta-y > 0 ? -1 : 1), 0);
+                return accept;
+            }
+            reject
+        }
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.UpArrow { root.go(root.index - 1, 0); return accept; }
+            if event.text == Key.DownArrow { root.go(root.index + 1, 0); return accept; }
+            if event.text == Key.PageUp { root.go(root.index - 5, 0); return accept; }
+            if event.text == Key.PageDown { root.go(root.index + 5, 0); return accept; }
+            if event.text == Key.Home { root.go(0, 0); return accept; }
+            if event.text == Key.End { root.go(root.column.options.length - 1, 0); return accept; }
+            reject
+        }
+    }
+
+    if keys.has-focus: Rectangle {
+        border-radius: {{ "borderRadius-medium" | tok }};
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+}
+
+// Wheels for picking from an ordered set: one column for a list, several for a time or date. Each wheel rolls under a
+// finger or a dragged mouse with momentum and settles on a row; the mouse wheel, a tap on a row and the arrow keys
+// turn it too. changed(column, index) fires as a value changes.
+export component WheelPicker inherits Rectangle {
+    in property <[WheelColumn]> columns;
+    callback changed(int, int);
+
+    height: 220px;
+
+    Rectangle {
+        y: 88px;
+        height: 44px;
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: {{ "bgColor-neutral-muted" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: {{ "borderColor-default" | tok }};
+    }
+
+    HorizontalLayout {
+        spacing: 4px;
+        for column[c] in root.columns: Wheel {
+            column: column;
+            horizontal-stretch: column.width > 0px ? 0 : 1;
+            min-width: column.width;
+            max-width: column.width > 0px ? column.width : 100000px;
+            changed(i) => { root.changed(c, i); }
+        }
+    }
+}

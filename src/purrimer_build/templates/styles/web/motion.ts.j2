@@ -150,6 +150,9 @@ export class VelocityTracker {
 
 // Light haptic tick on devices that support it.
 export function buzz(ms = 8): void {
+  // Browsers refuse (and log) vibration before the person has interacted with the page.
+  const activation = typeof navigator !== "undefined" ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation : undefined;
+  if (activation && !activation.hasBeenActive) return;
   if (typeof navigator !== "undefined" && "vibrate" in navigator) {
     try {
       navigator.vibrate(ms);
@@ -542,6 +545,61 @@ export function wireCarousel(parts: CarouselParts): { go: (index: number, smooth
       track.removeEventListener("pointermove", move);
       track.removeEventListener("pointerup", up);
       track.removeEventListener("pointercancel", up);
+    },
+  };
+}
+
+// Wires one WheelPicker column: the row on the band is the value, the phone ticks as each row reaches it (firmer at
+// the ends), and keys step the wheel. Returns go(index) and a cleanup.
+export function wireWheel(column: HTMLElement, onIndex: (index: number) => void): { go: (index: number, smooth?: boolean) => void; dispose: () => void } {
+  const ROW = 44;
+  const count = () => column.children.length;
+  let current = -1;
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const index = Math.max(0, Math.min(count() - 1, Math.round(column.scrollTop / ROW)));
+    if (index === current) return;
+    const first = current === -1;
+    current = index;
+    Array.from(column.children).forEach((row, i) => row.classList.toggle("pm-wheel__item--on", i === index));
+    // The wheel's starting position is not a change.
+    if (first) return;
+    buzz(index === 0 || index === count() - 1 ? 14 : 5);
+    onIndex(index);
+  };
+  const onScroll = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  const go = (index: number, smooth = true) => {
+    const target = Math.max(0, Math.min(count() - 1, index)) * ROW;
+    column.scrollTo({ top: target, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
+  };
+  const onKey = (e: KeyboardEvent) => {
+    const steps: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, PageUp: -5, PageDown: 5 };
+    let next: number | undefined;
+    if (e.key in steps) next = Math.max(0, current) + steps[e.key];
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = count() - 1;
+    if (next === undefined) return;
+    e.preventDefault();
+    go(next);
+  };
+  const onClick = (e: MouseEvent) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".pm-wheel__item");
+    if (row && row.parentElement === column) go(Array.from(column.children).indexOf(row));
+  };
+  column.addEventListener("scroll", onScroll, { passive: true });
+  column.addEventListener("keydown", onKey);
+  column.addEventListener("click", onClick);
+  update();
+  return {
+    go,
+    dispose: () => {
+      cancelAnimationFrame(frame);
+      column.removeEventListener("scroll", onScroll);
+      column.removeEventListener("keydown", onKey);
+      column.removeEventListener("click", onClick);
     },
   };
 }

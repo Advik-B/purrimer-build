@@ -1,0 +1,199 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPen
+from PySide6.QtWidgets import QHBoxLayout, QWidget
+
+from ..motion import SLOP, Spring, VelocityTracker, project, rubber_band
+from ..theme import theme
+
+ROW = 44
+ROWS = 5
+
+
+@dataclass
+class WheelColumn:
+    label: str
+    # Values, or (value, label) pairs.
+    options: list[str | tuple[str, str]]
+    value: str | None = None
+    width: int | None = None
+    align: str = "center"
+
+
+class _Wheel(QWidget):
+    changed = Signal(str)
+
+    def __init__(self, column: WheelColumn) -> None:
+        super().__init__()
+        self._column = column
+        self._values = [o if isinstance(o, str) else o[0] for o in column.options]
+        self._labels = [o if isinstance(o, str) else o[1] for o in column.options]
+        start = self._values.index(column.value) if column.value in self._values else 0
+        self._index = start
+        self._offset = Spring(start * ROW, precision=0.5, parent=self)
+        self._offset.changed.connect(self._moved)
+        self._tracker = VelocityTracker()
+        self._origin: QPointF | None = None
+        self._origin_offset = 0.0
+        self._dragging = False
+        self._font = theme.font({{ "text-body-medium" | tok }})
+        self._font.setPixelSize(20)
+        self._bold = QFont(self._font)
+        self._bold.setWeight(QFont.Weight.DemiBold)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(column.label)
+        self.setFixedHeight(ROW * ROWS)
+        if column.width:
+            self.setFixedWidth(column.width)
+        theme.changed.connect(self.update)
+
+    def value(self) -> str:
+        return self._values[self._index]
+
+    def set_value(self, value: str) -> None:
+        if value in self._values:
+            self.go(self._values.index(value))
+
+    def go(self, index: int, velocity: float | None = None) -> None:
+        index = max(0, min(index, len(self._values) - 1))
+        self._offset.to(index * ROW, velocity)
+
+    def _moved(self, value: float) -> None:
+        index = max(0, min(len(self._values) - 1, round(value / ROW)))
+        if index != self._index:
+            self._index = index
+            self.setAccessibleDescription(self._labels[index])
+            self.changed.emit(self._values[index])
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._column.width or 72, ROW * ROWS)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._offset.stop()
+        self._origin = event.position()
+        self._origin_offset = self._offset.value
+        self._dragging = False
+        self._tracker.reset()
+        self._tracker.add(event.position())
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._tracker.add(event.position())
+        dy = event.position().y() - self._origin.y()
+        if not self._dragging and abs(dy) > SLOP:
+            self._dragging = True
+        if self._dragging:
+            offset = self._origin_offset - dy
+            limit = (len(self._values) - 1) * ROW
+            if offset < 0:
+                offset = rubber_band(offset, self.height())
+            elif offset > limit:
+                offset = limit + rubber_band(offset - limit, self.height())
+            self._offset.set(offset)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._origin = None
+        if self._dragging:
+            velocity = -self._tracker.velocity().y()
+            self.go(round((self._offset.value + project(velocity)) / ROW), velocity)
+        else:
+            # A tap on a row rolls it to the band.
+            self.go(self._index + round((event.position().y() - self.height() / 2) / ROW))
+        self._dragging = False
+
+    def wheelEvent(self, event) -> None:
+        steps = -event.angleDelta().y() / 120
+        if steps:
+            self.go(round(self._offset.target / ROW + steps))
+
+    def keyPressEvent(self, event) -> None:
+        moves = {Qt.Key.Key_Up: -1, Qt.Key.Key_Down: 1, Qt.Key.Key_PageUp: -5, Qt.Key.Key_PageDown: 5}
+        if event.key() in moves:
+            self.go(self._index + moves[event.key()])
+        elif event.key() == Qt.Key.Key_Home:
+            self.go(0)
+        elif event.key() == Qt.Key.Key_End:
+            self.go(len(self._values) - 1)
+        else:
+            super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        center = self.height() / 2
+        muted = theme.color({{ "fgColor-muted" | tok }})
+        ink = theme.color({{ "fgColor-default" | tok }})
+        align = {"start": Qt.AlignmentFlag.AlignLeft, "end": Qt.AlignmentFlag.AlignRight}.get(
+            self._column.align, Qt.AlignmentFlag.AlignHCenter)
+        for i, label in enumerate(self._labels):
+            y = center - ROW / 2 + i * ROW - self._offset.value
+            if y < -ROW or y > self.height():
+                continue
+            distance = abs(y + ROW / 2 - center) / center
+            on = i == self._index
+            color = QColor(ink if on else muted)
+            # Rows fade towards the edges of the wheel.
+            color.setAlphaF(color.alphaF() * max(0.0, min(1.0, 1.6 - 1.6 * distance)))
+            painter.setPen(color)
+            painter.setFont(self._bold if on else self._font)
+            painter.drawText(QRectF(8, y, self.width() - 16, ROW), align | Qt.AlignmentFlag.AlignVCenter, label)
+        if self.hasFocus():
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), {{ px("borderRadius-medium") | num }},
+                                    {{ px("borderRadius-medium") | num }})
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.update()
+
+
+class WheelPicker(QWidget):
+    """Wheels for picking from an ordered set: one column for a list, several for a time or date. Each wheel rolls
+    under a finger or a dragged mouse with momentum and settles on a row; the mouse wheel, a tap on a row and the arrow
+    keys turn it too. `changed(column, value)` fires as a value changes.
+    """
+
+    changed = Signal(int, str)
+
+    def __init__(self, columns: list[WheelColumn], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.wheels: list[_Wheel] = []
+        for index, column in enumerate(columns):
+            wheel = _Wheel(column)
+            wheel.changed.connect(lambda value, i=index: self.changed.emit(i, value))
+            layout.addWidget(wheel, 0 if column.width else 1)
+            self.wheels.append(wheel)
+        self.setFixedHeight(ROW * ROWS)
+        theme.changed.connect(self.update)
+
+    def values(self) -> list[str]:
+        return [w.value() for w in self.wheels]
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        band = QRectF(0.5, ROW * 2 + 0.5, self.width() - 1, ROW - 1)
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), {{ px("borderWidth-thin") | num }}))
+        painter.setBrush(theme.color({{ "bgColor-neutral-muted" | tok }}))
+        painter.drawRoundedRect(band, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})

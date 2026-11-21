@@ -1,0 +1,47 @@
+/* Scroll-snap columns over a band that marks the chosen row: five 44px rows, fading towards the edges. */
+.pm-wheel { position: relative; display: flex; gap: 4px; height: 220px; user-select: none; -webkit-user-select: none; }
+.pm-wheel__band {
+  position: absolute;
+  top: 88px;
+  left: 0;
+  right: 0;
+  height: 44px;
+  box-sizing: border-box;
+  background: {{ "bgColor-neutral-muted" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  pointer-events: none;
+}
+.pm-wheel__column {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  height: 100%;
+  padding: 88px 0;
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: none;
+  outline: none;
+  mask-image: linear-gradient(to bottom, transparent, #000 35%, #000 65%, transparent);
+}
+.pm-wheel__column::-webkit-scrollbar { display: none; }
+.pm-wheel__column:focus-visible { mask-image: none; outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -2px; border-radius: {{ "borderRadius-medium" | tok }}; }
+.pm-wheel__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 8px;
+  font: 400 20px/28px var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: {{ "fgColor-muted" | tok }};
+  scroll-snap-align: center;
+  cursor: pointer;
+  transition: color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-wheel__item--start { justify-content: flex-start; }
+.pm-wheel__item--end { justify-content: flex-end; }
+.pm-wheel__item--on { font-weight: 600; color: {{ "fgColor-default" | tok }}; }

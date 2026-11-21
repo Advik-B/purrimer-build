@@ -1,0 +1,71 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, createEffect, createSignal, onCleanup } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { wireWheel } from "../motion";
+
+export type WheelOption = string | { value: string; label: string };
+export type WheelColumn = {
+  options: WheelOption[];
+  value?: string;
+  label: string;
+  // A CSS width such as "64px"; columns share the space by default.
+  width?: string;
+  align?: "start" | "center" | "end";
+};
+
+const valueOf = (o: WheelOption) => (typeof o === "string" ? o : o.value);
+const labelOf = (o: WheelOption) => (typeof o === "string" ? o : o.label);
+
+function Column(props: { column: WheelColumn; onChange?: (value: string) => void }): JSX.Element {
+  const [chosen, setChosen] = createSignal(0);
+  let wired: ReturnType<typeof wireWheel> | undefined;
+  const attach = (node: HTMLDivElement) => {
+    queueMicrotask(() => {
+      wired = wireWheel(node, (i) => {
+        setChosen(i);
+        const value = valueOf(props.column.options[i]);
+        if (value !== props.column.value) props.onChange?.(value);
+      });
+      const start = Math.max(0, props.column.options.findIndex((o) => valueOf(o) === props.column.value));
+      wired.go(start, false);
+      setChosen(start);
+    });
+  };
+  onCleanup(() => wired?.dispose());
+  createEffect(
+    () => props.column.value,
+    (value) => {
+      const wanted = props.column.options.findIndex((o) => valueOf(o) === value);
+      if (wired && wanted >= 0 && wanted !== chosen()) wired.go(wanted);
+    },
+  );
+  const align = () => props.column.align;
+  return (
+    <div
+      ref={attach}
+      class="pm-wheel__column"
+      style={ { flex: props.column.width ? `0 0 ${props.column.width}` : undefined } }
+      role="spinbutton"
+      tabindex="0"
+      aria-label={props.column.label}
+      aria-valuenow={chosen()}
+      aria-valuemin={0}
+      aria-valuemax={props.column.options.length - 1}
+      aria-valuetext={labelOf(props.column.options[chosen()] ?? "")}
+    >
+      <For each={props.column.options}>
+        {(option) => <div class={align() && align() !== "center" ? `pm-wheel__item pm-wheel__item--${align()}` : "pm-wheel__item"}>{labelOf(option)}</div>}
+      </For>
+    </div>
+  );
+}
+
+export function WheelPicker(props: { columns: WheelColumn[]; onChange?: (column: number, value: string) => void }): JSX.Element {
+  return (
+    <div class="pm-wheel">
+      <div class="pm-wheel__band" aria-hidden="true" />
+      <For each={props.columns}>{(column, c) => <Column column={column} onChange={(v) => props.onChange?.(c(), v)} />}</For>
+    </div>
+  );
+}
