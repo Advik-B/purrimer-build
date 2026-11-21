@@ -1,0 +1,79 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component Radio inherits HorizontalLayout {
+    in property <string> text;
+    in-out property <bool> checked;
+    in property <bool> enabled: true;
+    accessible-role: radio-button;
+    accessible-checkable: true;
+    accessible-checked: checked;
+    accessible-action-default => { self.activate(); }
+
+    // A radio only turns itself on; the group turns the others off in its toggled handler.
+    function activate() {
+        if (!root.checked) {
+            root.checked = true;
+            root.toggled(true);
+        }
+    }
+
+    callback toggled(bool);
+    out property <bool> has-focus: focus.has-focus;
+    min-height: 20px;
+    accessible-label: text;
+    accessible-enabled: enabled;
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.activate(); }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " ") {
+                root.activate();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    spacing: 8px;
+    alignment: start;
+
+    Rectangle {
+        width: 16px;
+        height: 16px;
+        y: (parent.height - self.height) / 2;
+        border-radius: 8px;
+        background: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.checked ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.checked ? self.background : touch.has-hover ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
+        Rectangle {
+            width: root.checked ? 6px : 0px;
+            height: self.width;
+            border-radius: 3px;
+            background: {{ "fgColor-onEmphasis" | tok }};
+            animate width { duration: {{ "duration-fast" | tok }}; }
+        }
+        if root.has-focus: Rectangle {
+            x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;
+            border-radius: 12px;
+            border-width: {{ "borderWidth-thick" | tok }};
+            border-color: {{ "focus-outlineColor" | tok }};
+        }
+    }
+
+    Text {
+        text: root.text;
+        color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 14px;
+        vertical-alignment: center;
+    }
+}

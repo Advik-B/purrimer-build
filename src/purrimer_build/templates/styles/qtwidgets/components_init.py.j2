@@ -1,0 +1,11 @@
+"""{{ note }}"""
+
+{% for c in done | sort(attribute="name") %}
+from .{{ c.name | snake }} import {{ c.name }}
+{% endfor %}
+
+__all__ = [
+{% for c in done | sort(attribute="name") %}
+    "{{ c.name }}",
+{% endfor %}
+]

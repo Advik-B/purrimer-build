@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+// Pass path commands from PurrimerIcons, such as PurrimerIcons.search-16, with box 16 (or 24 for the -24 set).
+export component Icon {
+    in property <string> path;
+    in property <length> size: 16px;
+    in property <float> box: 16;
+    in property <brush> color: {{ "fgColor-default" | tok }};
+    in property <string> label;
+    width: size;
+    height: size;
+    accessible-role: image;
+    accessible-label: label;
+
+    if root.path != "": Path {
+        width: root.size;
+        height: root.size;
+        viewbox-width: root.box;
+        viewbox-height: root.box;
+        commands: root.path;
+        fill: root.color;
+        stroke-width: 0px;
+    }
+}

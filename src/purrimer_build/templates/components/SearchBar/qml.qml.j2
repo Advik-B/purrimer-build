@@ -1,0 +1,43 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.TextField {
+    id: control
+    implicitWidth: 320
+    implicitHeight: {{ "control-large-size" | tok }}
+    leftPadding: 36
+    rightPadding: text ? 40 : 12
+    verticalAlignment: TextInput.AlignVCenter
+    placeholderText: "{{ c.spec.props.placeholder.default }}"
+    placeholderTextColor: {{ "fgColor-muted" | tok }}
+    font: {{ "text-mobile-body" | tok }}
+    color: {{ "fgColor-default" | tok }}
+    selectionColor: {{ "bgColor-accent-muted" | tok }}
+    inputMethodHints: Qt.ImhNoPredictiveText
+    Accessible.name: "Search"
+
+    background: Rectangle {
+        radius: {{ "borderRadius-medium" | tok }}
+        color: {{ "bgColor-muted" | tok }}
+        border.width: control.activeFocus ? {{ "borderWidth-thick" | tok }} : 0
+        border.color: {{ "focus-outlineColor" | tok }}
+
+        Icon { x: 12; anchors.verticalCenter: parent.verticalCenter; name: "search"; color: {{ "fgColor-muted" | tok }} }
+        IconButton {
+            visible: control.text !== ""
+            anchors.right: parent.right
+            anchors.rightMargin: 2
+            anchors.verticalCenter: parent.verticalCenter
+            iconName: "x"
+            label: "Clear"
+            variant: "invisible"
+            onClicked: {
+                control.clear()
+                control.forceActiveFocus()
+            }
+        }
+    }
+}

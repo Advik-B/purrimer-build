@@ -1,0 +1,55 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property string text
+    property string tone: "accent"
+    property string iconName
+    property bool removable: false
+    signal removed()
+
+    readonly property var inks: ({
+        "neutral": [{{ "bgColor-neutral-muted" | tok }}, {{ "fgColor-default" | tok }}],
+        "accent": [{{ "bgColor-accent-muted" | tok }}, {{ "fgColor-accent" | tok }}],
+        "success": [{{ "bgColor-success-muted" | tok }}, {{ "fgColor-success" | tok }}],
+        "attention": [{{ "bgColor-attention-muted" | tok }}, {{ "fgColor-attention" | tok }}],
+        "severe": [{{ "bgColor-severe-muted" | tok }}, {{ "fgColor-severe" | tok }}],
+        "danger": [{{ "bgColor-danger-muted" | tok }}, {{ "fgColor-danger" | tok }}],
+        "done": [{{ "bgColor-done-muted" | tok }}, {{ "fgColor-done" | tok }}],
+        "info": [{{ "bgColor-info-muted" | tok }}, {{ "fgColor-info" | tok }}]
+    })
+    readonly property color ink: (inks[tone] || inks["accent"])[1]
+
+    implicitWidth: row.implicitWidth + 20
+    implicitHeight: 24
+    radius: height / 2
+    color: (inks[tone] || inks["accent"])[0]
+
+    Row {
+        id: row
+        anchors.centerIn: parent
+        spacing: 4
+        Icon { name: root.iconName; size: 16; scale: 0.75; color: root.ink; visible: root.iconName !== ""; anchors.verticalCenter: parent.verticalCenter }
+        Text {
+            text: root.text
+            font.family: {{ "text-caption" | tok }}.family
+            font.pixelSize: 12
+            font.weight: Font.Medium
+            color: root.ink
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Item {
+            visible: root.removable
+            width: 16
+            height: 16
+            anchors.verticalCenter: parent.verticalCenter
+            Accessible.role: Accessible.Button
+            Accessible.name: "Remove " + root.text
+            Icon { anchors.centerIn: parent; name: "x"; scale: 0.75; color: root.ink }
+            TapHandler { onTapped: root.removed() }
+        }
+    }
+}

@@ -1,0 +1,15 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type ListSectionProps = { header?: string; variant?: "inset" | "plain"; children?: JSX.Element };
+
+export function ListSection(props: ListSectionProps): JSX.Element {
+  return (
+    <section class={["pm-list-section", `pm-list-section--${props.variant ?? "inset"}`]}>
+      <Show when={props.header}><h2 class="pm-list-section__header">{props.header}</h2></Show>
+      <div class="pm-list-section__rows" role="list">{props.children}</div>
+    </section>
+  );
+}

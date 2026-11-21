@@ -1,0 +1,101 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFontMetrics, QPainter
+from PySide6.QtWidgets import QPushButton, QSizePolicy, QStyle, QStyleOptionButton, QStylePainter, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+VARIANTS = ("default", "primary", "danger", "invisible")
+SIZES = ("small", "medium", "large")
+GAP = {{ px("control-medium-gap") | int }}
+
+
+def _repolish(widget: QWidget) -> None:
+    widget.style().unpolish(widget)
+    widget.style().polish(widget)
+    widget.update()
+
+
+class Button(QPushButton):
+    """A labelled button. The stylesheet draws the frame from variant and size; icons are painted here."""
+
+    def __init__(self, text: str = "", variant: str = "default", size: str = "medium", leading_icon: str | None = None,
+                 trailing_icon: str | None = None, block: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self._leading = leading_icon
+        self._trailing = trailing_icon
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.set_variant(variant)
+        self.set_size(size)
+        if block:
+            self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        theme.changed.connect(self.update)
+
+    def set_variant(self, variant: str) -> None:
+        if variant not in VARIANTS:
+            raise ValueError(f"variant must be one of {VARIANTS}")
+        self.setProperty("variant", variant)
+        _repolish(self)
+
+    def set_size(self, size: str) -> None:
+        if size not in SIZES:
+            raise ValueError(f"size must be one of {SIZES}")
+        self.setProperty("size", size)
+        _repolish(self)
+
+    def set_icons(self, leading: str | None = None, trailing: str | None = None) -> None:
+        self._leading = leading
+        self._trailing = trailing
+        self.updateGeometry()
+        self.update()
+
+    def _icon_count(self) -> int:
+        return int(bool(self._leading)) + int(bool(self._trailing))
+
+    def sizeHint(self) -> QSize:
+        hint = super().sizeHint()
+        return QSize(hint.width() + self._icon_count() * (16 + GAP), hint.height())
+
+    def _ink(self):
+        variant = self.property("variant") or "default"
+        if not self.isEnabled():
+            token = {{ "fgColor-disabled" | tok }}
+        elif variant == "primary":
+            token = {{ "fgColor-onEmphasis" | tok }}
+        elif variant == "danger":
+            token = {{ "fgColor-onEmphasis" | tok }} if self.isDown() or self.underMouse() else {{ "fgColor-danger" | tok }}
+        else:
+            token = {{ "fgColor-default" | tok }}
+        return theme.color(token)
+
+    def paintEvent(self, event) -> None:
+        if not self._icon_count():
+            super().paintEvent(event)
+            return
+        option = QStyleOptionButton()
+        self.initStyleOption(option)
+        text = option.text
+        option.text = ""
+        painter = QStylePainter(self)
+        painter.drawControl(QStyle.ControlElement.CE_PushButton, option)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        metrics = QFontMetrics(self.font())
+        text_w = metrics.horizontalAdvance(text)
+        content = text_w + self._icon_count() * (16 + GAP)
+        x = (self.width() - content) / 2
+        top = (self.height() - 16) / 2
+        ink = self._ink()
+        if self._leading:
+            paint_icon(painter, QRectF(x, top, 16, 16), self._leading, ink)
+            x += 16 + GAP
+        painter.setPen(ink)
+        painter.drawText(QRectF(x, 0, text_w + 1, self.height()), Qt.AlignmentFlag.AlignVCenter, text)
+        x += text_w + GAP
+        if self._trailing:
+            paint_icon(painter, QRectF(x, top, 16, 16), self._trailing, ink)

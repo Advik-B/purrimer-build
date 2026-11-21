@@ -1,0 +1,14 @@
+name = "Tabs"
+group = "Navigation"
+order = 61
+summary = "Document tabs whose current tab joins the panel under it."
+
+[props.items]
+type = "list"
+default = []
+doc = "Tab labels."
+
+[props.selected]
+type = "int"
+default = 0
+doc = "Index of the current tab."

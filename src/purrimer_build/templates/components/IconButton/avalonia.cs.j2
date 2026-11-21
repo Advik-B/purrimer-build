@@ -1,0 +1,52 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A square button with one icon; Label is read by assistive tech and shown as a tooltip.
+public class IconButton : Button
+{
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<IconButton, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<IconButton, string?>(nameof(Label));
+
+    public static readonly StyledProperty<double> IconSizeProperty =
+        AvaloniaProperty.Register<IconButton, double>(nameof(IconSize), 16);
+
+    static IconButton()
+    {
+        LabelProperty.Changed.AddClassHandler<IconButton>((b, e) =>
+        {
+            global::Avalonia.Automation.AutomationProperties.SetName(b, e.NewValue as string);
+            ToolTip.SetTip(b, e.NewValue);
+        });
+    }
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public double IconSize
+    {
+        get => GetValue(IconSizeProperty);
+        set => SetValue(IconSizeProperty, value);
+    }
+}

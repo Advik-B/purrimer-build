@@ -1,0 +1,24 @@
+name = "Checkbox"
+group = "Forms"
+order = 21
+summary = "A box that is checked, unchecked or indeterminate, with its label."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Text beside the box."
+
+[props.checked]
+type = "bool"
+default = false
+doc = "Checked state."
+
+[props.indeterminate]
+type = "bool"
+default = false
+doc = "Shows a dash; wins over checked."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the control."

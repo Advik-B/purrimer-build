@@ -1,0 +1,46 @@
+.pm-select { position: relative; display: flex; flex-direction: column; gap: 4px; }
+.pm-select__label { font: 600 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; }
+.pm-select__field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  height: {{ "control-medium-size" | tok }};
+  padding: 0 8px 0 {{ "control-medium-paddingInline-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "control-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-inset" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+.pm-select__field svg { width: 16px; height: 16px; fill: {{ "fgColor-muted" | tok }}; transition: rotate {{ "duration-base" | tok }} {{ "easing-standard" | tok }}; }
+.pm-select__field:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -1px; }
+.pm-select__placeholder { color: {{ "fgColor-muted" | tok }}; }
+.pm-select--open .pm-select__field { border-color: {{ "borderColor-default" | tok }}; border-bottom-left-radius: 0; border-bottom-right-radius: 0; background: {{ "overlay-bgColor" | tok }}; box-shadow: none; }
+.pm-select--open .pm-select__field svg { rotate: 180deg; }
+.pm-select__list {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 280px;
+  margin: -1px 0 0;
+  padding: 4px;
+  overflow: auto;
+  list-style: none;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-top: 0;
+  border-radius: 0 0 {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }};
+  background: {{ "overlay-bgColor" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+}
+.pm-select__option { display: flex; align-items: center; justify-content: space-between; min-height: 32px; padding: 0 8px; border-radius: {{ "borderRadius-small" | tok }}; font: 400 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; cursor: pointer; }
+.pm-select__option svg { width: 16px; height: 16px; fill: {{ "fgColor-accent" | tok }}; }
+.pm-select__option--active { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+.pm-select__option[aria-selected="true"] { font-weight: 600; }
+.pm-select--disabled .pm-select__field { background: {{ "bgColor-disabled" | tok }}; border-color: {{ "bgColor-disabled" | tok }}; color: {{ "fgColor-disabled" | tok }}; box-shadow: none; cursor: not-allowed; }
+[data-density="touch"] .pm-select__field { height: {{ "touch-target-min" | tok }}; font-size: 16px; }

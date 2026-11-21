@@ -1,0 +1,54 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF
+from PySide6.QtGui import QPainter, QPen
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+from ..theme import theme
+
+
+class _Group(QWidget):
+    def __init__(self, inset: bool) -> None:
+        super().__init__()
+        self._inset = inset
+        theme.changed.connect(self.update)
+
+    def paintEvent(self, event) -> None:
+        if not self._inset:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+        painter.setBrush(theme.color({{ "bgColor-default" | tok }}))
+        radius = {{ px("borderRadius-large") | num }}
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+
+
+class ListSection(QWidget):
+    """A titled group of ListItem rows, inset into a rounded card or plain edge to edge."""
+
+    def __init__(self, header: str = "", inset: bool = True, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        gutter = {{ px("mobile-gutter") | int }}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(gutter if inset else 0, 0, gutter if inset else 0, {{ px("mobile-section-gap") | int }})
+        layout.setSpacing(6)
+        self.header = QLabel(header)
+        self.header.setProperty("role", "muted")
+        self.header.setStyleSheet("font-weight: 600;")
+        self.header.setContentsMargins(0 if inset else gutter, 0, 0, 0)
+        self.header.setVisible(bool(header))
+        layout.addWidget(self.header)
+        self.group = _Group(inset)
+        self.rows = QVBoxLayout(self.group)
+        self.rows.setContentsMargins(0, 1, 0, 1)
+        self.rows.setSpacing(0)
+        layout.addWidget(self.group)
+
+    def add_item(self, item: QWidget) -> QWidget:
+        self.rows.addWidget(item)
+        return item

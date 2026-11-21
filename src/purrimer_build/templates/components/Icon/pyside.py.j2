@@ -1,0 +1,43 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+
+class Icon(QWidget):
+    """An Octicon drawn in a colour token; it repaints when the theme changes."""
+
+    def __init__(self, name: str, size: int = 16, color: str = {{ "fgColor-default" | tok }},
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._name = name
+        self._size = size
+        self._color = color
+        self.setFixedSize(QSize(size, size))
+        theme.changed.connect(self.update)
+
+    def name(self) -> str:
+        return self._name
+
+    def set_name(self, name: str) -> None:
+        self._name = name
+        self.update()
+
+    def set_color(self, token: str) -> None:
+        self._color = token
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        if not self._name:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        paint_icon(painter, QRectF(0, 0, self._size, self._size), self._name, theme.color(self._color))

@@ -1,0 +1,86 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Item {
+    id: root
+    property var items: []
+    property int selected: 0
+    default property alias content: panel.data
+    signal activated(int index)
+
+    implicitWidth: 360
+    implicitHeight: tabRow.height + panel.implicitHeight
+
+    Row {
+        id: tabRow
+        z: 1
+        spacing: 2
+        height: 32
+        Repeater {
+            model: root.items
+            Rectangle {
+                id: tab
+                required property var modelData
+                required property int index
+                readonly property bool current: root.selected === tab.index
+                width: label.implicitWidth + 28
+                height: tab.current ? tabRow.height + 1 : tabRow.height
+                topLeftRadius: {{ "borderRadius-medium" | tok }}
+                topRightRadius: {{ "borderRadius-medium" | tok }}
+                color: tab.current ? {{ "bgColor-default" | tok }} : hover.hovered ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+                border.width: tab.current ? {{ "borderWidth-thin" | tok }} : 0
+                border.color: {{ "borderColor-default" | tok }}
+                Accessible.role: Accessible.PageTab
+                Accessible.name: tab.modelData
+                Accessible.selected: tab.current
+
+                Rectangle {
+                    visible: tab.current
+                    anchors.bottom: parent.bottom
+                    x: 1
+                    width: parent.width - 2
+                    height: 2
+                    color: {{ "bgColor-default" | tok }}
+                }
+                Text {
+                    id: label
+                    anchors.centerIn: parent
+                    text: tab.modelData
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 14
+                    font.weight: tab.current ? Font.DemiBold : Font.Medium
+                    color: tab.current ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+                }
+                HoverHandler { id: hover }
+                TapHandler {
+                    onTapped: {
+                        root.selected = tab.index
+                        root.activated(tab.index)
+                    }
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        id: panelBox
+        anchors.top: tabRow.bottom
+        width: parent.width
+        height: Math.max(panel.implicitHeight, root.height - tabRow.height)
+        topRightRadius: {{ "borderRadius-large" | tok }}
+        bottomLeftRadius: {{ "borderRadius-large" | tok }}
+        bottomRightRadius: {{ "borderRadius-large" | tok }}
+        color: {{ "bgColor-default" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: {{ "borderColor-default" | tok }}
+
+        Item {
+            id: panel
+            anchors.fill: parent
+            anchors.margins: {{ "stack-padding-normal" | tok }}
+            implicitHeight: childrenRect.height + 2 * {{ "stack-padding-normal" | tok }}
+        }
+    }
+}

@@ -1,0 +1,95 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+import QtQuick.Effects
+
+T.Popup {
+    id: control
+    property string title
+    default property alias content: body.data
+    property alias footer: footerRow.data
+
+    parent: T.Overlay.overlay
+    modal: true
+    dim: true
+    anchors.centerIn: parent
+    width: parent ? Math.min(parent.width - 2 * {{ "mobile-gutter" | tok }}, 440) : 440
+    padding: 0
+    closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
+
+    T.Overlay.modal: Rectangle { color: {{ "overlay-backdrop-bgColor" | tok }} }
+
+    enter: Transition {
+        ParallelAnimation {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+            NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+        }
+    }
+    exit: Transition {
+        NumberAnimation { property: "opacity"; to: 0; duration: {{ "duration-sleepy-exit" | tok }} }
+    }
+
+    background: Rectangle {
+        radius: {{ "borderRadius-large" | tok }}
+        color: {{ "overlay-bgColor" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: {{ "borderColor-default" | tok }}
+        RectangularShadow {
+            readonly property var key: {{ "shadow-floating-large" | tok }}[0]
+            anchors.fill: parent
+            z: -1
+            radius: parent.radius
+            offset.x: key.x
+            offset.y: key.y
+            blur: key.blur
+            spread: key.spread
+            color: key.color
+        }
+    }
+
+    contentItem: Column {
+        Item {
+            width: parent.width
+            height: 48
+            Text {
+                x: 16
+                width: parent.width - 64
+                anchors.verticalCenter: parent.verticalCenter
+                text: control.title
+                elide: Text.ElideRight
+                font: {{ "text-title-medium" | tok }}
+                color: {{ "fgColor-default" | tok }}
+            }
+            IconButton {
+                anchors.right: parent.right
+                anchors.rightMargin: 8
+                anchors.verticalCenter: parent.verticalCenter
+                iconName: "x"
+                label: "Close"
+                variant: "invisible"
+                onClicked: control.close()
+            }
+            Rectangle { anchors.bottom: parent.bottom; width: parent.width; height: {{ "borderWidth-thin" | tok }}; color: {{ "borderColor-default" | tok }} }
+        }
+        Item {
+            id: body
+            x: 16
+            width: parent.width - 32
+            implicitHeight: childrenRect.height + 32
+            Component.onCompleted: {
+                for (let i = 0; i < children.length; i++)
+                    children[i].y += 16
+            }
+        }
+        Row {
+            id: footerRow
+            anchors.right: parent.right
+            anchors.rightMargin: 16
+            spacing: 8
+            bottomPadding: 16
+            layoutDirection: Qt.LeftToRight
+        }
+    }
+}

@@ -1,0 +1,92 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+
+class SegmentedControl(QWidget):
+    """Two to five mutually exclusive options in a pill track."""
+
+    activated = Signal(int)
+
+    def __init__(self, items: list[str], selected: int = 0, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._items = items
+        self._selected = selected
+        self._font = (theme.font({{ "text-body-medium" | tok }}))
+        self.setFixedHeight(32)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        theme.changed.connect(self.update)
+
+    def selected(self) -> int:
+        return self._selected
+
+    def _widths(self) -> list[float]:
+        bold = QFont(self._font)
+        bold.setWeight(QFont.Weight.DemiBold)
+        metrics = QFontMetrics(bold)
+        return [max(64.0, metrics.horizontalAdvance(item) + 24.0) for item in self._items]
+
+    def sizeHint(self) -> QSize:
+        widths = self._widths()
+        return QSize(int(sum(widths) + 2 * (len(widths) - 1) + 4), 32)
+
+    def _select(self, index: int) -> None:
+        if 0 <= index < len(self._items) and index != self._selected:
+            self._selected = index
+            self.update()
+            self.activated.emit(index)
+
+    def mouseReleaseEvent(self, event) -> None:
+        x = 2.0
+        for i, width in enumerate(self._widths()):
+            if x <= event.position().x() < x + width + 2:
+                self._select(i)
+                return
+            x += width + 2
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Left:
+            self._select(self._selected - 1)
+        elif event.key() == Qt.Key.Key_Right:
+            self._select(self._selected + 1)
+        else:
+            super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        radius = {{ px("borderRadius-medium") | num }}
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "bgColor-muted" | tok }}))
+        painter.drawRoundedRect(QRectF(self.rect()), radius, radius)
+        x = 2.0
+        for i, (item, width) in enumerate(zip(self._items, self._widths(), strict=True)):
+            rect = QRectF(x, 2, width, self.height() - 4)
+            font = QFont(self._font)
+            if i == self._selected:
+                painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+                painter.setBrush(theme.color({{ "bgColor-default" | tok }}))
+                painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+                font.setWeight(QFont.Weight.DemiBold)
+                painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+            else:
+                font.setWeight(QFont.Weight.Medium)
+                painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+            painter.setFont(font)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, item)
+            x += width + 2
+        if self.hasFocus():
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), radius, radius)

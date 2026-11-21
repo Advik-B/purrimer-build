@@ -1,0 +1,64 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFont, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QWidget
+
+from ..theme import theme
+
+
+def initials(name: str) -> str:
+    parts = name.split()
+    if not parts:
+        return ""
+    if len(parts) == 1:
+        return parts[0][:2].upper()
+    return (parts[0][0] + parts[-1][0]).upper()
+
+
+class Avatar(QWidget):
+    """A round or square picture of a person or team, with initials while there is no picture."""
+
+    def __init__(self, name: str, pixmap: QPixmap | None = None, size: int = 32, square: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._name = name
+        self._pixmap = pixmap
+        self._square = square
+        self.setFixedSize(QSize(size, size))
+        self.setAccessibleName(name)
+        theme.changed.connect(self.update)
+
+    def set_pixmap(self, pixmap: QPixmap | None) -> None:
+        self._pixmap = pixmap
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        radius = {{ px("borderRadius-small") | num }} if self._square else rect.width() / 2
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        if self._pixmap is not None and not self._pixmap.isNull():
+            painter.setClipPath(path)
+            scaled = self._pixmap.scaled(self.size(), Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+                                         Qt.TransformationMode.SmoothTransformation)
+            painter.drawPixmap((self.width() - scaled.width()) // 2, (self.height() - scaled.height()) // 2, scaled)
+            painter.setClipping(False)
+        else:
+            painter.fillPath(path, theme.color({{ "bgColor-accent-muted" | tok }}))
+            font = theme.font({{ "text-body-medium" | tok }})
+            font.setPixelSize(max(8, round(self.height() * 0.4)))
+            font.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(font)
+            painter.setPen(theme.color({{ "fgColor-accent" | tok }}))
+            painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, initials(self._name))
+        painter.setPen(QPen(theme.color({{ "borderColor-muted" | tok }}), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawPath(path)

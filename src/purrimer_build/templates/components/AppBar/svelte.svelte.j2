@@ -1,0 +1,27 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import IconButton from "./IconButton.svelte";
+
+  type Action = { icon: string; label: string; onclick?: () => void };
+
+  let { title, back = false, large = false, elevated = false, actions = [], onback }: {
+    title: string;
+    back?: boolean;
+    large?: boolean;
+    elevated?: boolean;
+    actions?: Action[];
+    onback?: () => void;
+  } = $props();
+</script>
+
+<header class={["pm-appbar", elevated && "pm-appbar--elevated"]}>
+  {#if back}<IconButton class="pm-appbar__back" icon="arrow-left" label="Back" variant="invisible" onclick={() => onback?.()} />{/if}
+  <h1 class="pm-appbar__title">{large ? "" : title}</h1>
+  <div class="pm-appbar__actions">
+    {#each actions.slice(0, 2) as action}
+      <IconButton icon={action.icon} label={action.label} variant="invisible" onclick={() => action.onclick?.()} />
+    {/each}
+  </div>
+</header>
+{#if large}<h1 class="pm-appbar-large">{title}</h1>{/if}

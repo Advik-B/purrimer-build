@@ -1,0 +1,58 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+TONES = {
+    "default": ({{ "borderColor-default" | tok }}, {{ "fgColor-muted" | tok }}),
+    "accent": ({{ "borderColor-accent-emphasis" | tok }}, {{ "fgColor-accent" | tok }}),
+    "success": ({{ "borderColor-success-emphasis" | tok }}, {{ "fgColor-success" | tok }}),
+    "attention": ({{ "borderColor-attention-emphasis" | tok }}, {{ "fgColor-attention" | tok }}),
+    "severe": ({{ "bgColor-severe-emphasis" | tok }}, {{ "fgColor-severe" | tok }}),
+    "danger": ({{ "borderColor-danger-emphasis" | tok }}, {{ "fgColor-danger" | tok }}),
+    "done": ({{ "borderColor-done-emphasis" | tok }}, {{ "fgColor-done" | tok }}),
+    "info": ({{ "borderColor-info-emphasis" | tok }}, {{ "fgColor-info" | tok }}),
+}
+
+
+class Label(QWidget):
+    """A small outlined pill for metadata."""
+
+    def __init__(self, text: str, tone: str = "default", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        if tone not in TONES:
+            raise ValueError(f"tone must be one of {tuple(TONES)}")
+        self._text = text
+        self._tone = tone
+        font = theme.font({{ "text-caption" | tok }})
+        font.setWeight(QFont.Weight.Medium)
+        self._font = (font)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(text)
+        theme.changed.connect(self.update)
+
+    def set_text(self, text: str) -> None:
+        self._text = text
+        self.updateGeometry()
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(QFontMetrics(self._font).horizontalAdvance(self._text) + 16, 20)
+
+    def paintEvent(self, event) -> None:
+        border, fg = TONES[self._tone]
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(QPen(theme.color(border), 1))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 9.5, 9.5)
+        painter.setPen(theme.color(fg))
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._text)

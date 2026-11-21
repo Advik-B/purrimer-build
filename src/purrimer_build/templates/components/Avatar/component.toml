@@ -1,0 +1,24 @@
+name = "Avatar"
+group = "People"
+order = 70
+summary = "A person's picture, or their initials on a tinted circle."
+
+[props.name]
+type = "string"
+default = ""
+doc = "Full name, used for initials and the accessible name."
+
+[props.src]
+type = "string"
+default = ""
+doc = "Image URL or path."
+
+[props.size]
+type = "int"
+default = 32
+doc = "Diameter: 20, 24, 32, 40 or 48."
+
+[props.square]
+type = "bool"
+default = false
+doc = "Rounded square, for organisations and apps."

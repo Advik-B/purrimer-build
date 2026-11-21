@@ -1,0 +1,91 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+
+Rectangle {
+    id: root
+    property string title
+    property bool back: false
+    property bool large: false
+    property bool elevated: false
+    // Up to two actions: [{ icon: "search", label: "Search" }]
+    property var actions: []
+    signal backClicked()
+    signal actionClicked(int index)
+
+    implicitWidth: 360
+    implicitHeight: bar.height + (large ? bigTitle.implicitHeight + 12 : 0)
+    color: {{ "bgColor-default" | tok }}
+
+    Item {
+        id: bar
+        width: parent.width
+        height: {{ "mobile-appBar-height" | tok }}
+
+        Row {
+            anchors.left: parent.left
+            anchors.leftMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            IconButton {
+                visible: root.back
+                iconName: "arrow-left"
+                label: "Back"
+                variant: "invisible"
+                size: "large"
+                onClicked: root.backClicked()
+            }
+            Text {
+                text: root.large ? "" : root.title
+                leftPadding: root.back ? 0 : 12
+                width: bar.width - actionRow.width - 64
+                elide: Text.ElideRight
+                font: {{ "text-mobile-title" | tok }}
+                color: {{ "fgColor-default" | tok }}
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+
+        Row {
+            id: actionRow
+            anchors.right: parent.right
+            anchors.rightMargin: 4
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: 4
+            Repeater {
+                model: root.actions.slice(0, 2)
+                IconButton {
+                    id: actionButton
+                    required property var modelData
+                    required property int index
+                    iconName: actionButton.modelData.icon
+                    label: actionButton.modelData.label
+                    variant: "invisible"
+                    size: "large"
+                    onClicked: root.actionClicked(actionButton.index)
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.bottom: parent.bottom
+            width: parent.width
+            height: {{ "borderWidth-thin" | tok }}
+            color: {{ "borderColor-default" | tok }}
+            opacity: root.elevated ? 1 : 0
+            Behavior on opacity { NumberAnimation { duration: {{ "duration-base" | tok }} } }
+        }
+    }
+
+    Text {
+        id: bigTitle
+        visible: root.large
+        anchors.top: bar.bottom
+        x: {{ "mobile-gutter" | tok }}
+        text: root.title
+        font: {{ "text-mobile-largeTitle" | tok }}
+        color: {{ "fgColor-default" | tok }}
+    }
+}

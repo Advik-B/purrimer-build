@@ -1,0 +1,91 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QLineEdit, QVBoxLayout, QWidget
+
+from ..icons import icon
+from ..theme import theme
+from .icon import Icon
+
+
+class TextField(QWidget):
+    """A line edit with a label above and a caption or error below."""
+
+    textChanged = Signal(str)
+    returnPressed = Signal()
+
+    def __init__(self, label: str = "", text: str = "", placeholder: str = "", caption: str = "", error: str = "",
+                 leading_icon: str | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.label = QLabel(label)
+        self.label.setFont(theme.font({{ "text-body-medium" | tok }}))
+        font = self.label.font()
+        font.setBold(True)
+        self.label.setFont(font)
+        self.label.setVisible(bool(label))
+        self.edit = QLineEdit(text)
+        self.edit.setPlaceholderText(placeholder)
+        self.edit.setAccessibleName(label)
+        self._leading = leading_icon
+        self._leading_action = None
+        self.label.setBuddy(self.edit)
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(4)
+        self._error_icon = Icon("alert-fill", 12, {{ "fgColor-danger" | tok }})
+        self.message = QLabel()
+        self.message.setProperty("textStyle", "caption")
+        self.message.setWordWrap(True)
+        row.addWidget(self._error_icon)
+        row.addWidget(self.message, 1)
+        layout.addWidget(self.label)
+        layout.addWidget(self.edit)
+        layout.addLayout(row)
+        self._caption = caption
+        self._error = error
+        self.edit.textChanged.connect(self.textChanged)
+        self.edit.returnPressed.connect(self.returnPressed)
+        theme.changed.connect(self._refresh_icon)
+        self._refresh_icon()
+        self._refresh_message()
+
+    def text(self) -> str:
+        return self.edit.text()
+
+    def set_text(self, text: str) -> None:
+        self.edit.setText(text)
+
+    def set_caption(self, caption: str) -> None:
+        self._caption = caption
+        self._refresh_message()
+
+    def set_error(self, error: str) -> None:
+        self._error = error
+        self._refresh_message()
+
+    def _refresh_icon(self) -> None:
+        if not self._leading:
+            return
+        if self._leading_action is not None:
+            self.edit.removeAction(self._leading_action)
+        self._leading_action = self.edit.addAction(icon(self._leading, 16, theme.color({{ "fgColor-muted" | tok }})),
+                                                   QLineEdit.ActionPosition.LeadingPosition)
+
+    def _refresh_message(self) -> None:
+        invalid = bool(self._error)
+        self.edit.setProperty("invalid", "true" if invalid else "false")
+        self.edit.style().unpolish(self.edit)
+        self.edit.style().polish(self.edit)
+        self.message.setText(self._error or self._caption)
+        self.message.setProperty("role", "danger" if invalid else "muted")
+        self.message.style().unpolish(self.message)
+        self.message.style().polish(self.message)
+        self.message.setVisible(bool(self._error or self._caption))
+        self._error_icon.setVisible(invalid)

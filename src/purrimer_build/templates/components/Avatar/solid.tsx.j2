@@ -1,0 +1,24 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type AvatarProps = { name: string; src?: string; size?: 20 | 24 | 32 | 40 | 48; square?: boolean };
+
+export function Avatar(props: AvatarProps): JSX.Element {
+  const [failed, setFailed] = createSignal(false);
+  const size = () => props.size ?? 32;
+  const initials = () => props.name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+  return (
+    <span
+      class={["pm-avatar", props.square && "pm-avatar--square"]}
+      style={ { width: `${size()}px`, height: `${size()}px`, "font-size": `${Math.round(size() * 0.4)}px` } }
+      role="img"
+      aria-label={props.name}
+    >
+      <Show when={props.src && !failed()} fallback={initials()}>
+        <img src={props.src} alt="" onError={() => setFailed(true)} />
+      </Show>
+    </span>
+  );
+}

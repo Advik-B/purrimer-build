@@ -1,0 +1,82 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+// Place it last in the window so it covers the screen; it shows while open is true.
+export component BottomSheet inherits Rectangle {
+    in-out property <bool> open;
+    in property <string> title;
+    in property <length> sheet-height: 320px;
+    callback closed();
+    property <length> drag-offset;
+    property <bool> dragging: handle.pressed;
+
+    visible: open || sheet.y < root.height;
+    background: open ? {{ "overlay-backdrop-bgColor" | tok }} : transparent;
+    animate background { duration: {{ "duration-slow" | tok }}; }
+
+    function close() {
+        root.open = false;
+        root.drag-offset = 0px;
+        root.closed();
+    }
+
+    TouchArea { enabled: root.open; clicked => { root.close(); } }
+
+    sheet := Rectangle {
+        width: min(parent.width, {{ "mobile-sheet-maxWidth" | tok }});
+        height: root.sheet-height;
+        x: (parent.width - self.width) / 2;
+        y: root.open ? parent.height - self.height + root.drag-offset : parent.height;
+        animate y {
+            duration: root.dragging ? 0ms : {{ "duration-slow" | tok }};
+            easing: {{ "easing-sleepy-enter" | tok }};
+        }
+        background: {{ "overlay-bgColor" | tok }};
+        border-top-left-radius: {{ "borderRadius-xlarge" | tok }};
+        border-top-right-radius: {{ "borderRadius-xlarge" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: {{ "borderColor-default" | tok }};
+        drop-shadow-offset-y: {{ "shadow-floating-large" | tok }}.offset-y;
+        drop-shadow-blur: {{ "shadow-floating-large" | tok }}.blur;
+        drop-shadow-color: {{ "shadow-floating-large" | tok }}.color;
+        accessible-role: groupbox;
+        accessible-label: root.title;
+
+        TouchArea { }
+
+        VerticalLayout {
+            handle-box := Rectangle {
+                height: 24px;
+                Rectangle { width: 36px; height: 4px; border-radius: 2px; background: {{ "borderColor-emphasis" | tok }}; }
+                handle := TouchArea {
+                    mouse-cursor: grab;
+                    moved => { root.drag-offset = max(0px, self.mouse-y - self.pressed-y); }
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.up) {
+                            if (root.drag-offset > 96px) { root.close(); } else { root.drag-offset = 0px; }
+                        }
+                    }
+                }
+            }
+            if root.title != "": HorizontalLayout {
+                padding-left: {{ "mobile-gutter" | tok }};
+                Text {
+                    text: root.title;
+                    color: {{ "fgColor-default" | tok }};
+                    font-family: {{ "text-mobile-title" | tok }}.font-family;
+                    font-size: {{ "text-mobile-title" | tok }}.font-size;
+                    font-weight: {{ "text-mobile-title" | tok }}.font-weight;
+                }
+            }
+            VerticalLayout {
+                padding-left: {{ "mobile-gutter" | tok }};
+                padding-right: {{ "mobile-gutter" | tok }};
+                padding-top: 8px;
+                padding-bottom: {{ "mobile-gutter" | tok }};
+                @children
+            }
+        }
+    }
+}

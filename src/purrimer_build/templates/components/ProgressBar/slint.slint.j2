@@ -1,0 +1,26 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component ProgressBar inherits Rectangle {
+    // 0 to 100
+    in property <float> value;
+    in property <bool> indeterminate;
+    in property <string> tone: "accent";
+    height: 8px;
+    border-radius: 4px;
+    clip: true;
+    background: {{ "controlTrack-bgColor-rest" | tok }};
+    accessible-role: progress-indicator;
+    accessible-value: indeterminate ? "" : round(value) + "%";
+
+    Rectangle {
+        x: root.indeterminate ? (-0.4 + 1.4 * mod(animation-tick() / 1400ms, 1)) * root.width : 0px;
+        width: root.indeterminate ? root.width * 0.4 : root.width * clamp(root.value, 0, 100) / 100;
+        height: parent.height;
+        border-radius: 4px;
+        background: root.tone == "success" ? {{ "bgColor-success-emphasis" | tok }} : root.tone == "attention" ? {{ "bgColor-attention-emphasis" | tok }} : root.tone == "danger" ? {{ "bgColor-danger-emphasis" | tok }} : {{ "bgColor-accent-emphasis" | tok }};
+        animate width { duration: {{ "duration-slow" | tok }}; easing: {{ "easing-sleepy-move" | tok }}; }
+    }
+}

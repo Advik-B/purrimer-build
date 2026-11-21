@@ -1,0 +1,9 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+
+export type LabelProps = { text?: string; tone?: {{ c.spec.props.tone["values"] | map("tojson") | join(" | ") }}; children?: JSX.Element };
+
+export function Label(props: LabelProps): JSX.Element {
+  return <span class={["pm-label", props.tone && props.tone !== "default" && `pm-label--${props.tone}`]}>{props.children ?? props.text}</span>;
+}

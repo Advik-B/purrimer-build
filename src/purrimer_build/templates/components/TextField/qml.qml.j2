@@ -1,0 +1,75 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+Column {
+    id: root
+    property string label
+    property alias text: field.text
+    property alias placeholder: field.placeholderText
+    property string caption
+    property string error
+    property string leadingIcon
+    property alias echoMode: field.echoMode
+    property alias inputMethodHints: field.inputMethodHints
+    property bool disabled: false
+    signal accepted()
+
+    spacing: 4
+
+    Text {
+        text: root.label
+        font.family: {{ "text-body-medium" | tok }}.family
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+        color: {{ "fgColor-default" | tok }}
+    }
+
+    T.TextField {
+        id: field
+        width: root.width > 0 ? root.width : implicitWidth
+        implicitWidth: 240
+        implicitHeight: {{ "control-medium-size" | tok }}
+        enabled: !root.disabled
+        leftPadding: root.leadingIcon ? 34 : {{ "control-medium-paddingInline-normal" | tok }}
+        rightPadding: {{ "control-medium-paddingInline-normal" | tok }}
+        verticalAlignment: TextInput.AlignVCenter
+        font: {{ "text-body-medium" | tok }}
+        color: enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }}
+        placeholderTextColor: {{ "fgColor-muted" | tok }}
+        selectionColor: {{ "bgColor-accent-muted" | tok }}
+        selectedTextColor: {{ "fgColor-default" | tok }}
+        Accessible.name: root.label
+        onAccepted: root.accepted()
+
+        background: Rectangle {
+            radius: {{ "borderRadius-medium" | tok }}
+            color: field.enabled ? {{ "control-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }}
+            border.width: field.activeFocus ? {{ "borderWidth-thick" | tok }} : {{ "borderWidth-thin" | tok }}
+            border.color: field.activeFocus ? {{ "focus-outlineColor" | tok }} : root.error ? {{ "borderColor-danger-emphasis" | tok }} : field.enabled ? {{ "control-borderColor-rest" | tok }} : {{ "bgColor-disabled" | tok }}
+
+            Icon {
+                visible: root.leadingIcon !== ""
+                name: root.leadingIcon
+                color: {{ "fgColor-muted" | tok }}
+                x: 10
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+    }
+
+    Row {
+        spacing: 4
+        visible: root.error !== "" || root.caption !== ""
+        Icon { name: "alert-fill"; size: 16; color: {{ "fgColor-danger" | tok }}; visible: root.error !== ""; scale: 0.75 }
+        Text {
+            text: root.error || root.caption
+            font.family: {{ "text-caption" | tok }}.family
+            font.pixelSize: 12
+            font.weight: root.error ? Font.DemiBold : Font.Normal
+            color: root.error ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }}
+        }
+    }
+}

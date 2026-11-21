@@ -1,0 +1,61 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmSegment" TargetType="ListBoxItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="MinWidth" Value="64" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ListBoxItem">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}" CornerRadius="{{ "borderRadius-medium" | tok }}"
+                Padding="{TemplateBinding Padding}">
+          <Border.Transitions>
+            <Transitions>
+              <BrushTransition Property="Background" Duration="{{ "duration-fast" | tok }}" />
+            </Transitions>
+          </Border.Transitions>
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" HorizontalAlignment="Center"
+                            VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:SegmentedControl}" TargetType="pm:SegmentedControl">
+    <Setter Property="Background" Value="{{ "bgColor-muted" | tok }}" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="SelectionMode" Value="AlwaysSelected" />
+    <Setter Property="ItemContainerTheme" Value="{StaticResource PmSegment}" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="2" />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:SegmentedControl">
+        <Border Background="{TemplateBinding Background}" CornerRadius="{{ "borderRadius-medium" | tok }}" Padding="2">
+          <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

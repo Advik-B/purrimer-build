@@ -1,0 +1,14 @@
+name = "Dialog"
+group = "Containers"
+order = 41
+summary = "A modal surface over a scrim, with a title, body and right-aligned buttons."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Whether it is shown."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Dialog title."

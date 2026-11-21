@@ -1,0 +1,31 @@
+// {{ note }}
+// Svelte 5: shared theme state. Runes work here because the file ends in .svelte.ts.
+import { themes, type ThemeId } from "./tokens";
+
+const STORAGE_KEY = "purrimer-theme";
+
+// Exported as an object so components can read theme.current reactively; reassigning an exported $state is not allowed.
+export const theme = $state<{ current: ThemeId }>({ current: "{{ themes[0] }}" });
+
+export function applyTheme(next: ThemeId, root: HTMLElement = document.documentElement): void {
+  theme.current = next;
+  root.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    // Storage can be unavailable; the theme still applies for this page.
+  }
+}
+
+// Call once on the client, for example in the root +layout.svelte inside onMount.
+export function restoreTheme(fallback: ThemeId = "{{ themes[0] }}", root: HTMLElement = document.documentElement): ThemeId {
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    saved = null;
+  }
+  const next = (themes as readonly string[]).includes(saved ?? "") ? (saved as ThemeId) : fallback;
+  applyTheme(next, root);
+  return next;
+}

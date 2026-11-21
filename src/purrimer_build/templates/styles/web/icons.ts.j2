@@ -1,0 +1,15 @@
+// {{ note }}
+// Octicons (MIT, GitHub Inc.): SVG path data at 16px and, where drawn, 24px.
+
+export type IconPaths = { readonly "16"?: string; readonly "24"?: string };
+
+export const octicons: Readonly<Record<string, IconPaths>> = {{ icons | tojson }};
+
+export type IconName = string;
+
+// Path data for an icon, falling back to the other size when one is missing.
+export function iconPath(name: IconName, size: 16 | 24 = 16): string {
+  const entry = octicons[name];
+  if (!entry) return "";
+  return (size === 24 ? entry["24"] ?? entry["16"] : entry["16"] ?? entry["24"]) ?? "";
+}

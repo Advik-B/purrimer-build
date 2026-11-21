@@ -1,0 +1,14 @@
+name = "BottomSheet"
+group = "Mobile"
+order = 52
+summary = "A sheet that rises from the bottom over a scrim; drag it down or tap the scrim to close."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Whether the sheet is shown."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Sheet title."

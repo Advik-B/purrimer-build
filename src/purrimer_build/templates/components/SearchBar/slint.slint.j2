@@ -1,0 +1,66 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+import { IconButton } from "icon-button.slint";
+
+export component SearchBar inherits Rectangle {
+    in-out property <string> text;
+    in property <string> placeholder: "{{ c.spec.props.placeholder.default }}";
+    callback accepted(string);
+    callback edited(string);
+
+    height: {{ "control-large-size" | tok }};
+    border-radius: {{ "borderRadius-medium" | tok }};
+    background: {{ "bgColor-muted" | tok }};
+    border-width: input.has-focus ? {{ "borderWidth-thick" | tok }} : 0px;
+    border-color: {{ "focus-outlineColor" | tok }};
+
+    HorizontalLayout {
+        padding-left: 12px;
+        padding-right: 2px;
+        spacing: 8px;
+        VerticalLayout {
+            alignment: center;
+            Icon { path: PurrimerIcons.search-16; color: {{ "fgColor-muted" | tok }}; }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            input := TextInput {
+                width: 100%;
+                text <=> root.text;
+                single-line: true;
+                vertical-alignment: center;
+                color: {{ "fgColor-default" | tok }};
+                selection-background-color: {{ "bgColor-accent-muted" | tok }};
+                font-family: {{ "text-mobile-body" | tok }}.font-family;
+                font-size: {{ "text-mobile-body" | tok }}.font-size;
+                accessible-label: "Search";
+                accepted => { root.accepted(self.text); }
+                edited => { root.edited(self.text); }
+            }
+            if root.text == "" && !input.has-focus: Text {
+                width: 100%;
+                text: root.placeholder;
+                vertical-alignment: center;
+                color: {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-mobile-body" | tok }}.font-family;
+                font-size: {{ "text-mobile-body" | tok }}.font-size;
+            }
+        }
+        if root.text != "": VerticalLayout {
+            alignment: center;
+            IconButton {
+                icon: PurrimerIcons.x-16;
+                label: "Clear";
+                variant: "invisible";
+                clicked => {
+                    root.text = "";
+                    root.edited("");
+                    input.focus();
+                }
+            }
+        }
+    }
+}

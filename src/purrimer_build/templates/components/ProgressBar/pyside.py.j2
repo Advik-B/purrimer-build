@@ -1,0 +1,24 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtWidgets import QProgressBar, QWidget
+
+
+class ProgressBar(QProgressBar):
+    """A thin progress bar; the stylesheet draws it. Indeterminate sets a busy range."""
+
+    def __init__(self, value: int = 0, tone: str = "accent", indeterminate: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setTextVisible(False)
+        self.setFixedHeight(8)
+        if indeterminate:
+            self.setRange(0, 0)
+        else:
+            self.setRange(0, 100)
+            self.setValue(value)
+        if tone != "accent":
+            self.setProperty("tone", tone)

@@ -1,0 +1,42 @@
+.pm-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: {{ "control-medium-gap" | tok }};
+  height: {{ "control-medium-size" | tok }};
+  padding: 0 {{ "control-medium-paddingInline-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "button-default-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "button-default-bgColor-rest" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  box-shadow: {{ "shadow-resting-xsmall" | tok }};
+  font: 600 14px/20px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-button:hover { background: {{ "button-default-bgColor-hover" | tok }}; }
+.pm-button:active { background: {{ "button-default-bgColor-active" | tok }}; }
+.pm-button:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+.pm-button svg { width: 16px; height: 16px; flex: none; fill: currentColor; }
+.pm-button--primary { background: {{ "button-primary-bgColor-rest" | tok }}; border-color: {{ "button-primary-bgColor-rest" | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-button--primary:hover { background: {{ "button-primary-bgColor-hover" | tok }}; border-color: {{ "button-primary-bgColor-hover" | tok }}; }
+.pm-button--primary:active { background: {{ "button-primary-bgColor-active" | tok }}; border-color: {{ "button-primary-bgColor-active" | tok }}; }
+.pm-button--danger { color: {{ "fgColor-danger" | tok }}; }
+.pm-button--danger:hover, .pm-button--danger:active { background: {{ "bgColor-danger-emphasis" | tok }}; border-color: {{ "bgColor-danger-emphasis" | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-button--invisible { background: transparent; border-color: transparent; box-shadow: none; }
+.pm-button--invisible:hover { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+.pm-button--invisible:active { background: {{ "control-transparent-bgColor-selected" | tok }}; }
+.pm-button--small { height: {{ "control-small-size" | tok }}; padding: 0 8px; font-size: 12px; }
+.pm-button--large { height: {{ "control-large-size" | tok }}; padding: 0 16px; }
+.pm-button--block { display: flex; width: 100%; }
+.pm-button:disabled, .pm-button[aria-disabled="true"] {
+  background: {{ "bgColor-disabled" | tok }};
+  border-color: {{ "bgColor-disabled" | tok }};
+  color: {{ "fgColor-disabled" | tok }};
+  box-shadow: none;
+  cursor: not-allowed;
+}
+[data-density="touch"] .pm-button { height: {{ "touch-target-min" | tok }}; font-size: 16px; }
+@media (pointer: coarse) { .pm-button:active:not(:disabled) { scale: 0.96; } }

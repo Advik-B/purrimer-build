@@ -1,0 +1,41 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component Card inherits Rectangle {
+    in property <string> title;
+    in property <bool> interactive;
+    callback clicked();
+    property <bool> lifted: interactive && touch.has-hover;
+
+    border-radius: {{ "borderRadius-large" | tok }};
+    background: {{ "bgColor-default" | tok }};
+    border-width: {{ "borderWidth-thin" | tok }};
+    border-color: {{ "borderColor-default" | tok }};
+    drop-shadow-offset-y: lifted ? {{ "shadow-resting-medium" | tok }}.offset-y : {{ "shadow-resting-small" | tok }}.offset-y;
+    drop-shadow-blur: lifted ? {{ "shadow-resting-medium" | tok }}.blur : {{ "shadow-resting-small" | tok }}.blur;
+    drop-shadow-color: lifted ? {{ "shadow-resting-medium" | tok }}.color : {{ "shadow-resting-small" | tok }}.color;
+    accessible-role: groupbox;
+    accessible-label: title;
+    accessible-action-default => { if (root.interactive) { root.clicked(); } }
+
+    touch := TouchArea {
+        enabled: root.interactive;
+        mouse-cursor: root.interactive ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+
+    VerticalLayout {
+        padding: {{ "stack-padding-normal" | tok }};
+        spacing: {{ "stack-gap-condensed" | tok }};
+        if root.title != "": Text {
+            text: root.title;
+            color: {{ "fgColor-default" | tok }};
+            font-family: {{ "text-title-small" | tok }}.font-family;
+            font-size: {{ "text-title-small" | tok }}.font-size;
+            font-weight: {{ "text-title-small" | tok }}.font-weight;
+        }
+        @children
+    }
+}

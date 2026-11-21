@@ -1,0 +1,71 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A row in a ListSection: headline, optional supporting line, leading icon and trailing text or chevron.
+[PseudoClasses(":two-line")]
+public class ListItem : Button
+{
+    public static readonly StyledProperty<string?> HeadlineProperty =
+        AvaloniaProperty.Register<ListItem, string?>(nameof(Headline));
+
+    public static readonly StyledProperty<string?> SupportingProperty =
+        AvaloniaProperty.Register<ListItem, string?>(nameof(Supporting));
+
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<ListItem, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<string?> TrailingProperty =
+        AvaloniaProperty.Register<ListItem, string?>(nameof(Trailing));
+
+    public static readonly StyledProperty<bool> ShowChevronProperty =
+        AvaloniaProperty.Register<ListItem, bool>(nameof(ShowChevron));
+
+    public string? Headline
+    {
+        get => GetValue(HeadlineProperty);
+        set => SetValue(HeadlineProperty, value);
+    }
+
+    public string? Supporting
+    {
+        get => GetValue(SupportingProperty);
+        set => SetValue(SupportingProperty, value);
+    }
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public string? Trailing
+    {
+        get => GetValue(TrailingProperty);
+        set => SetValue(TrailingProperty, value);
+    }
+
+    public bool ShowChevron
+    {
+        get => GetValue(ShowChevronProperty);
+        set => SetValue(ShowChevronProperty, value);
+    }
+
+    protected override Type StyleKeyOverride => typeof(ListItem);
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SupportingProperty)
+            PseudoClasses.Set(":two-line", !string.IsNullOrEmpty(Supporting));
+    }
+}

@@ -1,0 +1,25 @@
+name = "Chip"
+group = "Status"
+order = 31
+summary = "A filled pastel tag for soft categories, optionally removable."
+
+[props.text]
+type = "string"
+default = ""
+doc = "Chip text."
+
+[props.tone]
+type = "enum"
+default = "accent"
+doc = "Colour role."
+values = ["neutral", "accent", "success", "attention", "severe", "danger", "done", "info"]
+
+[props.icon]
+type = "icon"
+default = ""
+doc = "Octicon before the text."
+
+[props.removable]
+type = "bool"
+default = false
+doc = "Shows a remove button."

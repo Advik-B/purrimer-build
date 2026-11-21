@@ -1,0 +1,81 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A filled pill with an optional icon and remove button.
+[TemplatePart("PART_Remove", typeof(Button))]
+public class Chip : TemplatedControl
+{
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<Chip, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> ToneProperty =
+        AvaloniaProperty.Register<Chip, string>(nameof(Tone), "accent");
+
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    // neutral, accent, success, attention, severe, danger, done or info
+    public string Tone
+    {
+        get => GetValue(ToneProperty);
+        set => SetValue(ToneProperty, value);
+    }
+
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<Chip, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<bool> IsRemovableProperty =
+        AvaloniaProperty.Register<Chip, bool>(nameof(IsRemovable));
+
+    public static readonly RoutedEvent<RoutedEventArgs> RemovedEvent =
+        RoutedEvent.Register<Chip, RoutedEventArgs>(nameof(Removed), RoutingStrategies.Bubble);
+
+    private Button? _remove;
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public bool IsRemovable
+    {
+        get => GetValue(IsRemovableProperty);
+        set => SetValue(IsRemovableProperty, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Removed
+    {
+        add => AddHandler(RemovedEvent, value);
+        remove => RemoveHandler(RemovedEvent, value);
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_remove != null)
+            _remove.Click -= OnRemoveClick;
+        base.OnApplyTemplate(e);
+        _remove = e.NameScope.Find<Button>("PART_Remove");
+        if (_remove != null)
+            _remove.Click += OnRemoveClick;
+    }
+
+    private void OnRemoveClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        RaiseEvent(new RoutedEventArgs(RemovedEvent, this));
+    }
+}

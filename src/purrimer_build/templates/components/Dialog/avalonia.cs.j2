@@ -1,0 +1,126 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A modal dialog with a title and close button. Place it last in a Panel that covers the window.
+[PseudoClasses(":open")]
+[TemplatePart("PART_Close", typeof(Button))]
+[TemplatePart("PART_Backdrop", typeof(Control))]
+public class Dialog : ContentControl
+{
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<Dialog, bool>(nameof(IsOpen), defaultBindingMode: global::Avalonia.Data.BindingMode.TwoWay);
+
+    public static readonly StyledProperty<string?> TitleProperty =
+        AvaloniaProperty.Register<Dialog, string?>(nameof(Title));
+
+    public static readonly StyledProperty<object?> FooterProperty =
+        AvaloniaProperty.Register<Dialog, object?>(nameof(Footer));
+
+    public static readonly StyledProperty<double> DialogWidthProperty =
+        AvaloniaProperty.Register<Dialog, double>(nameof(DialogWidth), 440);
+
+    public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
+        RoutedEvent.Register<Dialog, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
+
+    private Button? _close;
+    private Control? _backdrop;
+
+    public bool IsOpen
+    {
+        get => GetValue(IsOpenProperty);
+        set => SetValue(IsOpenProperty, value);
+    }
+
+    public string? Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public object? Footer
+    {
+        get => GetValue(FooterProperty);
+        set => SetValue(FooterProperty, value);
+    }
+
+    public double DialogWidth
+    {
+        get => GetValue(DialogWidthProperty);
+        set => SetValue(DialogWidthProperty, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Closed
+    {
+        add => AddHandler(ClosedEvent, value);
+        remove => RemoveHandler(ClosedEvent, value);
+    }
+
+    public void Close()
+    {
+        if (!IsOpen)
+            return;
+        IsOpen = false;
+        RaiseEvent(new RoutedEventArgs(ClosedEvent, this));
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsOpenProperty)
+        {
+            PseudoClasses.Set(":open", IsOpen);
+            if (IsOpen)
+                Focus();
+        }
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_close != null)
+            _close.Click -= OnCloseClick;
+        if (_backdrop != null)
+            _backdrop.PointerPressed -= OnBackdropPressed;
+        base.OnApplyTemplate(e);
+        _close = e.NameScope.Find<Button>("PART_Close");
+        _backdrop = e.NameScope.Find<Control>("PART_Backdrop");
+        if (_close != null)
+            _close.Click += OnCloseClick;
+        if (_backdrop != null)
+            _backdrop.PointerPressed += OnBackdropPressed;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (IsOpen && e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close();
+        }
+    }
+
+    private void OnCloseClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        Close();
+    }
+
+    private void OnBackdropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.Source == _backdrop)
+        {
+            e.Handled = true;
+            Close();
+        }
+    }
+}

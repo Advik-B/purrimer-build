@@ -1,0 +1,39 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component ListSection inherits VerticalLayout {
+    in property <string> header;
+    // "inset" or "plain"
+    in property <string> variant: "inset";
+
+    spacing: 6px;
+    padding-bottom: {{ "mobile-section-gap" | tok }};
+
+    if root.header != "": HorizontalLayout {
+        padding-left: {{ "mobile-gutter" | tok }};
+        Text {
+            text: root.header;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: root.variant == "inset" ? {{ "mobile-gutter" | tok }} : 0px;
+        padding-right: self.padding-left;
+        Rectangle {
+            border-radius: root.variant == "inset" ? {{ "borderRadius-large" | tok }} : 0px;
+            background: root.variant == "inset" ? {{ "bgColor-default" | tok }} : transparent;
+            border-width: root.variant == "inset" ? {{ "borderWidth-thin" | tok }} : 0px;
+            border-color: {{ "borderColor-default" | tok }};
+            clip: true;
+            VerticalLayout {
+                @children
+            }
+        }
+    }
+}

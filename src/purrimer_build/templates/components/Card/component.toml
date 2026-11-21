@@ -1,0 +1,14 @@
+name = "Card"
+group = "Containers"
+order = 40
+summary = "A raised surface with a hairline, a soft lift and optional title."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Card header text."
+
+[props.interactive]
+type = "bool"
+default = false
+doc = "Lifts on hover and acts as one button."

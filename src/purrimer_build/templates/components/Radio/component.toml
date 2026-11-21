@@ -1,0 +1,29 @@
+name = "Radio"
+group = "Forms"
+order = 22
+summary = "One choice of a group; give every radio of a group the same name."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Text beside the circle."
+
+[props.name]
+type = "string"
+default = ""
+doc = "Group name."
+
+[props.value]
+type = "string"
+default = ""
+doc = "Value this radio stands for."
+
+[props.checked]
+type = "bool"
+default = false
+doc = "Selected state."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the control."

@@ -1,0 +1,19 @@
+name = "FAB"
+group = "Mobile"
+order = 55
+summary = "The floating action button: one squircle for the main thing people create."
+
+[props.icon]
+type = "icon"
+default = "plus"
+doc = "Octicon at 24px."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Accessible name; shown when extended."
+
+[props.extended]
+type = "bool"
+default = false
+doc = "Shows the label beside the icon."

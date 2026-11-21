@@ -1,0 +1,22 @@
+.pm-appbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: {{ "mobile-appBar-height" | tok }};
+  padding: 0 4px;
+  padding-top: env(safe-area-inset-top, 0px);
+  box-sizing: content-box;
+  background: {{ "bgColor-default" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  transition: box-shadow {{ "duration-base" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-appbar--elevated { box-shadow: inset 0 -1px 0 {{ "borderColor-default" | tok }}, {{ "shadow-resting-xsmall" | tok }}; }
+.pm-appbar__title { flex: 1; min-width: 0; margin: 0 0 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 600 18px/24px var(--font-heading); }
+.pm-appbar__back + .pm-appbar__title { margin-left: 4px; }
+.pm-appbar__actions { display: flex; gap: 4px; }
+.pm-appbar .pm-icon-button { width: {{ "touch-target-min" | tok }}; height: {{ "touch-target-min" | tok }}; }
+.pm-appbar .pm-icon-button svg { width: 24px; height: 24px; }
+.pm-appbar-large { margin: 0; padding: 4px {{ "mobile-gutter" | tok }} 8px; font: 600 28px/36px var(--font-heading); color: {{ "fgColor-default" | tok }}; }

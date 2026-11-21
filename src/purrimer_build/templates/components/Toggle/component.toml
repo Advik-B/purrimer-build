@@ -1,0 +1,19 @@
+name = "Toggle"
+group = "Forms"
+order = 23
+summary = "A switch for a setting that applies at once."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Text before the switch."
+
+[props.checked]
+type = "bool"
+default = false
+doc = "On state."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the control."

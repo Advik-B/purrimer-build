@@ -1,0 +1,56 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Signal
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
+
+from ..theme import theme
+from .icon_button import IconButton
+
+
+class AppBar(QWidget):
+    """The top bar of a mobile screen: back button, title and up to two actions as (icon, label) pairs."""
+
+    backClicked = Signal()
+    actionClicked = Signal(int)
+
+    def __init__(self, title: str, back: bool = False, large: bool = False, elevated: bool = False,
+                 actions: list[tuple[str, str]] | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._elevated = elevated
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        bar = QWidget()
+        bar.setFixedHeight({{ px("mobile-appBar-height") | int }})
+        row = QHBoxLayout(bar)
+        row.setContentsMargins(4 if back else {{ px("mobile-gutter") | int }}, 0, 4, 0)
+        row.setSpacing(4)
+        if back:
+            button = IconButton("arrow-left", "Back", variant="invisible", size="large")
+            button.clicked.connect(self.backClicked)
+            row.addWidget(button)
+        self.title = QLabel("" if large else title)
+        self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
+        row.addWidget(self.title, 1)
+        for index, (icon_name, label) in enumerate((actions or [])[:2]):
+            button = IconButton(icon_name, label, variant="invisible", size="large")
+            button.clicked.connect(lambda checked=False, i=index: self.actionClicked.emit(i))
+            row.addWidget(button)
+        outer.addWidget(bar)
+        if large:
+            big = QLabel(title)
+            big.setStyleSheet(theme.text_css({{ "text-mobile-largeTitle" | tok }}))
+            big.setContentsMargins({{ px("mobile-gutter") | int }}, 0, {{ px("mobile-gutter") | int }}, 8)
+            outer.addWidget(big)
+        theme.changed.connect(self.update)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
+        if self._elevated:
+            painter.fillRect(0, self.height() - 1, self.width(), 1, theme.color({{ "borderColor-default" | tok }}))

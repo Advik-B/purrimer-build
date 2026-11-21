@@ -1,0 +1,48 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, createSignal, createUniqueId } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type TabsProps = { items: string[]; selected?: number; label?: string; onSelect?: (index: number) => void; children?: (index: number) => JSX.Element };
+
+export function Tabs(props: TabsProps): JSX.Element {
+  const uid = createUniqueId();
+  const [selected, setSelected] = createSignal(() => props.selected ?? 0);
+  const pick = (i: number) => {
+    setSelected(i);
+    props.onSelect?.(i);
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (selected() + step + props.items.length) % props.items.length;
+    pick(next);
+    ((e.currentTarget as HTMLElement).children[next] as HTMLElement).focus();
+  };
+  return (
+    <div class="pm-tabs">
+      <div class="pm-tabs__list" role="tablist" aria-label={props.label ?? "Tabs"} tabindex="-1" onKeyDown={onKeyDown}>
+        <For each={props.items}>
+          {(item, i) => (
+            <button
+              type="button"
+              class="pm-tabs__tab"
+              role="tab"
+              id={`${uid}-tab-${i()}`}
+              aria-controls={`${uid}-panel`}
+              aria-selected={i() === selected() ? "true" : "false"}
+              tabindex={i() === selected() ? 0 : -1}
+              onClick={() => pick(i())}
+            >
+              {item}
+            </button>
+          )}
+        </For>
+      </div>
+      <div class="pm-tabs__panel" role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${selected()}`} tabindex="0">
+        {props.children?.(selected())}
+      </div>
+    </div>
+  );
+}

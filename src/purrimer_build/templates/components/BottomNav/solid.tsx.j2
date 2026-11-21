@@ -1,0 +1,35 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type BottomNavItem = { icon: string; label: string; badge?: number };
+export type BottomNavProps = { items: BottomNavItem[]; selected?: number; showLabels?: boolean; onSelect?: (index: number) => void };
+
+export function BottomNav(props: BottomNavProps): JSX.Element {
+  const [selected, setSelected] = createSignal(() => props.selected ?? 0);
+  const pick = (i: number) => {
+    setSelected(i);
+    props.onSelect?.(i);
+  };
+  return (
+    <nav class="pm-bottomnav" aria-label="Main">
+      <For each={props.items}>
+        {(item, i) => (
+          <button
+            type="button"
+            class="pm-bottomnav__item"
+            aria-current={i() === selected() ? "page" : undefined}
+            aria-label={props.showLabels ? undefined : item.label}
+            onClick={() => pick(i())}
+          >
+            <Icon name={item.icon} size={24} />
+            <Show when={props.showLabels}><span>{item.label}</span></Show>
+            <Show when={item.badge}>{(count) => <span class="pm-bottomnav__badge">{count() > 99 ? "99+" : count()}</span>}</Show>
+          </button>
+        )}
+      </For>
+    </nav>
+  );
+}

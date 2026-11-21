@@ -1,0 +1,8 @@
+// {{ note }}
+// Every {{ tokens.name }} component, plus the theme globals: import { Button, Purrimer } from "purrimer-components.slint";
+
+export { Purrimer, PurrimerMotion, PurrimerTheme, PurrimerShadow, PurrimerTextStyle } from "purrimer.slint";
+export { PurrimerIcons } from "icons.slint";
+{% for c in done %}
+export { {{ c.spec.get("slint_exports", [c.name]) | join(", ") }} } from "components/{{ c.name | kebab }}.slint";
+{% endfor %}

@@ -1,0 +1,35 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A small outlined pill for metadata.
+public class Label : TemplatedControl
+{
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<Label, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> ToneProperty =
+        AvaloniaProperty.Register<Label, string>(nameof(Tone), "default");
+
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    // default, accent, success, attention, severe, danger, done or info
+    public string Tone
+    {
+        get => GetValue(ToneProperty);
+        set => SetValue(ToneProperty, value);
+    }
+}

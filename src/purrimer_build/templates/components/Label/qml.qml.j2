@@ -1,0 +1,37 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property string text
+    property string tone: "default"
+    readonly property var inks: ({
+        "default": [{{ "borderColor-default" | tok }}, {{ "fgColor-muted" | tok }}],
+        "accent": [{{ "borderColor-accent-emphasis" | tok }}, {{ "fgColor-accent" | tok }}],
+        "success": [{{ "borderColor-success-emphasis" | tok }}, {{ "fgColor-success" | tok }}],
+        "attention": [{{ "borderColor-attention-emphasis" | tok }}, {{ "fgColor-attention" | tok }}],
+        "severe": [{{ "bgColor-severe-emphasis" | tok }}, {{ "fgColor-severe" | tok }}],
+        "danger": [{{ "borderColor-danger-emphasis" | tok }}, {{ "fgColor-danger" | tok }}],
+        "done": [{{ "borderColor-done-emphasis" | tok }}, {{ "fgColor-done" | tok }}],
+        "info": [{{ "borderColor-info-emphasis" | tok }}, {{ "fgColor-info" | tok }}]
+    })
+
+    implicitWidth: label.implicitWidth + 14
+    implicitHeight: 20
+    radius: height / 2
+    color: "transparent"
+    border.width: {{ "borderWidth-thin" | tok }}
+    border.color: (inks[tone] || inks["default"])[0]
+
+    Text {
+        id: label
+        anchors.centerIn: parent
+        text: root.text
+        font.family: {{ "text-caption" | tok }}.family
+        font.pixelSize: 12
+        font.weight: Font.Medium
+        color: (root.inks[root.tone] || root.inks["default"])[1]
+    }
+}

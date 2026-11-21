@@ -1,0 +1,55 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.Switch {
+    id: control
+    implicitWidth: implicitContentWidth + leftPadding + rightPadding
+    implicitHeight: Math.max(implicitContentHeight, implicitIndicatorHeight) + topPadding + bottomPadding
+    spacing: 12
+    padding: 2
+
+    indicator: Rectangle {
+        implicitWidth: 36
+        implicitHeight: 20
+        x: control.text ? control.width - width - control.rightPadding : control.leftPadding
+        y: (control.height - height) / 2
+        radius: height / 2
+        color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.checked ? {{ "bgColor-accent-emphasis" | tok }} : {{ "controlTrack-bgColor-rest" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.checked ? color : {{ "control-borderColor-rest" | tok }}
+        Behavior on color { ColorAnimation { duration: {{ "duration-base" | tok }} } }
+
+        Rectangle {
+            width: 14
+            height: 14
+            radius: 7
+            y: 3
+            x: control.checked ? parent.width - width - 3 : 3
+            color: control.checked ? {{ "fgColor-onEmphasis" | tok }} : {{ "controlKnob-bgColor-rest" | tok }}
+            border.width: control.checked ? 0 : 1
+            border.color: {{ "control-borderColor-rest" | tok }}
+            Behavior on x { NumberAnimation { duration: {{ "duration-base" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-standard" | tok }} } }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -4
+            radius: height / 2
+            color: "transparent"
+            border.width: {{ "borderWidth-thick" | tok }}
+            border.color: {{ "focus-outlineColor" | tok }}
+            visible: control.visualFocus
+        }
+    }
+
+    contentItem: Text {
+        rightPadding: control.text ? control.indicator.width + control.spacing : 0
+        text: control.text
+        font: {{ "text-body-medium" | tok }}
+        color: control.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }}
+        verticalAlignment: Text.AlignVCenter
+    }
+}

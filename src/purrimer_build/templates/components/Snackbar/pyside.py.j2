@@ -1,0 +1,103 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter
+from PySide6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QWidget
+
+from ..theme import theme
+
+
+class Snackbar(QWidget):
+    """A short message with one optional action. It fades out after `duration` ms; zero keeps it up."""
+
+    actionTriggered = Signal()
+    closed = Signal()
+
+    def __init__(self, message: str = "", action: str = "", duration: int = {{ c.spec.props.duration.default }},
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._message = message
+        self._action = action
+        self._duration = duration
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.timeout.connect(self.dismiss)
+        self._opacity = QGraphicsOpacityEffect(self)
+        self._opacity.setOpacity(0.0)
+        self.setGraphicsEffect(self._opacity)
+        self._fade = QPropertyAnimation(self._opacity, b"opacity", self)
+        self._fade.setDuration(theme.duration({{ "duration-sleepy-medium" | tok }}))
+        self._fade.setEasingCurve(theme.easing({{ "easing-sleepy-enter" | tok }}))
+        self._fade.finished.connect(self._faded)
+        self._font = (theme.font({{ "text-body-medium" | tok }}))
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(48)
+        self.hide()
+        theme.changed.connect(self.update)
+
+    def show_message(self, message: str, action: str = "", duration: int | None = None) -> None:
+        self._message = message
+        self._action = action
+        if duration is not None:
+            self._duration = duration
+        self.show()
+        self.raise_()
+        self._fade_to(1.0)
+        self._timer.stop()
+        if self._duration > 0:
+            self._timer.start(self._duration)
+
+    def dismiss(self) -> None:
+        self._timer.stop()
+        if self.isVisible():
+            self._fade_to(0.0)
+            self.closed.emit()
+
+    def sizeHint(self) -> QSize:
+        return QSize(344, 48)
+
+    def _action_rect(self) -> QRectF:
+        bold = QFont(self._font)
+        bold.setBold(True)
+        width = QFontMetrics(bold).horizontalAdvance(self._action) + 28
+        return QRectF(self.width() - 4 - width, 4, width, 40)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._action and self._action_rect().contains(event.position()):
+            self.actionTriggered.emit()
+            self.dismiss()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "bgColor-emphasis" | tok }}))
+        radius = {{ px("borderRadius-large") | num }}
+        painter.drawRoundedRect(QRectF(self.rect()), radius, radius)
+        ink = theme.color({{ "fgColor-onEmphasis" | tok }})
+        painter.setPen(ink)
+        right = self.width() - 16.0
+        if self._action:
+            rect = self._action_rect()
+            bold = QFont(self._font)
+            bold.setBold(True)
+            painter.setFont(bold)
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._action)
+            painter.setFont(self._font)
+            right = rect.left() - 8
+        painter.drawText(QRectF(16, 0, right - 16, self.height()), Qt.AlignmentFlag.AlignVCenter, self._message)
+
+    def _fade_to(self, value: float) -> None:
+        self._fade.stop()
+        self._fade.setStartValue(self._opacity.opacity())
+        self._fade.setEndValue(value)
+        self._fade.start()
+
+    def _faded(self) -> None:
+        if self._opacity.opacity() == 0.0:
+            self.hide()

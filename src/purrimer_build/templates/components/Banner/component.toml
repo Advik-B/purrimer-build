@@ -1,0 +1,25 @@
+name = "Banner"
+group = "Status"
+order = 32
+summary = "A message across a region with an icon, title, text and optional dismiss."
+
+[props.tone]
+type = "enum"
+default = "info"
+doc = "Colour role and icon."
+values = ["info", "success", "attention", "danger", "done"]
+
+[props.title]
+type = "string"
+default = ""
+doc = "Bold first line."
+
+[props.text]
+type = "string"
+default = ""
+doc = "Body text; ends with a full stop."
+
+[props.dismissible]
+type = "bool"
+default = false
+doc = "Shows a close button."

@@ -1,0 +1,19 @@
+name = "Icon"
+group = "Graphics"
+order = 5
+summary = "An Octicon drawn in the current text colour, at 16 or 24px."
+
+[props.name]
+type = "icon"
+default = ""
+doc = "Octicon name, such as search or arrow-left."
+
+[props.size]
+type = "int"
+default = 16
+doc = "16 or 24; 24 uses the 24px drawing when Octicons has one."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Accessible name; leave empty for decorative icons."

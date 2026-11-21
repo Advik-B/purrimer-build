@@ -1,0 +1,12 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { header = "", variant = "inset", children }: { header?: string; variant?: "inset" | "plain"; children?: Snippet } = $props();
+</script>
+
+<section class={["pm-list-section", `pm-list-section--${variant}`]}>
+  {#if header}<h2 class="pm-list-section__header">{header}</h2>{/if}
+  <div class="pm-list-section__rows" role="list">{@render children?.()}</div>
+</section>

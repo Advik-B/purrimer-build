@@ -1,0 +1,8 @@
+.pm-progress { position: relative; height: 8px; overflow: hidden; border-radius: {{ "borderRadius-full" | tok }}; background: {{ "controlTrack-bgColor-rest" | tok }}; }
+.pm-progress__fill { height: 100%; border-radius: inherit; background: {{ "bgColor-accent-emphasis" | tok }}; transition: width {{ "duration-slow" | tok }} {{ "easing-sleepy-move" | tok }}; }
+{% for tone in ["success", "attention", "danger"] %}
+.pm-progress--{{ tone }} .pm-progress__fill { background: {{ ("bgColor-" ~ tone ~ "-emphasis") | tok }}; }
+{% endfor %}
+.pm-progress--indeterminate .pm-progress__fill { position: absolute; width: 40%; animation: pm-progress-sweep 1.4s {{ "easing-sleepy-move" | tok }} infinite; }
+@keyframes pm-progress-sweep { from { left: -40%; } to { left: 100%; } }
+@media (prefers-reduced-motion: reduce) { .pm-progress--indeterminate .pm-progress__fill { animation-duration: 3s; } }

@@ -1,0 +1,97 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+
+class ListItem(QWidget):
+    """A row in a ListSection: headline, optional supporting line, leading icon and trailing text or chevron."""
+
+    clicked = Signal()
+
+    def __init__(self, headline: str, supporting: str = "", icon: str | None = None, trailing: str = "",
+                 chevron: bool = False, clickable: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._headline = headline
+        self._supporting = supporting
+        self._icon = icon
+        self._trailing = trailing
+        self._chevron = chevron
+        self._clickable = clickable
+        self._pressed = False
+        height = {{ px("mobile-row-height-twoLine") | int }} if supporting else {{ px("mobile-row-height") | int }}
+        self.setFixedHeight(height)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        if clickable:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAccessibleName(headline)
+        theme.changed.connect(self.update)
+
+    def sizeHint(self) -> QSize:
+        return QSize(320, self.height())
+
+    def mousePressEvent(self, event) -> None:
+        if self._clickable:
+            self._pressed = True
+            self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._pressed:
+            self._pressed = False
+            self.update()
+            if self.rect().contains(event.position().toPoint()):
+                self.clicked.emit()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        if self._pressed:
+            painter.fillRect(self.rect(), theme.color({{ "control-transparent-bgColor-hover" | tok }}))
+        gutter = {{ px("mobile-gutter") | int }}
+        x = float(gutter)
+        right = float(self.width() - gutter)
+        if self._icon:
+            box = QRectF(x, (self.height() - 32) / 2, 32, 32)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "bgColor-accent-muted" | tok }}))
+            painter.drawRoundedRect(box, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+            accent = theme.color({{ "fgColor-accent" | tok }})
+            paint_icon(painter, box.adjusted(8, 8, -8, -8), self._icon, accent)
+            x += 44
+        if self._chevron:
+            paint_icon(painter, QRectF(right - 16, (self.height() - 16) / 2, 16, 16), "chevron-right",
+                       theme.color({{ "fgColor-muted" | tok }}))
+            right -= 24
+        small = theme.font({{ "text-mobile-supporting" | tok }})
+        if self._trailing:
+            painter.setFont(small)
+            width = painter.fontMetrics().horizontalAdvance(self._trailing)
+            painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+            trailing_rect = QRectF(right - width, 0, width, self.height())
+            painter.drawText(trailing_rect, Qt.AlignmentFlag.AlignVCenter, self._trailing)
+            right -= width + 12
+        body = theme.font({{ "text-mobile-body" | tok }})
+        painter.setFont(body)
+        line_h = painter.fontMetrics().height()
+        sub_h = 0
+        if self._supporting:
+            painter.setFont(small)
+            sub_h = painter.fontMetrics().height()
+        top = (self.height() - line_h - sub_h) / 2
+        painter.setFont(body)
+        painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+        text = painter.fontMetrics().elidedText(self._headline, Qt.TextElideMode.ElideRight, int(right - x))
+        painter.drawText(QRectF(x, top, right - x, line_h), Qt.AlignmentFlag.AlignVCenter, text)
+        if self._supporting:
+            painter.setFont(small)
+            painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+            text = painter.fontMetrics().elidedText(self._supporting, Qt.TextElideMode.ElideRight, int(right - x))
+            painter.drawText(QRectF(x, top + line_h, right - x, sub_h), Qt.AlignmentFlag.AlignVCenter, text)

@@ -1,0 +1,10 @@
+<!DOCTYPE RCC>
+<!-- {{ note }} -->
+<!-- For C++ apps: compile with rcc; the sheets then load icons from :/purrimer/icons. -->
+<RCC version="1.0">
+  <qresource prefix="/purrimer">
+{% for f in icon_files %}
+    <file alias="icons/{{ f }}">purrimer_qt/icons/{{ f }}</file>
+{% endfor %}
+  </qresource>
+</RCC>

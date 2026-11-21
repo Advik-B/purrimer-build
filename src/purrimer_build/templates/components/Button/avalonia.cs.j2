@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// Icons for any Button with the Purrimer theme: pm:ButtonAssist.LeadingIcon="check".
+public static class ButtonAssist
+{
+    public static readonly AttachedProperty<string?> LeadingIconProperty =
+        AvaloniaProperty.RegisterAttached<Button, string?>("LeadingIcon", typeof(ButtonAssist));
+
+    public static readonly AttachedProperty<string?> TrailingIconProperty =
+        AvaloniaProperty.RegisterAttached<Button, string?>("TrailingIcon", typeof(ButtonAssist));
+
+    public static string? GetLeadingIcon(Button element) => element.GetValue(LeadingIconProperty);
+    public static void SetLeadingIcon(Button element, string? value) => element.SetValue(LeadingIconProperty, value);
+    public static string? GetTrailingIcon(Button element) => element.GetValue(TrailingIconProperty);
+    public static void SetTrailingIcon(Button element, string? value) => element.SetValue(TrailingIconProperty, value);
+}

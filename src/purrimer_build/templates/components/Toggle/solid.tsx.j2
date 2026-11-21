@@ -1,0 +1,38 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type ToggleProps = {
+  label?: string;
+  ariaLabel?: string;
+  checked?: boolean;
+  disabled?: boolean;
+  onChange?: (checked: boolean) => void;
+};
+
+export function Toggle(props: ToggleProps): JSX.Element {
+  const [on, setOn] = createSignal(() => props.checked ?? false);
+  const flip = () => {
+    if (props.disabled) return;
+    const next = !on();
+    setOn(next);
+    props.onChange?.(next);
+  };
+  return (
+    <label class="pm-toggle">
+      <Show when={props.label}><span>{props.label}</span></Show>
+      <button
+        type="button"
+        class="pm-toggle__track"
+        role="switch"
+        aria-checked={on() ? "true" : "false"}
+        aria-label={props.label || props.ariaLabel}
+        disabled={props.disabled}
+        onClick={flip}
+      >
+        <span class="pm-toggle__knob" />
+      </button>
+    </label>
+  );
+}

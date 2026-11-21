@@ -1,0 +1,14 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { HTMLInputAttributes } from "svelte/elements";
+
+  type Props = Omit<HTMLInputAttributes, "type" | "checked"> & { label: string; checked?: boolean; indeterminate?: boolean };
+
+  let { label, checked = $bindable(false), indeterminate = $bindable(false), class: className = "", ...rest }: Props = $props();
+</script>
+
+<label class={["pm-check", className]}>
+  <input {...rest} class="pm-check__input" type="checkbox" bind:checked bind:indeterminate />
+  <span>{label}</span>
+</label>

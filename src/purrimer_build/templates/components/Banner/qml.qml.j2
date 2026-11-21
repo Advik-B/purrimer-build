@@ -1,0 +1,54 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property string tone: "info"
+    property string title
+    property string text
+    property bool dismissible: false
+    signal dismissed()
+
+    readonly property var tones: ({
+        "info": ["info", {{ "bgColor-info-muted" | tok }}, {{ "borderColor-info-emphasis" | tok }}, {{ "fgColor-info" | tok }}],
+        "success": ["check-circle", {{ "bgColor-success-muted" | tok }}, {{ "borderColor-success-emphasis" | tok }}, {{ "fgColor-success" | tok }}],
+        "attention": ["alert", {{ "bgColor-attention-muted" | tok }}, {{ "borderColor-attention-emphasis" | tok }}, {{ "fgColor-attention" | tok }}],
+        "danger": ["stop", {{ "bgColor-danger-muted" | tok }}, {{ "borderColor-danger-emphasis" | tok }}, {{ "fgColor-danger" | tok }}],
+        "done": ["check-circle-fill", {{ "bgColor-done-muted" | tok }}, {{ "borderColor-done-emphasis" | tok }}, {{ "fgColor-done" | tok }}]
+    })
+    readonly property var spec: tones[tone] || tones["info"]
+
+    implicitWidth: 360
+    implicitHeight: Math.max(row.implicitHeight, 20) + 24
+    radius: {{ "borderRadius-large" | tok }}
+    color: spec[1]
+    border.width: {{ "borderWidth-thin" | tok }}
+    border.color: spec[2]
+    Accessible.role: Accessible.AlertMessage
+    Accessible.name: title + " " + text
+
+    Row {
+        id: row
+        x: 16
+        y: 12
+        width: parent.width - 32
+        spacing: 12
+        Icon { name: root.spec[0]; color: root.spec[3]; y: 2 }
+        Column {
+            width: row.width - 28 - (close.visible ? close.width + 12 : 0)
+            Text { visible: root.title !== ""; width: parent.width; text: root.title; wrapMode: Text.Wrap; font.family: {{ "text-body-medium" | tok }}.family; font.pixelSize: 14; font.weight: Font.DemiBold; color: {{ "fgColor-default" | tok }} }
+            Text { visible: root.text !== ""; width: parent.width; text: root.text; wrapMode: Text.Wrap; font: {{ "text-body-medium" | tok }}; color: {{ "fgColor-default" | tok }} }
+        }
+        IconButton {
+            id: close
+            visible: root.dismissible
+            iconName: "x"
+            label: "Dismiss"
+            variant: "invisible"
+            size: "small"
+            onClicked: root.dismissed()
+        }
+    }
+}

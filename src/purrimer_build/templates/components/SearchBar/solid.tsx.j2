@@ -1,0 +1,51 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type SearchBarProps = { value?: string; placeholder?: string; label?: string; onValue?: (value: string) => void; onSubmit?: (query: string) => void };
+
+export function SearchBar(props: SearchBarProps): JSX.Element {
+  const [value, setValue] = createSignal(() => props.value ?? "");
+  let input: HTMLInputElement | undefined;
+  const update = (next: string) => {
+    setValue(next);
+    props.onValue?.(next);
+  };
+  return (
+    <form
+      class="pm-search"
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        props.onSubmit?.(value());
+      }}
+    >
+      <Icon name="search" />
+      <input
+        ref={(el) => (input = el)}
+        class="pm-search__input"
+        type="search"
+        enterkeyhint="search"
+        aria-label={props.label ?? "Search"}
+        placeholder={props.placeholder ?? "{{ c.spec.props.placeholder.default }}"}
+        value={value()}
+        onInput={(e) => update(e.currentTarget.value)}
+      />
+      <Show when={value()}>
+        <button
+          type="button"
+          class="pm-search__clear"
+          aria-label="Clear"
+          onClick={() => {
+            update("");
+            input?.focus();
+          }}
+        >
+          <Icon name="x" />
+        </button>
+      </Show>
+    </form>
+  );
+}

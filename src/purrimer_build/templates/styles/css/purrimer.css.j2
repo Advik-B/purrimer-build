@@ -1,0 +1,63 @@
+/* {{ note }} */
+/* {{ tokens.name }} tokens for the web. Themes: {% for t in themes %}{{ labels[t] }} (data-theme="{{ t }}"){{ ", " if not loop.last }}{% endfor %}. */
+
+{% for f in web_fonts %}
+@font-face {
+  font-family: "{{ f.family }}";
+  src: url("{{ font_prefix }}{{ f.filename }}") format("woff2");
+  font-weight: {{ f.weight }};
+  font-style: {{ f.style }};
+  font-display: swap;
+}
+
+{% endfor %}
+:root {
+{% for n, v in tokens.lengths_css + tokens.durations_css + tokens.easings_css + tokens.other_css %}
+  --{{ n }}: {{ v }};
+{% endfor %}
+{% for key, stack in tokens.families.items() %}
+  --font-{{ key }}: {{ stack }};
+{% endfor %}
+}
+
+{% for theme in themes %}
+{% if loop.first %}
+:root,
+[data-theme="{{ theme }}"] {
+{% else %}
+[data-theme="{{ theme }}"] {
+{% endif %}
+  color-scheme: {{ "dark" if theme in tokens.dark_themes else "light" }};
+{% for name in tokens.colors %}
+  --{{ name }}: {{ tokens.css_color(name, theme) }};
+{% endfor %}
+{% for name in tokens.shadow_css %}
+  --{{ name }}: {{ tokens.shadow_css[name][theme] }};
+{% endfor %}
+}
+
+{% endfor %}
+{% for s in tokens.type_styles %}
+.{{ s.name }} {
+  font-family: var(--font-{{ s.family_key }});
+  font-size: {{ s.css.fontSize }};
+{% if s.css.lineHeight is defined %}
+  line-height: {{ s.css.lineHeight }};
+{% endif %}
+  font-weight: {{ s.css.fontWeight | default(400) }};
+{% if s.css.letterSpacing is defined %}
+  letter-spacing: {{ s.css.letterSpacing }};
+{% endif %}
+{% if s.family_key == "numeric" %}
+  font-variant-numeric: tabular-nums slashed-zero;
+{% endif %}
+}
+
+{% endfor %}
+@media (prefers-reduced-motion: reduce) {
+  :root {
+{% for n, _ in tokens.durations_css if n != "duration-reduced" %}
+    --{{ n }}: var(--duration-reduced);
+{% endfor %}
+  }
+}

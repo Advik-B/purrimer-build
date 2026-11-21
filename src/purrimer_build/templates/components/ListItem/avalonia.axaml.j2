@@ -1,0 +1,46 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ListItem}" TargetType="pm:ListItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="MinHeight" Value="{{ "mobile-row-height" | tok }}" />
+    <Setter Property="Padding" Value="{{ px("mobile-gutter") | num }},0" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ListItem">
+        <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" MinHeight="{TemplateBinding MinHeight}">
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+            <Border Width="32" Height="32" Margin="0,0,12,0" CornerRadius="{{ "borderRadius-medium" | tok }}"
+                    Background="{{ "bgColor-accent-muted" | tok }}" VerticalAlignment="Center"
+                    IsVisible="{TemplateBinding IconName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+              <pm:Icon IconName="{TemplateBinding IconName}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{{ "fgColor-accent" | tok }}" />
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+              <TextBlock Text="{TemplateBinding Headline}" TextTrimming="CharacterEllipsis"
+                         FontSize="{{ "text-mobile-body" | tokx("FontSize") }}" />
+              <TextBlock Text="{TemplateBinding Supporting}" TextTrimming="CharacterEllipsis" Foreground="{{ "fgColor-muted" | tok }}"
+                         FontSize="{{ "text-mobile-supporting" | tokx("FontSize") }}"
+                         IsVisible="{TemplateBinding Supporting, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+            <TextBlock Grid.Column="2" Margin="12,0,0,0" Text="{TemplateBinding Trailing}" VerticalAlignment="Center"
+                       Foreground="{{ "fgColor-muted" | tok }}" FontSize="{{ "text-mobile-supporting" | tokx("FontSize") }}"
+                       IsVisible="{TemplateBinding Trailing, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <pm:Icon Grid.Column="3" Margin="8,0,0,0" IconName="chevron-right" VerticalAlignment="Center"
+                     Foreground="{{ "fgColor-muted" | tok }}" IsVisible="{TemplateBinding ShowChevron}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:two-line">
+      <Setter Property="MinHeight" Value="{{ "mobile-row-height-twoLine" | tok }}" />
+    </Style>
+    <Style Selector="^:pressed">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

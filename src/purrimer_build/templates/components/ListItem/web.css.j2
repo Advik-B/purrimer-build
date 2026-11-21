@@ -1,0 +1,24 @@
+.pm-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: {{ "mobile-row-height" | tok }};
+  padding: 0 {{ "mobile-gutter" | tok }};
+  border: 0;
+  background: transparent;
+  color: {{ "fgColor-default" | tok }};
+  font: 400 16px/24px var(--font-sans);
+  text-align: left;
+}
+.pm-list-item--two-line { min-height: {{ "mobile-row-height-twoLine" | tok }}; }
+button.pm-list-item { cursor: pointer; }
+button.pm-list-item:active { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+button.pm-list-item:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -2px; }
+.pm-list-item__tile { display: grid; place-items: center; width: 32px; height: 32px; flex: none; border-radius: {{ "borderRadius-medium" | tok }}; background: {{ "bgColor-accent-muted" | tok }}; corner-shape: squircle; }
+.pm-list-item__tile svg { width: 16px; height: 16px; fill: {{ "fgColor-accent" | tok }}; }
+.pm-list-item__text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pm-list-item__headline { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pm-list-item__supporting { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; color: {{ "fgColor-muted" | tok }}; }
+.pm-list-item__trailing { flex: none; font-size: 14px; line-height: 20px; color: {{ "fgColor-muted" | tok }}; }
+.pm-list-item__chevron { width: 16px; height: 16px; flex: none; fill: {{ "fgColor-muted" | tok }}; }

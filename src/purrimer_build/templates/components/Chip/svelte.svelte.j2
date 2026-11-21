@@ -1,0 +1,21 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  let { text, tone = "accent", icon = "", removable = false, onremove }: {
+    text: string;
+    tone?: {{ c.spec.props.tone["values"] | map("tojson") | join(" | ") }};
+    icon?: string;
+    removable?: boolean;
+    onremove?: () => void;
+  } = $props();
+</script>
+
+<span class={["pm-chip", `pm-chip--${tone}`]}>
+  {#if icon}<Icon name={icon} />{/if}
+  {text}
+  {#if removable}
+    <button type="button" class="pm-chip__remove" aria-label="Remove {text}" onclick={() => onremove?.()}><Icon name="x" /></button>
+  {/if}
+</span>

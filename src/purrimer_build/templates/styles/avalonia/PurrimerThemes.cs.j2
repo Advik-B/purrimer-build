@@ -1,0 +1,65 @@
+// {{ note }}
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using Avalonia.Animation.Easings;
+using Avalonia.Styling;
+
+namespace {{ ns }};
+
+// Purrimer theme variants. Blanc and Noir are Avalonia's Light and Dark; Latte and Mocha inherit from them.
+public static class PurrimerThemes
+{
+{% for t in themes %}
+{% if t in ava_inherits %}
+    public static readonly ThemeVariant {{ labels[t] }} = new("{{ labels[t] }}", ThemeVariant.{{ ava_inherits[t] }});
+{% else %}
+    public static readonly ThemeVariant {{ labels[t] }} = ThemeVariant.{{ ava_keys[t] }};
+{% endif %}
+{% endfor %}
+
+    public static IReadOnlyList<ThemeVariant> All { get; } = new[] { {% for t in themes %}{{ labels[t] }}{{ ", " if not loop.last }}{% endfor %} };
+}
+
+// Piecewise linear easing, the same curve as CSS linear(). Points are "progress,value" pairs.
+public sealed class PurrimerLinearEasing : Easing
+{
+    private double[] _x = { 0, 1 };
+    private double[] _y = { 0, 1 };
+    private string _points = "0,0 1,1";
+
+    public string Points
+    {
+        get => _points;
+        set
+        {
+            var pairs = value.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var xs = new double[pairs.Length];
+            var ys = new double[pairs.Length];
+            for (var i = 0; i < pairs.Length; i++)
+            {
+                var parts = pairs[i].Split(',');
+                xs[i] = double.Parse(parts[0], CultureInfo.InvariantCulture);
+                ys[i] = double.Parse(parts[1], CultureInfo.InvariantCulture);
+            }
+            _x = xs;
+            _y = ys;
+            _points = value;
+        }
+    }
+
+    public override double Ease(double progress)
+    {
+        if (progress <= _x[0]) return _y[0];
+        for (var i = 1; i < _x.Length; i++)
+        {
+            if (progress <= _x[i])
+            {
+                var span = _x[i] - _x[i - 1];
+                var t = span <= 0 ? 1 : (progress - _x[i - 1]) / span;
+                return _y[i - 1] + (_y[i] - _y[i - 1]) * t;
+            }
+        }
+        return _y[^1];
+    }
+}

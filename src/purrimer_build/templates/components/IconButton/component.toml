@@ -1,0 +1,31 @@
+name = "IconButton"
+group = "Actions"
+order = 11
+summary = "A square button holding one Octicon; its label is the accessible name."
+
+[props.icon]
+type = "icon"
+default = ""
+doc = "Octicon name."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Accessible name, also the tooltip."
+
+[props.variant]
+type = "enum"
+default = "default"
+doc = "Fill style."
+values = ["default", "primary", "danger", "invisible"]
+
+[props.size]
+type = "enum"
+default = "medium"
+doc = "28, 32 or 40px square."
+values = ["small", "medium", "large"]
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the button and ignores presses."

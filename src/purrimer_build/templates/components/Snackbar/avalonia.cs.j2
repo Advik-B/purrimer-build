@@ -1,0 +1,127 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A short message above the bottom bar, with one optional action. It closes itself after Duration; zero keeps it open.
+[PseudoClasses(":open")]
+[TemplatePart("PART_Action", typeof(Button))]
+public class Snackbar : TemplatedControl
+{
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<Snackbar, bool>(nameof(IsOpen), defaultBindingMode: global::Avalonia.Data.BindingMode.TwoWay);
+
+    public static readonly StyledProperty<string?> MessageProperty =
+        AvaloniaProperty.Register<Snackbar, string?>(nameof(Message));
+
+    public static readonly StyledProperty<string?> ActionTextProperty =
+        AvaloniaProperty.Register<Snackbar, string?>(nameof(ActionText));
+
+    public static readonly StyledProperty<TimeSpan> DurationProperty =
+        AvaloniaProperty.Register<Snackbar, TimeSpan>(nameof(Duration), TimeSpan.FromMilliseconds({{ c.spec.props.duration.default }}));
+
+    public static readonly RoutedEvent<RoutedEventArgs> ActionInvokedEvent =
+        RoutedEvent.Register<Snackbar, RoutedEventArgs>(nameof(ActionInvoked), RoutingStrategies.Bubble);
+
+    public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
+        RoutedEvent.Register<Snackbar, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
+
+    private readonly global::Avalonia.Threading.DispatcherTimer _timer = new();
+    private Button? _action;
+
+    public Snackbar()
+    {
+        _timer.Tick += (_, _) => Close();
+    }
+
+    public bool IsOpen
+    {
+        get => GetValue(IsOpenProperty);
+        set => SetValue(IsOpenProperty, value);
+    }
+
+    public string? Message
+    {
+        get => GetValue(MessageProperty);
+        set => SetValue(MessageProperty, value);
+    }
+
+    public string? ActionText
+    {
+        get => GetValue(ActionTextProperty);
+        set => SetValue(ActionTextProperty, value);
+    }
+
+    public TimeSpan Duration
+    {
+        get => GetValue(DurationProperty);
+        set => SetValue(DurationProperty, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? ActionInvoked
+    {
+        add => AddHandler(ActionInvokedEvent, value);
+        remove => RemoveHandler(ActionInvokedEvent, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Closed
+    {
+        add => AddHandler(ClosedEvent, value);
+        remove => RemoveHandler(ClosedEvent, value);
+    }
+
+    public void Close()
+    {
+        _timer.Stop();
+        if (!IsOpen)
+            return;
+        IsOpen = false;
+        RaiseEvent(new RoutedEventArgs(ClosedEvent, this));
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsOpenProperty)
+        {
+            PseudoClasses.Set(":open", IsOpen);
+            _timer.Stop();
+            if (IsOpen && Duration > TimeSpan.Zero)
+            {
+                _timer.Interval = Duration;
+                _timer.Start();
+            }
+        }
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_action != null)
+            _action.Click -= OnActionClick;
+        base.OnApplyTemplate(e);
+        _action = e.NameScope.Find<Button>("PART_Action");
+        if (_action != null)
+            _action.Click += OnActionClick;
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _timer.Stop();
+    }
+
+    private void OnActionClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        RaiseEvent(new RoutedEventArgs(ActionInvokedEvent, this));
+        Close();
+    }
+}

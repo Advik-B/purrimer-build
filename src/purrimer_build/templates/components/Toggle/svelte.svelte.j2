@@ -1,0 +1,24 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { label = "", ariaLabel = "", checked = $bindable(false), disabled = false, onchange }: {
+    label?: string;
+    ariaLabel?: string;
+    checked?: boolean;
+    disabled?: boolean;
+    onchange?: (checked: boolean) => void;
+  } = $props();
+
+  function flip() {
+    if (disabled) return;
+    checked = !checked;
+    onchange?.(checked);
+  }
+</script>
+
+<label class="pm-toggle">
+  {#if label}<span>{label}</span>{/if}
+  <button type="button" class="pm-toggle__track" role="switch" aria-checked={checked} aria-label={label || ariaLabel} {disabled} onclick={flip}>
+    <span class="pm-toggle__knob"></span>
+  </button>
+</label>

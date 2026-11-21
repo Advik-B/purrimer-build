@@ -1,0 +1,9 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { text = "", tone = "default", children }: { text?: string; tone?: {{ c.spec.props.tone["values"] | map("tojson") | join(" | ") }}; children?: Snippet } = $props();
+</script>
+
+<span class={["pm-label", tone !== "default" && `pm-label--${tone}`]}>{#if children}{@render children()}{:else}{text}{/if}</span>

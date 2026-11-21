@@ -1,0 +1,16 @@
+.pm-avatar {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-accent-muted" | tok }};
+  color: {{ "fgColor-accent" | tok }};
+  box-shadow: 0 0 0 1px {{ "borderColor-muted" | tok }};
+  font: 600 13px/1 var(--font-sans);
+  user-select: none;
+}
+.pm-avatar--square { border-radius: {{ "borderRadius-small" | tok }}; }
+.pm-avatar img { width: 100%; height: 100%; object-fit: cover; }

@@ -1,0 +1,36 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component Avatar inherits Rectangle {
+    in property <string> name;
+    in property <image> source;
+    in property <length> size: 32px;
+    in property <bool> square;
+    in property <string> initials;
+
+    width: size;
+    height: size;
+    border-radius: square ? {{ "borderRadius-small" | tok }} : size / 2;
+    clip: true;
+    background: {{ "bgColor-accent-muted" | tok }};
+    border-width: 1px;
+    border-color: {{ "borderColor-muted" | tok }};
+    accessible-role: image;
+    accessible-label: name;
+
+    if root.source.width == 0: Text {
+        text: root.initials;
+        color: {{ "fgColor-accent" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: root.size * 0.4;
+        font-weight: 600;
+    }
+    if root.source.width > 0: Image {
+        width: 100%;
+        height: 100%;
+        source: root.source;
+        image-fit: cover;
+    }
+}

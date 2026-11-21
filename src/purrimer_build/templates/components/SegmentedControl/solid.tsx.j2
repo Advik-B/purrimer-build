@@ -1,0 +1,33 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type SegmentedControlProps = { items: string[]; selected?: number; label?: string; onSelect?: (index: number) => void };
+
+export function SegmentedControl(props: SegmentedControlProps): JSX.Element {
+  const [selected, setSelected] = createSignal(() => props.selected ?? 0);
+  const pick = (i: number) => {
+    setSelected(i);
+    props.onSelect?.(i);
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (selected() + step + props.items.length) % props.items.length;
+    pick(next);
+    ((e.currentTarget as HTMLElement).children[next] as HTMLElement).focus();
+  };
+  return (
+    <div class="pm-segmented" role="radiogroup" aria-label={props.label ?? "View"} tabindex="-1" onKeyDown={onKeyDown}>
+      <For each={props.items}>
+        {(item, i) => (
+          <button type="button" class="pm-segmented__item" role="radio" aria-checked={i() === selected() ? "true" : "false"} tabindex={i() === selected() ? 0 : -1} onClick={() => pick(i())}>
+            {item}
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}

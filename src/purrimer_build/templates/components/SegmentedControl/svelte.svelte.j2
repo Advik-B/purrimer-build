@@ -1,0 +1,25 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { items, selected = $bindable(0), label = "View", onselect }: { items: string[]; selected?: number; label?: string; onselect?: (index: number) => void } = $props();
+
+  function pick(i: number) {
+    selected = i;
+    onselect?.(i);
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    const step = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (selected + step + items.length) % items.length;
+    pick(next);
+    ((e.currentTarget as HTMLElement).children[next] as HTMLElement).focus();
+  }
+</script>
+
+<div class="pm-segmented" role="radiogroup" aria-label={label} tabindex="-1" {onkeydown}>
+  {#each items as item, i}
+    <button type="button" class="pm-segmented__item" role="radio" aria-checked={i === selected} tabindex={i === selected ? 0 : -1} onclick={() => pick(i)}>{item}</button>
+  {/each}
+</div>

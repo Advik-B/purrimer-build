@@ -1,0 +1,21 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+
+export type ProgressBarProps = { value?: number; indeterminate?: boolean; tone?: "accent" | "success" | "attention" | "danger"; label?: string };
+
+export function ProgressBar(props: ProgressBarProps): JSX.Element {
+  const value = () => Math.max(0, Math.min(100, props.value ?? 0));
+  return (
+    <div
+      class={["pm-progress", props.tone && props.tone !== "accent" && `pm-progress--${props.tone}`, props.indeterminate && "pm-progress--indeterminate"]}
+      role="progressbar"
+      aria-label={props.label ?? "Progress"}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={props.indeterminate ? undefined : value()}
+    >
+      <div class="pm-progress__fill" style={ { width: props.indeterminate ? undefined : `${value()}%` } } />
+    </div>
+  );
+}

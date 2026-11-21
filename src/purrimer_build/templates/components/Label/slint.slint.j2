@@ -1,0 +1,30 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component Label inherits Rectangle {
+    in property <string> text;
+    // "default", "accent", "success", "attention", "severe", "danger", "done" or "info"
+    in property <string> tone: "default";
+    height: 20px;
+    width: row.preferred-width;
+    border-radius: 10px;
+    border-width: {{ "borderWidth-thin" | tok }};
+    border-color: tone == "accent" ? {{ "borderColor-accent-emphasis" | tok }} : tone == "success" ? {{ "borderColor-success-emphasis" | tok }} : tone == "attention" ? {{ "borderColor-attention-emphasis" | tok }} : tone == "severe" ? {{ "bgColor-severe-emphasis" | tok }} : tone == "danger" ? {{ "borderColor-danger-emphasis" | tok }} : tone == "done" ? {{ "borderColor-done-emphasis" | tok }} : tone == "info" ? {{ "borderColor-info-emphasis" | tok }} : {{ "borderColor-default" | tok }};
+    accessible-role: AccessibleRole.text;
+    accessible-label: text;
+
+    row := HorizontalLayout {
+        padding-left: 7px;
+        padding-right: 7px;
+        Text {
+            text: root.text;
+            color: root.tone == "accent" ? {{ "fgColor-accent" | tok }} : root.tone == "success" ? {{ "fgColor-success" | tok }} : root.tone == "attention" ? {{ "fgColor-attention" | tok }} : root.tone == "severe" ? {{ "fgColor-severe" | tok }} : root.tone == "danger" ? {{ "fgColor-danger" | tok }} : root.tone == "done" ? {{ "fgColor-done" | tok }} : root.tone == "info" ? {{ "fgColor-info" | tok }} : {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-caption" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: 500;
+            vertical-alignment: center;
+        }
+    }
+}

@@ -1,0 +1,20 @@
+name = "ProgressBar"
+group = "Status"
+order = 33
+summary = "A track that fills to show progress, or sweeps while it is unknown."
+
+[props.value]
+type = "float"
+default = 0
+doc = "Progress from 0 to 100."
+
+[props.indeterminate]
+type = "bool"
+default = false
+doc = "Sweeps instead of filling."
+
+[props.tone]
+type = "enum"
+default = "accent"
+doc = "Fill colour role."
+values = ["accent", "success", "attention", "danger"]

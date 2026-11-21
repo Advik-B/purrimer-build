@@ -1,0 +1,78 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { IconButton } from "icon-button.slint";
+
+// Place it last in the window so it covers the screen; it shows while open is true.
+export component Dialog inherits Rectangle {
+    in-out property <bool> open;
+    in property <string> title;
+    in property <length> dialog-width: 440px;
+    callback closed();
+
+    visible: open;
+    background: {{ "overlay-backdrop-bgColor" | tok }};
+
+    function close() {
+        root.open = false;
+        root.closed();
+    }
+
+    TouchArea { clicked => { root.close(); } }
+
+    FocusScope {
+        key-pressed(event) => {
+            if (event.text == Key.Escape) {
+                root.close();
+                return accept;
+            }
+            reject
+        }
+
+        Rectangle {
+            width: min(root.dialog-width, root.width - 2 * {{ "mobile-gutter" | tok }});
+            x: (root.width - self.width) / 2;
+            y: (root.height - self.height) / 2;
+            border-radius: {{ "borderRadius-large" | tok }};
+            background: {{ "overlay-bgColor" | tok }};
+            border-width: {{ "borderWidth-thin" | tok }};
+            border-color: {{ "borderColor-default" | tok }};
+            drop-shadow-offset-y: {{ "shadow-floating-large" | tok }}.offset-y;
+            drop-shadow-blur: {{ "shadow-floating-large" | tok }}.blur;
+            drop-shadow-color: {{ "shadow-floating-large" | tok }}.color;
+            accessible-role: groupbox;
+            accessible-label: root.title;
+
+            TouchArea { }
+
+            VerticalLayout {
+                HorizontalLayout {
+                    height: 48px;
+                    padding-left: 16px;
+                    padding-right: 8px;
+                    Text {
+                        horizontal-stretch: 1;
+                        text: root.title;
+                        overflow: elide;
+                        vertical-alignment: center;
+                        color: {{ "fgColor-default" | tok }};
+                        font-family: {{ "text-title-medium" | tok }}.font-family;
+                        font-size: {{ "text-title-medium" | tok }}.font-size;
+                        font-weight: {{ "text-title-medium" | tok }}.font-weight;
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        IconButton { icon: PurrimerIcons.x-16; label: "Close"; variant: "invisible"; clicked => { root.close(); } }
+                    }
+                }
+                Rectangle { height: {{ "borderWidth-thin" | tok }}; background: {{ "borderColor-default" | tok }}; }
+                VerticalLayout {
+                    padding: 16px;
+                    spacing: 16px;
+                    @children
+                }
+            }
+        }
+    }
+}

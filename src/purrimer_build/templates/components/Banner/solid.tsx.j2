@@ -1,0 +1,34 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
+
+const icons = { info: "info", success: "check-circle", attention: "alert", danger: "stop", done: "check-circle-fill" } as const;
+
+export type BannerProps = {
+  tone?: keyof typeof icons;
+  title?: string;
+  text?: string;
+  dismissible?: boolean;
+  onDismiss?: () => void;
+  children?: JSX.Element;
+};
+
+export function Banner(props: BannerProps): JSX.Element {
+  const tone = () => props.tone ?? "info";
+  return (
+    <div class={["pm-banner", tone() !== "info" && `pm-banner--${tone()}`]} role={tone() === "danger" ? "alert" : "status"}>
+      <Icon name={icons[tone()]} class="pm-banner__icon" />
+      <div class="pm-banner__body">
+        <Show when={props.title}><p class="pm-banner__title">{props.title}</p></Show>
+        <Show when={props.text}><p class="pm-banner__text">{props.text}</p></Show>
+        {props.children}
+      </div>
+      <Show when={props.dismissible}>
+        <IconButton class="pm-banner__close" icon="x" label="Dismiss" variant="invisible" onClick={() => props.onDismiss?.()} />
+      </Show>
+    </div>
+  );
+}

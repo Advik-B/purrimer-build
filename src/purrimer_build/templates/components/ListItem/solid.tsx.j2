@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type ListItemProps = { headline: string; supporting?: string; icon?: string; trailing?: string; chevron?: boolean; onClick?: () => void };
+
+export function ListItem(props: ListItemProps): JSX.Element {
+  const content = () => (
+    <>
+      <Show when={props.icon}>{(name) => <span class="pm-list-item__tile"><Icon name={name()} /></span>}</Show>
+      <span class="pm-list-item__text">
+        <span class="pm-list-item__headline">{props.headline}</span>
+        <Show when={props.supporting}><span class="pm-list-item__supporting">{props.supporting}</span></Show>
+      </span>
+      <Show when={props.trailing}><span class="pm-list-item__trailing">{props.trailing}</span></Show>
+      <Show when={props.chevron}><Icon name="chevron-right" class="pm-list-item__chevron" /></Show>
+    </>
+  );
+  const cls = () => ["pm-list-item", props.supporting && "pm-list-item--two-line"];
+  return (
+    <Show when={props.onClick} fallback={<div class={cls()} role="listitem">{content()}</div>}>
+      <button type="button" class={cls()} onClick={() => props.onClick?.()}>{content()}</button>
+    </Show>
+  );
+}

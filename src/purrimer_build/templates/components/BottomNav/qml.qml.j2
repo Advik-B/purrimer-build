@@ -1,0 +1,91 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    // [{ icon: "home", label: "Home", badge: 0 }]
+    property var items: []
+    property int selected: 0
+    property bool showLabels: false
+    signal activated(int index)
+
+    implicitWidth: 360
+    implicitHeight: {{ "mobile-bottomNav-height" | tok }}
+    color: {{ "bgColor-default" | tok }}
+
+    Rectangle { width: parent.width; height: {{ "borderWidth-thin" | tok }}; color: {{ "borderColor-muted" | tok }} }
+
+    Row {
+        anchors.fill: parent
+        Repeater {
+            model: root.items
+            Item {
+                id: cell
+                required property var modelData
+                required property int index
+                readonly property bool current: root.selected === cell.index
+                width: root.width / Math.max(1, root.items.length)
+                height: root.height
+                Accessible.role: Accessible.PageTab
+                Accessible.name: cell.modelData.label
+                Accessible.selected: current
+
+                Rectangle {
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    width: 24
+                    height: 3
+                    bottomLeftRadius: 3
+                    bottomRightRadius: 3
+                    color: {{ "bgColor-accent-emphasis" | tok }}
+                    transform: Scale { origin.x: 12; xScale: cell.current ? 1 : 0; Behavior on xScale { NumberAnimation { duration: {{ "duration-base" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} } } }
+                }
+
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 2
+                    Icon {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        name: cell.modelData.icon
+                        size: 24
+                        color: cell.current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }}
+                    }
+                    Text {
+                        visible: root.showLabels
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: cell.modelData.label
+                        font: {{ "text-mobile-navLabel" | tok }}
+                        color: cell.current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }}
+                    }
+                }
+
+                Rectangle {
+                    visible: (cell.modelData.badge || 0) > 0
+                    x: parent.width / 2 + 6
+                    y: 6
+                    width: Math.max(16, badgeText.implicitWidth + 8)
+                    height: 16
+                    radius: 8
+                    color: {{ "bgColor-danger-emphasis" | tok }}
+                    Text {
+                        id: badgeText
+                        anchors.centerIn: parent
+                        text: (cell.modelData.badge || 0) > 99 ? "99+" : (cell.modelData.badge || 0)
+                        font.family: {{ "text-caption" | tok }}.family
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        color: {{ "fgColor-onEmphasis" | tok }}
+                    }
+                }
+
+                TapHandler {
+                    onTapped: {
+                        root.selected = cell.index
+                        root.activated(cell.index)
+                    }
+                }
+            }
+        }
+    }
+}

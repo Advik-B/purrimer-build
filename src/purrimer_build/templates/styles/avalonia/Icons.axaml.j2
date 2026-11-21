@@ -1,0 +1,10 @@
+<!-- {{ note }} -->
+<!-- Octicons (MIT, GitHub Inc.) as geometries: PmIcon<Name>16 and PmIcon<Name>24. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+{% for name, sizes in icons.items() %}
+{% for size, path in sizes.items() %}
+  <StreamGeometry x:Key="PmIcon{{ name | pascal }}{{ size }}">{{ path }}</StreamGeometry>
+{% endfor %}
+{% endfor %}
+</ResourceDictionary>

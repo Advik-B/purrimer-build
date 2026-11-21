@@ -1,0 +1,29 @@
+name = "Select"
+group = "Forms"
+order = 24
+summary = "A field that opens a list of options; the open list joins the field."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Label above the field."
+
+[props.options]
+type = "list"
+default = []
+doc = "Option labels."
+
+[props.value]
+type = "int"
+default = -1
+doc = "Index of the chosen option, or -1 for none."
+
+[props.placeholder]
+type = "string"
+default = "Choose"
+doc = "Text while nothing is chosen."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the field."

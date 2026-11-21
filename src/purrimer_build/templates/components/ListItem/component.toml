@@ -1,0 +1,29 @@
+name = "ListItem"
+group = "Mobile"
+order = 53
+summary = "One row of a mobile list: icon tile, headline, supporting text and trailing text."
+
+[props.headline]
+type = "string"
+default = ""
+doc = "First line."
+
+[props.supporting]
+type = "string"
+default = ""
+doc = "Second line; makes the row 64px."
+
+[props.icon]
+type = "icon"
+default = ""
+doc = "Octicon in the leading tile."
+
+[props.trailing]
+type = "string"
+default = ""
+doc = "Text at the end, such as a time."
+
+[props.chevron]
+type = "bool"
+default = false
+doc = "Shows a chevron for rows that open a screen."

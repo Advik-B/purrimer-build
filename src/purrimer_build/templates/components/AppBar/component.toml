@@ -1,0 +1,24 @@
+name = "AppBar"
+group = "Mobile"
+order = 50
+summary = "The bar at the top of a mobile screen: back, title and up to two actions."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Screen title."
+
+[props.back]
+type = "bool"
+default = false
+doc = "Shows the back button."
+
+[props.large]
+type = "bool"
+default = false
+doc = "Large title under the bar, for top-level screens."
+
+[props.elevated]
+type = "bool"
+default = false
+doc = "Hairline and shadow, for when content scrolls under it."

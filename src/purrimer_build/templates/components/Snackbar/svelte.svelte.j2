@@ -1,0 +1,30 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { open = $bindable(false), message, action = "", duration = {{ c.spec.props.duration.default }}, onaction, onclose }: {
+    open?: boolean;
+    message: string;
+    action?: string;
+    duration?: number;
+    onaction?: () => void;
+    onclose?: () => void;
+  } = $props();
+
+  function close() {
+    open = false;
+    onclose?.();
+  }
+
+  $effect(() => {
+    if (!open || duration <= 0) return;
+    const id = setTimeout(close, duration);
+    return () => clearTimeout(id);
+  });
+</script>
+
+{#if open}
+  <div class="pm-snackbar" role="status" aria-live="polite">
+    <span class="pm-snackbar__message">{message}</span>
+    {#if action}<button type="button" class="pm-snackbar__action" onclick={() => { onaction?.(); close(); }}>{action}</button>{/if}
+  </div>
+{/if}

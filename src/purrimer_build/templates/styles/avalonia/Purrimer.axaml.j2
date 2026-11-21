@@ -1,0 +1,68 @@
+{% macro timespan(ms) %}0:0:{{ (ms / 1000) | num }}{% endmacro %}
+{% set weights = {100: "Thin", 200: "ExtraLight", 300: "Light", 400: "Normal", 500: "Medium", 600: "SemiBold", 700: "Bold", 800: "ExtraBold", 900: "Black"} %}
+<!-- {{ note }} -->
+<!-- {{ tokens.name }} resources for Avalonia 12. Use DynamicResource for themed keys (colours, brushes, shadows). -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+
+  <!-- Lengths in device-independent pixels -->
+{% for n, v in tokens.spacing + tokens.size + tokens.border_width %}
+  <x:Double x:Key="Pm{{ n | pascal }}">{{ v | num }}</x:Double>
+{% endfor %}
+{% for n, v in tokens.spacing + tokens.border_width %}
+  <Thickness x:Key="Pm{{ n | pascal }}Thickness">{{ v | num }}</Thickness>
+{% endfor %}
+{% for n, v in tokens.radius %}
+  <CornerRadius x:Key="Pm{{ n | pascal }}">{{ v | num }}</CornerRadius>
+{% endfor %}
+
+  <!-- Durations -->
+{% for n, v in tokens.durations %}
+  <sys:TimeSpan x:Key="Pm{{ n | pascal }}">{{ timespan(v) }}</sys:TimeSpan>
+{% endfor %}
+
+  <!-- Easings -->
+{% for n, e in tokens.easings %}
+{% if e.kind == "cubic" %}
+  <SplineEasing x:Key="Pm{{ n | pascal }}" X1="{{ e.values[0] | num }}" Y1="{{ e.values[1] | num }}" X2="{{ e.values[2] | num }}" Y2="{{ e.values[3] | num }}" />
+{% elif e.kind == "linear" %}
+  <LinearEasing x:Key="Pm{{ n | pascal }}" />
+{% else %}
+  <pm:PurrimerLinearEasing x:Key="Pm{{ n | pascal }}" Points="{% for x, y in e.values %}{{ x | num }},{{ y | num }}{{ " " if not loop.last }}{% endfor %}" />
+{% endif %}
+{% endfor %}
+
+  <!-- Fonts: Purrimer/Fonts holds the TTF files; include it as AvaloniaResource -->
+{% for key, fam in tokens.family_names.items() %}
+  <FontFamily x:Key="PmFont{{ key | pascal }}">avares://{{ assembly }}/Purrimer/Fonts#{{ fam }}</FontFamily>
+{% endfor %}
+
+  <!-- Text styles -->
+{% for s in tokens.type_styles %}
+  <x:Double x:Key="Pm{{ s.name | pascal }}FontSize">{{ s.size | num }}</x:Double>
+  <x:Double x:Key="Pm{{ s.name | pascal }}LineHeight">{{ s.line_height | num }}</x:Double>
+  <FontWeight x:Key="Pm{{ s.name | pascal }}FontWeight">{{ weights.get(s.weight, s.weight) }}</FontWeight>
+  <x:Double x:Key="Pm{{ s.name | pascal }}LetterSpacing">{{ s.letter_spacing | num }}</x:Double>
+{% endfor %}
+
+  <ResourceDictionary.ThemeDictionaries>
+{% for t in themes %}
+{% if t in ava_inherits %}
+    <ResourceDictionary x:Key="{x:Static pm:PurrimerThemes.{{ labels[t] }}}">
+{% else %}
+    <ResourceDictionary x:Key="{{ ava_keys[t] }}">
+{% endif %}
+      <!-- {{ labels[t] }} -->
+{% for n in tokens.colors %}
+      <Color x:Key="Pm{{ n | pascal }}Color">{{ color_argb[n][t] }}</Color>
+      <SolidColorBrush x:Key="Pm{{ n | pascal }}" Color="{{ color_argb[n][t] }}" />
+{% endfor %}
+{% for n in tokens.shadows %}
+      <BoxShadows x:Key="Pm{{ n | pascal }}">{{ ava_shadow(tokens.shadows[n][t]) }}</BoxShadows>
+{% endfor %}
+    </ResourceDictionary>
+{% endfor %}
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

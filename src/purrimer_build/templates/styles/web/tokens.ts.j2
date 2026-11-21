@@ -1,0 +1,37 @@
+// {{ note }}
+
+export const themes = {{ themes | tojson }} as const;
+export type ThemeId = (typeof themes)[number];
+export const themeLabels: Record<ThemeId, string> = {{ labels | tojson }};
+export const darkThemes: readonly ThemeId[] = {{ tokens.dark_themes | tojson }};
+
+export const color = {{ color_hex | tojson(2) }} as const;
+export type ColorToken = keyof typeof color;
+
+export const shadow = {{ tokens.shadow_css | tojson(2) }} as const;
+export type ShadowToken = keyof typeof shadow;
+
+{% for label, items in [("spacing", tokens.spacing), ("radius", tokens.radius), ("size", tokens.size), ("borderWidth", tokens.border_width), ("duration", tokens.durations)] %}
+export const {{ label }} = {{ dict(items) | tojson(2) }} as const;
+
+{% endfor %}
+export const easing = {{ dict(tokens.easings_css) | tojson(2) }} as const;
+
+export const fontFamily = {{ tokens.families | tojson(2) }} as const;
+
+{% set ts = {} %}
+{% for s in tokens.type_styles %}{% set _ = ts.update({s.name: {"family": s.family_key, "fontSize": s.size, "lineHeight": s.line_height, "fontWeight": s.weight, "letterSpacing": (s.letter_spacing | round(3))}}) %}{% endfor %}
+export const textStyle = {{ ts | tojson(2) }} as const;
+export type TextStyleName = keyof typeof textStyle;
+
+export type CssToken = ColorToken | ShadowToken | keyof typeof spacing | keyof typeof radius
+  | keyof typeof size | keyof typeof borderWidth | keyof typeof duration | keyof typeof easing;
+
+// A var() reference for inline styles, such as style={ { color: cssVar("fgColor-muted") } }.
+export function cssVar(name: CssToken): string {
+  return `var(--${name})`;
+}
+
+export function isDarkTheme(theme: ThemeId): boolean {
+  return darkThemes.includes(theme);
+}

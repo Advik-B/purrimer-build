@@ -1,0 +1,78 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A bordered surface with an optional title; set IsInteractive for a pressable card.
+[PseudoClasses(":pressed")]
+public class Card : ContentControl
+{
+    public static readonly StyledProperty<string?> TitleProperty =
+        AvaloniaProperty.Register<Card, string?>(nameof(Title));
+
+    public static readonly StyledProperty<bool> IsInteractiveProperty =
+        AvaloniaProperty.Register<Card, bool>(nameof(IsInteractive));
+
+    public static readonly RoutedEvent<RoutedEventArgs> ClickEvent =
+        RoutedEvent.Register<Card, RoutedEventArgs>(nameof(Click), RoutingStrategies.Bubble);
+
+    public string? Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public bool IsInteractive
+    {
+        get => GetValue(IsInteractiveProperty);
+        set => SetValue(IsInteractiveProperty, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Click
+    {
+        add => AddHandler(ClickEvent, value);
+        remove => RemoveHandler(ClickEvent, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsInteractiveProperty)
+            Focusable = IsInteractive;
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (IsInteractive && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            PseudoClasses.Set(":pressed", true);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!IsInteractive || !PseudoClasses.Contains(":pressed"))
+            return;
+        PseudoClasses.Set(":pressed", false);
+        if (new Rect(Bounds.Size).Contains(e.GetPosition(this)))
+            RaiseEvent(new RoutedEventArgs(ClickEvent, this));
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (IsInteractive && (e.Key == Key.Enter || e.Key == Key.Space))
+        {
+            e.Handled = true;
+            RaiseEvent(new RoutedEventArgs(ClickEvent, this));
+        }
+    }
+}

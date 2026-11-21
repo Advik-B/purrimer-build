@@ -1,0 +1,43 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Dialog}" TargetType="pm:Dialog">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="IsVisible" Value="False" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Dialog">
+        <Border Name="PART_Backdrop" Background="{{ "overlay-backdrop-bgColor" | tok }}">
+          <Border Width="{TemplateBinding DialogWidth}" Margin="{{ px("mobile-gutter") | num }}" HorizontalAlignment="Center"
+                  VerticalAlignment="Center" Background="{{ "overlay-bgColor" | tok }}" BorderBrush="{{ "borderColor-default" | tok }}"
+                  BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}" CornerRadius="{{ "borderRadius-large" | tok }}"
+                  BoxShadow="{{ "shadow-floating-large" | tok }}" ClipToBounds="True">
+            <DockPanel>
+              <Grid DockPanel.Dock="Top" Height="48" ColumnDefinitions="*,Auto" Margin="16,0,8,0">
+                <TextBlock Text="{TemplateBinding Title}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                           FontFamily="{{ "heading" | font }}" FontSize="{{ "text-title-medium" | tokx("FontSize") }}"
+                           FontWeight="{{ "text-title-medium" | tokx("FontWeight") }}" />
+                <pm:IconButton Name="PART_Close" Grid.Column="1" Classes="invisible" IconName="x" Label="Close"
+                               VerticalAlignment="Center" />
+              </Grid>
+              <Border DockPanel.Dock="Top" Height="1" Background="{{ "borderColor-default" | tok }}" />
+              <Border DockPanel.Dock="Bottom" BorderBrush="{{ "borderColor-default" | tok }}" BorderThickness="0,1,0,0" Padding="16"
+                      IsVisible="{TemplateBinding Footer, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ContentPresenter Content="{TemplateBinding Footer}" HorizontalAlignment="Right" />
+              </Border>
+              <ContentPresenter Name="PART_ContentPresenter" Margin="16" Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </DockPanel>
+          </Border>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

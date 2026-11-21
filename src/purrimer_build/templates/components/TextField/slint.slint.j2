@@ -1,0 +1,82 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export component TextField inherits VerticalLayout {
+    in property <string> label;
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> caption;
+    in property <string> error;
+    in property <string> leading-icon;
+    in property <InputType> input-type: InputType.text;
+    in property <bool> enabled: true;
+    callback accepted(string);
+    callback edited(string);
+
+    spacing: 4px;
+
+    Text {
+        text: root.label;
+        color: {{ "fgColor-default" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    box := Rectangle {
+        height: {{ "control-medium-size" | tok }};
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: root.enabled ? {{ "control-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
+        border-width: input.has-focus ? {{ "borderWidth-thick" | tok }} : {{ "borderWidth-thin" | tok }};
+        border-color: input.has-focus ? {{ "focus-outlineColor" | tok }} : root.error != "" ? {{ "borderColor-danger-emphasis" | tok }} : root.enabled ? {{ "control-borderColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
+
+        HorizontalLayout {
+            padding-left: root.leading-icon != "" ? 10px : {{ "control-medium-paddingInline-normal" | tok }};
+            padding-right: {{ "control-medium-paddingInline-normal" | tok }};
+            spacing: 8px;
+            if root.leading-icon != "": Icon { path: root.leading-icon; color: {{ "fgColor-muted" | tok }}; y: (parent.height - self.height) / 2; }
+            Rectangle {
+                input := TextInput {
+                    width: 100%;
+                    text <=> root.text;
+                    enabled: root.enabled;
+                    input-type: root.input-type;
+                    color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
+                    selection-background-color: {{ "bgColor-accent-muted" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    vertical-alignment: center;
+                    single-line: true;
+                    accessible-label: root.label;
+                    accepted => { root.accepted(self.text); }
+                    edited => { root.edited(self.text); }
+                }
+                if root.text == "" && !input.has-focus: Text {
+                    width: 100%;
+                    text: root.placeholder;
+                    color: {{ "fgColor-muted" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+    }
+
+    if root.error != "" || root.caption != "": HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+        if root.error != "": Icon { path: PurrimerIcons.alert-fill-16; size: 12px; color: {{ "fgColor-danger" | tok }}; y: 2px; }
+        Text {
+            text: root.error != "" ? root.error : root.caption;
+            color: root.error != "" ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-caption" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: root.error != "" ? 600 : 400;
+            wrap: word-wrap;
+        }
+    }
+}

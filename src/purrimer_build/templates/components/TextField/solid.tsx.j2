@@ -1,0 +1,44 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createUniqueId, omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type TextFieldProps = Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "class" | "value" | "onInput"> & {
+  label: string;
+  value?: string;
+  onValue?: (value: string) => void;
+  caption?: string;
+  error?: string;
+  leadingIcon?: string;
+  class?: JSX.ClassValue;
+};
+
+export function TextField(props: TextFieldProps): JSX.Element {
+  const rest = omit(props, "label", "value", "onValue", "caption", "error", "leadingIcon", "class", "id", "disabled");
+  const id = props.id ?? `pm-field-${createUniqueId()}`;
+  return (
+    <div class={["pm-field", props.error && "pm-field--invalid", props.disabled && "pm-field--disabled", props.class]}>
+      <label class="pm-field__label" for={id}>{props.label}</label>
+      <div class="pm-field__control">
+        <Show when={props.leadingIcon}>{(name) => <Icon name={name()} />}</Show>
+        <input
+          {...rest}
+          id={id}
+          class="pm-field__input"
+          value={props.value ?? ""}
+          disabled={props.disabled}
+          aria-invalid={props.error ? "true" : undefined}
+          aria-describedby={props.error || props.caption ? `${id}-note` : undefined}
+          onInput={(e) => props.onValue?.(e.currentTarget.value)}
+        />
+      </div>
+      <Show
+        when={props.error}
+        fallback={<Show when={props.caption}><span class="pm-field__caption" id={`${id}-note`}>{props.caption}</span></Show>}
+      >
+        <span class="pm-field__error" id={`${id}-note`}><Icon name="alert-fill" />{props.error}</span>
+      </Show>
+    </div>
+  );
+}

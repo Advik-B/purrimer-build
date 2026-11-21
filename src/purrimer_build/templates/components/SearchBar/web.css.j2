@@ -1,0 +1,8 @@
+.pm-search { position: relative; display: flex; align-items: center; height: {{ "control-large-size" | tok }}; border-radius: {{ "borderRadius-medium" | tok }}; corner-shape: squircle; background: {{ "bgColor-muted" | tok }}; }
+.pm-search:focus-within { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; }
+.pm-search > svg { width: 16px; height: 16px; margin-left: 12px; flex: none; fill: {{ "fgColor-muted" | tok }}; }
+.pm-search__input { flex: 1; min-width: 0; height: 100%; padding: 0 8px; border: 0; background: transparent; color: {{ "fgColor-default" | tok }}; font: 400 16px/24px var(--font-sans); outline: none; }
+.pm-search__input::placeholder { color: {{ "fgColor-muted" | tok }}; }
+.pm-search__input::-webkit-search-cancel-button { display: none; }
+.pm-search__clear { display: grid; place-items: center; width: 36px; height: 36px; margin-right: 2px; padding: 0; border: 0; border-radius: {{ "borderRadius-medium" | tok }}; background: transparent; color: {{ "fgColor-muted" | tok }}; cursor: pointer; }
+.pm-search__clear svg { width: 16px; height: 16px; fill: currentColor; }

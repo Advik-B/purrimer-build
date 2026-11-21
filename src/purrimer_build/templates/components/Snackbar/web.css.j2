@@ -1,0 +1,26 @@
+.pm-snackbar {
+  position: fixed;
+  left: 50%;
+  bottom: calc({{ "mobile-bottomNav-height" | tok }} + {{ "base-size-16" | tok }} + env(safe-area-inset-bottom, 0px));
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(calc(100vw - 2 * {{ "mobile-gutter" | tok }}), 560px);
+  min-height: 48px;
+  padding: 4px 4px 4px 16px;
+  box-sizing: border-box;
+  border-radius: {{ "borderRadius-large" | tok }};
+  background: {{ "bgColor-emphasis" | tok }};
+  color: {{ "fgColor-onEmphasis" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  font: 400 14px/20px var(--font-sans);
+  translate: -50% 0;
+  animation: pm-snackbar-in {{ "duration-sleepy-medium" | tok }} {{ "easing-sleepy-enter" | tok }};
+}
+.pm-snackbar__message { flex: 1; min-width: 0; }
+.pm-snackbar__action { height: 40px; padding: 0 12px; border: 0; border-radius: {{ "borderRadius-medium" | tok }}; background: transparent; color: inherit; font: 600 14px/20px var(--font-sans); text-decoration: underline; cursor: pointer; }
+.pm-snackbar__action:hover { background: rgb(from currentColor r g b / 0.12); }
+.pm-snackbar__action:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid currentColor; }
+@keyframes pm-snackbar-in { from { opacity: 0; translate: -50% 16px; } }
+@media (prefers-reduced-motion: reduce) { .pm-snackbar { animation-name: pm-fade-in; } }

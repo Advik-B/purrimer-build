@@ -1,0 +1,29 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import type { HTMLButtonAttributes } from "svelte/elements";
+  import Icon from "./Icon.svelte";
+
+  type Props = HTMLButtonAttributes & {
+    label?: string;
+    variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+    size?: {{ c.spec.props.size["values"] | map("tojson") | join(" | ") }};
+    leadingIcon?: string;
+    trailingIcon?: string;
+    block?: boolean;
+    children?: Snippet;
+  };
+
+  let { label = "", variant = "default", size = "medium", leadingIcon = "", trailingIcon = "", block = false, type = "button", class: className = "", children, ...rest }: Props = $props();
+</script>
+
+<button
+  {...rest}
+  {type}
+  class={["pm-button", `pm-button--${variant}`, size !== "medium" && `pm-button--${size}`, block && "pm-button--block", className]}
+>
+  {#if leadingIcon}<Icon name={leadingIcon} />{/if}
+  {#if children}{@render children()}{:else}{label}{/if}
+  {#if trailingIcon}<Icon name={trailingIcon} />{/if}
+</button>

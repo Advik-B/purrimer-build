@@ -1,0 +1,53 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+import QtQuick.Effects
+
+T.Button {
+    id: control
+    property string iconName: "plus"
+    property string label
+    property bool extended: false
+
+    implicitWidth: extended ? row.implicitWidth + 32 : {{ "mobile-fab-size" | tok }}
+    implicitHeight: {{ "mobile-fab-size" | tok }}
+    Accessible.name: label
+    scale: down ? 0.96 : 1
+    Behavior on scale { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
+
+    contentItem: Item {
+        Row {
+            id: row
+            anchors.centerIn: parent
+            spacing: 8
+            Icon { name: control.iconName; size: 24; color: {{ "fgColor-onEmphasis" | tok }}; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+                visible: control.extended
+                text: control.label
+                font.family: {{ "text-mobile-body" | tok }}.family
+                font.pixelSize: 16
+                font.weight: Font.DemiBold
+                color: {{ "fgColor-onEmphasis" | tok }}
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+    }
+
+    background: Rectangle {
+        radius: {{ "borderRadius-large" | tok }}
+        color: control.down ? {{ "button-primary-bgColor-active" | tok }} : control.hovered ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }}
+        RectangularShadow {
+            readonly property var key: {{ "shadow-floating-small" | tok }}[0]
+            anchors.fill: parent
+            z: -1
+            radius: parent.radius
+            offset.x: key.x
+            offset.y: key.y
+            blur: key.blur
+            spread: key.spread
+            color: key.color
+        }
+    }
+}

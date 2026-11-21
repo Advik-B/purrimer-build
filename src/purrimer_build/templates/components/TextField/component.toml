@@ -1,0 +1,45 @@
+name = "TextField"
+group = "Forms"
+order = 20
+summary = "A labelled text input with an optional caption and validation message."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Label above the field."
+
+[props.value]
+type = "string"
+default = ""
+doc = "Current text."
+
+[props.placeholder]
+type = "string"
+default = ""
+doc = "Hint shown while empty."
+
+[props.caption]
+type = "string"
+default = ""
+doc = "Helper text under the field."
+
+[props.error]
+type = "string"
+default = ""
+doc = "Validation message; marks the field invalid."
+
+[props.leadingIcon]
+type = "icon"
+default = ""
+doc = "Octicon inside the field, before the text."
+
+[props.type]
+type = "enum"
+default = "text"
+doc = "Input type."
+values = ["text", "email", "password", "search", "url", "tel", "number"]
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Read-only and greyed."

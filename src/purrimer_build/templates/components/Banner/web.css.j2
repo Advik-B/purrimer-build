@@ -1,0 +1,20 @@
+.pm-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-info-emphasis" | tok }};
+  border-radius: {{ "borderRadius-large" | tok }};
+  background: {{ "bgColor-info-muted" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+}
+.pm-banner__icon { width: 16px; height: 16px; margin-top: 2px; flex: none; fill: {{ "fgColor-info" | tok }}; }
+.pm-banner__body { flex: 1; min-width: 0; }
+.pm-banner__title { margin: 0; font-weight: 600; }
+.pm-banner__text { margin: 0; }
+.pm-banner__close { flex: none; margin: -4px -8px -4px 0; }
+{% for tone in ["success", "attention", "danger", "done"] %}
+.pm-banner--{{ tone }} { border-color: {{ ("borderColor-" ~ tone ~ "-emphasis") | tok }}; background: {{ ("bgColor-" ~ tone ~ "-muted") | tok }}; }
+.pm-banner--{{ tone }} .pm-banner__icon { fill: {{ ("fgColor-" ~ tone) | tok }}; }
+{% endfor %}

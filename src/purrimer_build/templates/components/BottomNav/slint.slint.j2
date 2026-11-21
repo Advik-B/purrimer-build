@@ -1,0 +1,83 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export struct BottomNavItem {
+    // 24px path commands, such as PurrimerIcons.home-24
+    icon: string,
+    label: string,
+    badge: int,
+}
+
+export component BottomNav inherits Rectangle {
+    in property <[BottomNavItem]> items;
+    in-out property <int> selected;
+    in property <bool> show-labels;
+    callback activated(int);
+
+    height: {{ "mobile-bottomNav-height" | tok }};
+    background: {{ "bgColor-default" | tok }};
+
+    Rectangle { y: 0px; height: {{ "borderWidth-thin" | tok }}; background: {{ "borderColor-muted" | tok }}; }
+
+    HorizontalLayout {
+        for item[i] in root.items: Rectangle {
+            property <bool> current: i == root.selected;
+            accessible-role: tab;
+            accessible-label: item.label;
+            accessible-item-selectable: true;
+            accessible-item-selected: current;
+            accessible-action-default => { root.selected = i; root.activated(i); }
+
+            Rectangle {
+                y: 0px;
+                width: current ? 24px : 0px;
+                height: 3px;
+                border-bottom-left-radius: 3px;
+                border-bottom-right-radius: 3px;
+                background: {{ "bgColor-accent-emphasis" | tok }};
+                animate width { duration: {{ "duration-base" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                spacing: 2px;
+                HorizontalLayout {
+                    alignment: center;
+                    Icon { path: item.icon; box: 24; size: 24px; color: current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }}; }
+                }
+                if root.show-labels: Text {
+                    text: item.label;
+                    horizontal-alignment: center;
+                    color: current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }};
+                    font-family: {{ "text-mobile-navLabel" | tok }}.font-family;
+                    font-size: {{ "text-mobile-navLabel" | tok }}.font-size;
+                    font-weight: {{ "text-mobile-navLabel" | tok }}.font-weight;
+                }
+            }
+
+            if item.badge > 0: Rectangle {
+                x: parent.width / 2 + 6px;
+                y: 6px;
+                width: max(16px, badge-text.preferred-width + 8px);
+                height: 16px;
+                border-radius: 8px;
+                background: {{ "bgColor-danger-emphasis" | tok }};
+                badge-text := Text {
+                    text: item.badge > 99 ? "99+" : item.badge;
+                    color: {{ "fgColor-onEmphasis" | tok }};
+                    font-family: {{ "text-caption" | tok }}.font-family;
+                    font-size: 11px;
+                    font-weight: 600;
+                }
+            }
+
+            TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.selected = i; root.activated(i); }
+            }
+        }
+    }
+}

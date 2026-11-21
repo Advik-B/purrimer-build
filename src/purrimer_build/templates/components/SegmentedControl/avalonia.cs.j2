@@ -1,0 +1,18 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// Two to five mutually exclusive options in a pill track.
+public class SegmentedControl : ListBox
+{
+    protected override Type StyleKeyOverride => typeof(SegmentedControl);
+}

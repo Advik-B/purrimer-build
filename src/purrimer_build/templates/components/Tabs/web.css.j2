@@ -1,0 +1,22 @@
+.pm-tabs { display: flex; flex-direction: column; }
+.pm-tabs__list { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.pm-tabs__tab {
+  position: relative;
+  height: 32px;
+  margin-bottom: -1px;
+  padding: 0 14px;
+  border: {{ "borderWidth-thin" | tok }} solid transparent;
+  border-bottom: 0;
+  border-radius: {{ "borderRadius-medium" | tok }} {{ "borderRadius-medium" | tok }} 0 0;
+  corner-shape: squircle;
+  background: transparent;
+  color: {{ "fgColor-muted" | tok }};
+  font: 500 14px/20px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pm-tabs__tab:hover { background: {{ "control-transparent-bgColor-hover" | tok }}; color: {{ "fgColor-default" | tok }}; }
+.pm-tabs__tab[aria-selected="true"] { z-index: 1; border-color: {{ "borderColor-default" | tok }}; background: {{ "bgColor-default" | tok }}; color: {{ "fgColor-default" | tok }}; font-weight: 600; }
+.pm-tabs__tab:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -2px; }
+.pm-tabs__panel { padding: {{ "stack-padding-normal" | tok }}; border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; border-radius: 0 {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }}; background: {{ "bgColor-default" | tok }}; }
+[data-density="touch"] .pm-tabs__tab { height: {{ "touch-target-min" | tok }}; }

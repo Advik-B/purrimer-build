@@ -1,0 +1,21 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  let { value = $bindable(""), placeholder = "{{ c.spec.props.placeholder.default }}", label = "Search", onsubmit }: {
+    value?: string;
+    placeholder?: string;
+    label?: string;
+    onsubmit?: (query: string) => void;
+  } = $props();
+  let input: HTMLInputElement;
+</script>
+
+<form class="pm-search" role="search" onsubmit={(e) => { e.preventDefault(); onsubmit?.(value); }}>
+  <Icon name="search" />
+  <input bind:this={input} class="pm-search__input" type="search" enterkeyhint="search" aria-label={label} {placeholder} bind:value />
+  {#if value}
+    <button type="button" class="pm-search__clear" aria-label="Clear" onclick={() => { value = ""; input.focus(); }}><Icon name="x" /></button>
+  {/if}
+</form>

@@ -1,0 +1,72 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmChipRemove" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Button">
+        <Border Width="16" Height="16" CornerRadius="8" Background="{TemplateBinding Background}">
+          <pm:Icon IconName="x" Size="12" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:Chip}" TargetType="pm:Chip">
+    <Setter Property="Background" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-accent" | tok }}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Chip">
+        <Border Name="pill" Height="24" Padding="10,0" CornerRadius="12" Background="{TemplateBinding Background}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <pm:Icon IconName="{TemplateBinding IconName}" Size="12" VerticalAlignment="Center"
+                     IsVisible="{TemplateBinding IconName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            <TextBlock Text="{TemplateBinding Text}" VerticalAlignment="Center" />
+            <Button Name="PART_Remove" Theme="{StaticResource PmChipRemove}" VerticalAlignment="Center"
+                    AutomationProperties.Name="Remove" IsVisible="{TemplateBinding IsRemovable}" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[IsRemovable=True] /template/ Border#pill">
+      <Setter Property="Padding" Value="10,0,6,0" />
+    </Style>
+    <Style Selector="^[Tone=success]">
+      <Setter Property="Background" Value="{{ "bgColor-success-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-success" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=attention]">
+      <Setter Property="Background" Value="{{ "bgColor-attention-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-attention" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=severe]">
+      <Setter Property="Background" Value="{{ "bgColor-severe-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-severe" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=danger]">
+      <Setter Property="Background" Value="{{ "bgColor-danger-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=done]">
+      <Setter Property="Background" Value="{{ "bgColor-done-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-done" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=info]">
+      <Setter Property="Background" Value="{{ "bgColor-info-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-info" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=neutral]">
+      <Setter Property="Background" Value="{{ "bgColor-neutral-muted" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

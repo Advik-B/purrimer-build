@@ -1,0 +1,30 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ListSection}" TargetType="pm:ListSection">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="Margin" Value="0,0,0,{{ px("mobile-section-gap") | num }}" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ListSection">
+        <StackPanel Spacing="6">
+          <TextBlock Text="{TemplateBinding Header}" Margin="{{ px("mobile-gutter") | num }},0" FontSize="14" FontWeight="SemiBold"
+                     Foreground="{{ "fgColor-muted" | tok }}"
+                     IsVisible="{TemplateBinding Header, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Border Name="group" ClipToBounds="True">
+            <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+          </Border>
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[IsInset=True] /template/ Border#group">
+      <Setter Property="Margin" Value="{{ px("mobile-gutter") | num }},0" />
+      <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+      <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+      <Setter Property="CornerRadius" Value="{{ "borderRadius-large" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

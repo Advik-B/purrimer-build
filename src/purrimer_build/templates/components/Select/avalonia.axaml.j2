@@ -1,0 +1,105 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmSelectItem" TargetType="ComboBoxItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-small" | tok }}" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="MinHeight" Value="32" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="ComboBoxItem">
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}"
+                Padding="{TemplateBinding Padding}" MinHeight="{TemplateBinding MinHeight}">
+          <Grid ColumnDefinitions="*,Auto">
+            <ContentPresenter Name="PART_ContentPresenter" VerticalAlignment="Center" Content="{TemplateBinding Content}"
+                              ContentTemplate="{TemplateBinding ContentTemplate}" />
+            <pm:Icon Name="check" Grid.Column="1" IconName="check" VerticalAlignment="Center" IsVisible="False"
+                     Foreground="{{ "fgColor-accent" | tok }}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="^:selected /template/ pm|Icon#check">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:Select}" TargetType="pm:Select">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="PlaceholderForeground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="ScrollViewer.IsScrollChainingEnabled" Value="True" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Background" Value="{{ "control-bgColor-rest" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "control-borderColor-rest" | tok }}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-medium" | tok }}" />
+    <Setter Property="Padding" Value="{{ px("control-medium-paddingInline-normal") | num }},0,8,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="ItemContainerTheme" Value="{StaticResource PmSelectItem}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Select">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{TemplateBinding Label}" FontWeight="SemiBold"
+                     IsVisible="{TemplateBinding Label, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Panel>
+          <Border Name="focusRing" Margin="-4" IsVisible="False" IsHitTestVisible="False"
+                  BorderThickness="2" BorderBrush="{{ "focus-outlineColor" | tok }}"
+                  CornerRadius="{{ "borderRadius-large" | tok }}" />
+            <Border Name="border" Height="{{ "control-medium-size" | tok }}" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Name="placeholder" Text="{TemplateBinding PlaceholderText}" VerticalAlignment="Center"
+                           Foreground="{TemplateBinding PlaceholderForeground}"
+                           IsVisible="{TemplateBinding SelectionBoxItem, Converter={x:Static ObjectConverters.IsNull}}" />
+                <ContentControl VerticalAlignment="Center" Content="{TemplateBinding SelectionBoxItem}"
+                                ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" />
+                <pm:Icon Grid.Column="1" IconName="chevron-down" Margin="8,0,0,0" VerticalAlignment="Center"
+                         Foreground="{{ "fgColor-muted" | tok }}" />
+              </Grid>
+            </Border>
+            <Popup Name="PART_Popup" WindowManagerAddShadowHint="False" IsLightDismissEnabled="True"
+                   MinWidth="{Binding Bounds.Width, RelativeSource={RelativeSource TemplatedParent}}"
+                   MaxHeight="{TemplateBinding MaxDropDownHeight}" PlacementTarget="{Binding #border}"
+                   IsOpen="{TemplateBinding IsDropDownOpen, Mode=TwoWay}" InheritsTransform="True">
+              <Border Margin="0,4,0,0" Padding="4" Background="{{ "overlay-bgColor" | tok }}"
+                      BorderBrush="{{ "borderColor-default" | tok }}" BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}"
+                      CornerRadius="{{ "borderRadius-large" | tok }}" BoxShadow="{{ "shadow-floating-small" | tok }}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                  <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Panel>
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#border">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-emphasis" | tok }}" />
+    </Style>
+    <Style Selector="^:dropdownopen /template/ Border#border">
+      <Setter Property="Background" Value="{{ "overlay-bgColor" | tok }}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{{ "fgColor-disabled" | tok }}" />
+    </Style>
+    <Style Selector="^:disabled /template/ Border#border">
+      <Setter Property="Background" Value="{{ "bgColor-disabled" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "bgColor-disabled" | tok }}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#focusRing">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

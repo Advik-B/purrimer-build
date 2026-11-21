@@ -1,0 +1,92 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// An Octicon from Icons.axaml, looked up by name: PmIcon<Name>16, or PmIcon<Name>24 when Size is 24 or more.
+public class Icon : TemplatedControl
+{
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<Icon, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<double> SizeProperty =
+        AvaloniaProperty.Register<Icon, double>(nameof(Size), 16);
+
+    public static readonly StyledProperty<Geometry?> DataProperty =
+        AvaloniaProperty.Register<Icon, Geometry?>(nameof(Data));
+
+    public static readonly StyledProperty<double> BoxProperty =
+        AvaloniaProperty.Register<Icon, double>(nameof(Box), 16);
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public double Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    public Geometry? Data
+    {
+        get => GetValue(DataProperty);
+        private set => SetValue(DataProperty, value);
+    }
+
+    // The design grid of the resolved path: 16 or 24.
+    public double Box
+    {
+        get => GetValue(BoxProperty);
+        private set => SetValue(BoxProperty, value);
+    }
+
+    public static string ResourceKey(string name, int size)
+    {
+        var parts = name.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        var key = "PmIcon";
+        foreach (var part in parts)
+            key += char.ToUpperInvariant(part[0]) + part.Substring(1);
+        return key + size;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IconNameProperty || change.Property == SizeProperty)
+            Resolve();
+    }
+
+    protected override void OnAttachedToLogicalTree(global::Avalonia.LogicalTree.LogicalTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToLogicalTree(e);
+        Resolve();
+    }
+
+    private void Resolve()
+    {
+        if (string.IsNullOrEmpty(IconName))
+        {
+            Data = null;
+            return;
+        }
+        object? found = null;
+        var box = 16;
+        if (Size >= 24 && this.TryFindResource(ResourceKey(IconName, 24), out found) && found != null)
+            box = 24;
+        else
+            this.TryFindResource(ResourceKey(IconName, 16), out found);
+        Box = box;
+        Data = found as Geometry;
+    }
+}

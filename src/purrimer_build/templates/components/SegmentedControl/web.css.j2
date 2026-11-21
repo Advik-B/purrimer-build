@@ -1,0 +1,18 @@
+.pm-segmented { display: inline-flex; gap: 2px; padding: 2px; border-radius: {{ "borderRadius-medium" | tok }}; background: {{ "bgColor-muted" | tok }}; }
+.pm-segmented__item {
+  flex: 1;
+  height: 28px;
+  padding: 0 12px;
+  border: {{ "borderWidth-thin" | tok }} solid transparent;
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: transparent;
+  color: {{ "fgColor-muted" | tok }};
+  font: 500 14px/20px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-segmented__item:hover { color: {{ "fgColor-default" | tok }}; }
+.pm-segmented__item[aria-checked="true"] { background: {{ "bgColor-default" | tok }}; border-color: {{ "borderColor-default" | tok }}; box-shadow: {{ "shadow-resting-xsmall" | tok }}; color: {{ "fgColor-default" | tok }}; font-weight: 600; }
+.pm-segmented__item:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 0; }
+[data-density="touch"] .pm-segmented__item { height: 40px; }

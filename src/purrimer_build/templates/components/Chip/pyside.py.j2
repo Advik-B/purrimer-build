@@ -1,0 +1,92 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+TONES = {
+    "accent": ({{ "bgColor-accent-muted" | tok }}, {{ "fgColor-accent" | tok }}),
+    "neutral": ({{ "bgColor-neutral-muted" | tok }}, {{ "fgColor-default" | tok }}),
+{% for t in ["success", "attention", "severe", "danger", "done", "info"] %}
+    "{{ t }}": ({{ ("bgColor-" ~ t ~ "-muted") | tok }}, {{ ("fgColor-" ~ t) | tok }}),
+{% endfor %}
+}
+
+
+class Chip(QWidget):
+    """A filled pill with an optional icon and remove button."""
+
+    removed = Signal()
+
+    def __init__(self, text: str, tone: str = "accent", icon: str | None = None, removable: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        if tone not in TONES:
+            raise ValueError(f"tone must be one of {tuple(TONES)}")
+        self._text = text
+        self._tone = tone
+        self._icon = icon
+        self._removable = removable
+        self._hover_remove = False
+        font = theme.font({{ "text-caption" | tok }})
+        font.setWeight(QFont.Weight.Medium)
+        self._font = (font)
+        self.setMouseTracking(removable)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(text)
+        theme.changed.connect(self.update)
+
+    def sizeHint(self) -> QSize:
+        width = 10 + QFontMetrics(self._font).horizontalAdvance(self._text) + (10 if not self._removable else 6 + 20)
+        if self._icon:
+            width += 16
+        return QSize(width, 24)
+
+    def _remove_rect(self) -> QRectF:
+        return QRectF(self.width() - 22, 4, 16, 16)
+
+    def mouseMoveEvent(self, event) -> None:
+        hover = self._removable and self._remove_rect().contains(event.position())
+        if hover != self._hover_remove:
+            self._hover_remove = hover
+            self.setCursor(Qt.CursorShape.PointingHandCursor if hover else Qt.CursorShape.ArrowCursor)
+            self.update()
+
+    def leaveEvent(self, event) -> None:
+        self._hover_remove = False
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._removable and self._remove_rect().contains(event.position()):
+            self.removed.emit()
+
+    def paintEvent(self, event) -> None:
+        bg, fg = TONES[self._tone]
+        ink = theme.color(fg)
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(bg))
+        painter.drawRoundedRect(QRectF(self.rect()), 12, 12)
+        x = 10.0
+        if self._icon:
+            paint_icon(painter, QRectF(x, 6, 12, 12), self._icon, ink)
+            x += 16
+        painter.setPen(ink)
+        text_w = QFontMetrics(self._font).horizontalAdvance(self._text)
+        painter.drawText(QRectF(x, 0, text_w + 1, self.height()), Qt.AlignmentFlag.AlignVCenter, self._text)
+        if self._removable:
+            rect = self._remove_rect()
+            if self._hover_remove:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(theme.color({{ "control-transparent-bgColor-hover" | tok }}))
+                painter.drawEllipse(rect)
+            paint_icon(painter, rect.adjusted(2, 2, -2, -2), "x", ink)

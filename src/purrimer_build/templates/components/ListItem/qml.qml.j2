@@ -1,0 +1,58 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property string headline
+    property string supporting
+    property string iconName
+    property string trailing
+    property bool chevron: false
+    property bool clickable: false
+    signal clicked()
+
+    implicitWidth: 360
+    implicitHeight: supporting ? {{ "mobile-row-height-twoLine" | tok }} : {{ "mobile-row-height" | tok }}
+    color: tap.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+    Accessible.role: clickable ? Accessible.Button : Accessible.ListItem
+    Accessible.name: headline
+
+    Row {
+        anchors.fill: parent
+        anchors.leftMargin: {{ "mobile-gutter" | tok }}
+        anchors.rightMargin: {{ "mobile-gutter" | tok }}
+        spacing: 12
+
+        Rectangle {
+            visible: root.iconName !== ""
+            width: 32
+            height: 32
+            radius: {{ "borderRadius-medium" | tok }}
+            color: {{ "bgColor-accent-muted" | tok }}
+            anchors.verticalCenter: parent.verticalCenter
+            Icon { anchors.centerIn: parent; name: root.iconName; color: {{ "fgColor-accent" | tok }} }
+        }
+
+        Column {
+            width: parent.width - (root.iconName ? 44 : 0) - (trailingText.visible ? trailingText.width + 12 : 0) - (root.chevron ? 28 : 0)
+            anchors.verticalCenter: parent.verticalCenter
+            Text { width: parent.width; text: root.headline; elide: Text.ElideRight; font: {{ "text-mobile-body" | tok }}; color: {{ "fgColor-default" | tok }} }
+            Text { visible: root.supporting !== ""; width: parent.width; text: root.supporting; elide: Text.ElideRight; font: {{ "text-mobile-supporting" | tok }}; color: {{ "fgColor-muted" | tok }} }
+        }
+
+        Text {
+            id: trailingText
+            visible: root.trailing !== ""
+            text: root.trailing
+            font: {{ "text-mobile-supporting" | tok }}
+            color: {{ "fgColor-muted" | tok }}
+            anchors.verticalCenter: parent.verticalCenter
+        }
+
+        Icon { visible: root.chevron; name: "chevron-right"; color: {{ "fgColor-muted" | tok }}; anchors.verticalCenter: parent.verticalCenter }
+    }
+
+    TapHandler { id: tap; enabled: root.clickable; onTapped: root.clicked() }
+}

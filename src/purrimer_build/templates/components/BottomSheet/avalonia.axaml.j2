@@ -1,0 +1,55 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:BottomSheet}" TargetType="pm:BottomSheet">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:BottomSheet">
+        <Panel>
+          <Border Name="PART_Backdrop" Background="{{ "overlay-backdrop-bgColor" | tok }}" Opacity="0">
+            <Border.Transitions>
+              <Transitions>
+                <DoubleTransition Property="Opacity" Duration="{{ "duration-slow" | tok }}" />
+              </Transitions>
+            </Border.Transitions>
+          </Border>
+          <Border Name="PART_Sheet" VerticalAlignment="Bottom" Height="{TemplateBinding SheetHeight}"
+                  MaxWidth="{{ "mobile-sheet-maxWidth" | tok }}" Background="{{ "overlay-bgColor" | tok }}"
+                  BorderBrush="{{ "borderColor-default" | tok }}" BorderThickness="1,1,1,0"
+                  CornerRadius="{{ px("borderRadius-xlarge") | num }},{{ px("borderRadius-xlarge") | num }},0,0"
+                  BoxShadow="{{ "shadow-floating-large" | tok }}">
+            <Border.Transitions>
+              <Transitions>
+                <TransformOperationsTransition Property="RenderTransform" Duration="{{ "duration-slow" | tok }}"
+                                               Easing="{{ "easing-sleepy-enter" | tok }}" />
+              </Transitions>
+            </Border.Transitions>
+            <DockPanel>
+              <Border Name="PART_Handle" DockPanel.Dock="Top" Height="24" Background="Transparent" Cursor="SizeNorthSouth">
+                <Border Width="36" Height="4" CornerRadius="2" Background="{{ "borderColor-emphasis" | tok }}" />
+              </Border>
+              <TextBlock DockPanel.Dock="Top" Text="{TemplateBinding Title}" Margin="{{ px("mobile-gutter") | num }},0"
+                         FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}"
+                         IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                Margin="{{ px("mobile-gutter") | num }},8,{{ px("mobile-gutter") | num }},{{ px("mobile-gutter") | num }}" />
+            </DockPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+    <Style Selector="^:open /template/ Border#PART_Backdrop">
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

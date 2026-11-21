@@ -1,0 +1,15 @@
+name = "ListSection"
+group = "Mobile"
+order = 54
+summary = "A titled group of list rows, inset in a rounded box or plain."
+
+[props.header]
+type = "string"
+default = ""
+doc = "Section title above the rows."
+
+[props.variant]
+type = "enum"
+default = "inset"
+doc = "Box style."
+values = ["inset", "plain"]

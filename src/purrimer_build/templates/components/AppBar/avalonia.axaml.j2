@@ -1,0 +1,43 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:AppBar}" TargetType="pm:AppBar">
+    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:AppBar">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="0,0,0,1">
+          <StackPanel>
+            <Grid Height="{{ "mobile-appBar-height" | tok }}" ColumnDefinitions="Auto,*,Auto" Margin="4,0">
+              <pm:IconButton Name="PART_Back" Classes="invisible large" IconName="arrow-left" IconSize="24" Label="Back"
+                             VerticalAlignment="Center" IsVisible="{TemplateBinding ShowBack}" />
+              <TextBlock Name="title" Grid.Column="1" Margin="12,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                         Text="{TemplateBinding Title}" FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}" />
+              <ContentPresenter Name="PART_ContentPresenter" Grid.Column="2" VerticalAlignment="Center"
+                                Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </Grid>
+            <TextBlock Name="largeTitle" IsVisible="False" Margin="{{ px("mobile-gutter") | num }},0,{{ px("mobile-gutter") | num }},8"
+                       Text="{TemplateBinding Title}" FontFamily="{{ "heading" | font }}"
+                       FontSize="{{ "text-mobile-largeTitle" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-largeTitle" | tokx("FontWeight") }}" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[ShowBack=True] /template/ TextBlock#title">
+      <Setter Property="Margin" Value="4,0" />
+    </Style>
+    <Style Selector="^[IsLarge=True] /template/ TextBlock#title">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^[IsLarge=True] /template/ TextBlock#largeTitle">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[IsElevated=True]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

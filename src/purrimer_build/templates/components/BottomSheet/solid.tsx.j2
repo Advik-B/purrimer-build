@@ -1,0 +1,73 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect, createSignal } from "solid-js";
+import { Portal, type JSX } from "@solidjs/web";
+
+const DISMISS = 96;
+
+export type BottomSheetProps = { open: boolean; title?: string; onClose: () => void; children?: JSX.Element };
+
+export function BottomSheet(props: BottomSheetProps): JSX.Element {
+  const [offset, setOffset] = createSignal(0);
+  const [dragging, setDragging] = createSignal(false);
+  let startY = 0;
+
+  const close = () => {
+    setOffset(0);
+    props.onClose();
+  };
+  const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+
+  createEffect(
+    () => props.open,
+    (open) => {
+      if (!open) return;
+      window.addEventListener("keydown", onKey);
+      return () => window.removeEventListener("keydown", onKey);
+    }
+  );
+
+  return (
+    <Show when={props.open}>
+      <Portal>
+        <div
+          class="pm-sheet-scrim"
+          role="presentation"
+          style={ { opacity: 1 - Math.min(offset() / 300, 0.6) } }
+          onClick={(e) => e.target === e.currentTarget && close()}
+        >
+          <div
+            class="pm-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label={props.title || undefined}
+            style={ { translate: `0 ${offset()}px`, transition: dragging() ? "none" : "translate {{ 'duration-slow' | tok }} {{ 'easing-sleepy-move' | tok }}" } }
+          >
+            <div
+              class="pm-sheet__handle"
+              role="button"
+              tabindex="0"
+              aria-label="Close"
+              onPointerDown={(e) => {
+                setDragging(true);
+                startY = e.clientY;
+                e.currentTarget.setPointerCapture(e.pointerId);
+              }}
+              onPointerMove={(e) => dragging() && setOffset(Math.max(0, e.clientY - startY))}
+              onPointerUp={() => {
+                setDragging(false);
+                if (offset() > DISMISS) close();
+                else setOffset(0);
+              }}
+              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && close()}
+            >
+              <span class="pm-sheet__grabber" />
+            </div>
+            <Show when={props.title}><h2 class="pm-sheet__title">{props.title}</h2></Show>
+            <div class="pm-sheet__body">{props.children}</div>
+          </div>
+        </div>
+      </Portal>
+    </Show>
+  );
+}

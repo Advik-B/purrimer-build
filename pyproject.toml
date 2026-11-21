@@ -1,0 +1,40 @@
+[project]
+name = "purrimer-build"
+version = "0.1.0"
+description = "Generate Purrimer design system styles and components for Qt Widgets, Qt Quick, CSS, Svelte, Solid, Avalonia and Slint from tokens.json."
+readme = "README.md"
+authors = [
+    { name = "Advik", email = "advik.b@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "brotli>=1.2.1",
+    "fonttools>=4.68.0",
+    "jinja2>=3.1.6",
+]
+
+[project.scripts]
+purrimer = "purrimer_build.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.11.32,<0.12.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+    "ruff>=0.17.6",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["dist"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# Percent formatting keeps the brace-heavy target syntax (XAML, Slint, CSS) readable.
+ignore = ["UP031"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

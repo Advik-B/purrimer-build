@@ -1,0 +1,62 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { IconButton } from "icon-button.slint";
+
+export struct AppBarAction {
+    icon: string,
+    label: string,
+}
+
+export component AppBar inherits Rectangle {
+    in property <string> title;
+    in property <bool> back;
+    in property <bool> large;
+    in property <bool> elevated;
+    // Up to two, with 24px icons: { icon: PurrimerIcons.search-24, label: "Search" }
+    in property <[AppBarAction]> actions;
+    callback back-clicked();
+    callback action-clicked(int);
+
+    background: {{ "bgColor-default" | tok }};
+    drop-shadow-offset-y: elevated ? 1px : 0px;
+    drop-shadow-color: elevated ? {{ "borderColor-default" | tok }} : transparent;
+
+    VerticalLayout {
+        HorizontalLayout {
+            height: {{ "mobile-appBar-height" | tok }};
+            padding-left: root.back ? 4px : 16px;
+            padding-right: 4px;
+            spacing: 4px;
+            if root.back: VerticalLayout {
+                alignment: center;
+                IconButton { icon: PurrimerIcons.arrow-left-24; box: 24; label: "Back"; variant: "invisible"; size: "large"; clicked => { root.back-clicked(); } }
+            }
+            Text {
+                horizontal-stretch: 1;
+                text: root.large ? "" : root.title;
+                overflow: elide;
+                vertical-alignment: center;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-mobile-title" | tok }}.font-family;
+                font-size: {{ "text-mobile-title" | tok }}.font-size;
+                font-weight: {{ "text-mobile-title" | tok }}.font-weight;
+            }
+            for action[i] in root.actions: VerticalLayout {
+                alignment: center;
+                if i < 2: IconButton { icon: action.icon; box: 24; label: action.label; variant: "invisible"; size: "large"; clicked => { root.action-clicked(i); } }
+            }
+        }
+        if root.large: HorizontalLayout {
+            padding-left: {{ "mobile-gutter" | tok }};
+            Text {
+                text: root.title;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-mobile-largeTitle" | tok }}.font-family;
+                font-size: {{ "text-mobile-largeTitle" | tok }}.font-size;
+                font-weight: {{ "text-mobile-largeTitle" | tok }}.font-weight;
+            }
+        }
+    }
+}

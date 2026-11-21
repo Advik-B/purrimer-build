@@ -1,0 +1,38 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A search field with a leading magnifier and a clear button.
+[TemplatePart("PART_Clear", typeof(Button))]
+public class SearchBar : TextBox
+{
+    private Button? _clear;
+
+    protected override Type StyleKeyOverride => typeof(SearchBar);
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_clear != null)
+            _clear.Click -= OnClearClick;
+        base.OnApplyTemplate(e);
+        _clear = e.NameScope.Find<Button>("PART_Clear");
+        if (_clear != null)
+            _clear.Click += OnClearClick;
+    }
+
+    private void OnClearClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        Clear();
+        Focus();
+    }
+}

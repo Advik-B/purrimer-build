@@ -1,0 +1,112 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmButton" TargetType="Button">
+    <Setter Property="Background" Value="{{ "button-default-bgColor-rest" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "button-default-borderColor-rest" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-medium" | tok }}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="{{ "control-medium-size" | tok }}" />
+    <Setter Property="Padding" Value="{{ px("control-medium-paddingInline-normal") | num }},0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Button">
+        <Panel>
+          <Border Name="focusRing" Margin="-4" IsVisible="False" IsHitTestVisible="False"
+                  BorderThickness="2" BorderBrush="{{ "focus-outlineColor" | tok }}"
+                  CornerRadius="{{ "borderRadius-large" | tok }}" />
+          <Border Name="PART_Border" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="{TemplateBinding Padding}">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="{{ "duration-fast" | tok }}" />
+              </Transitions>
+            </Border.Transitions>
+            <StackPanel Orientation="Horizontal" Spacing="{{ "control-medium-gap" | tok }}"
+                        HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                        VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+              <pm:Icon IconName="{TemplateBinding (pm:ButtonAssist.LeadingIcon)}" VerticalAlignment="Center"
+                       IsVisible="{TemplateBinding (pm:ButtonAssist.LeadingIcon), Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" RecognizesAccessKey="True"
+                                VerticalAlignment="Center" />
+              <pm:Icon IconName="{TemplateBinding (pm:ButtonAssist.TrailingIcon)}" VerticalAlignment="Center"
+                       IsVisible="{TemplateBinding (pm:ButtonAssist.TrailingIcon), Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+            </StackPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^.small">
+      <Setter Property="Height" Value="{{ "control-small-size" | tok }}" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="^.large">
+      <Setter Property="Height" Value="{{ "control-large-size" | tok }}" />
+      <Setter Property="Padding" Value="16,0" />
+    </Style>
+    <Style Selector="^.block">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{{ "button-default-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^:pressed">
+      <Setter Property="Background" Value="{{ "button-default-bgColor-active" | tok }}" />
+    </Style>
+    <Style Selector="^.primary">
+      <Setter Property="Background" Value="{{ "button-primary-bgColor-rest" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "button-primary-bgColor-rest" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    </Style>
+    <Style Selector="^.primary:pointerover">
+      <Setter Property="Background" Value="{{ "button-primary-bgColor-hover" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "button-primary-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^.primary:pressed">
+      <Setter Property="Background" Value="{{ "button-primary-bgColor-active" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "button-primary-bgColor-active" | tok }}" />
+    </Style>
+    <Style Selector="^.danger">
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^.danger:pointerover, ^.danger:pressed">
+      <Setter Property="Background" Value="{{ "bgColor-danger-emphasis" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "bgColor-danger-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    </Style>
+    <Style Selector="^.invisible">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="^.invisible:pointerover">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^.invisible:pressed">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-selected" | tok }}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Background" Value="{{ "bgColor-disabled" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "bgColor-disabled" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-disabled" | tok }}" />
+    </Style>
+    <Style Selector="^.invisible:disabled">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#focusRing">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type Button}" TargetType="Button" BasedOn="{StaticResource PmButton}" />
+</ResourceDictionary>

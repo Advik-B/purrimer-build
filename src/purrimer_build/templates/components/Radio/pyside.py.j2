@@ -1,0 +1,17 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QRadioButton, QWidget
+
+
+class Radio(QRadioButton):
+    """A radio button; the stylesheet draws it. Radios that share a parent are exclusive."""
+
+    def __init__(self, text: str = "", checked: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(text, parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setChecked(checked)

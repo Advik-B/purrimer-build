@@ -1,0 +1,93 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:TextField}" TargetType="pm:TextField">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="CaretBrush" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="PlaceholderForeground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="SelectionBrush" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="SelectionForegroundBrush" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="ScrollViewer.IsScrollChainingEnabled" Value="True" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Background" Value="{{ "control-bgColor-rest" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "control-borderColor-rest" | tok }}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-medium" | tok }}" />
+    <Setter Property="Padding" Value="{{ px("control-medium-paddingInline-normal") | num }},0" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:TextField">
+        <StackPanel Spacing="4">
+          <TextBlock Text="{TemplateBinding Label}" FontWeight="SemiBold" Foreground="{{ "fgColor-default" | tok }}"
+                     IsVisible="{TemplateBinding Label, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          <Border Name="PART_Border" Height="{{ "control-medium-size" | tok }}" Background="{TemplateBinding Background}"
+                  BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                  CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+            <Grid ColumnDefinitions="Auto,*">
+              <pm:Icon Grid.Column="0" IconName="{TemplateBinding LeadingIcon}" Margin="0,0,8,0" VerticalAlignment="Center"
+                       Foreground="{{ "fgColor-muted" | tok }}"
+                       IsVisible="{TemplateBinding LeadingIcon, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <ScrollViewer Name="PART_ScrollViewer" Grid.Column="1" VerticalAlignment="Center"
+                            HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                <Panel>
+                  <TextBlock Name="placeholder" Text="{TemplateBinding PlaceholderText}"
+                             Foreground="{TemplateBinding PlaceholderForeground}" VerticalAlignment="Center"
+                             IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                  <TextPresenter Name="PART_TextPresenter"
+                                 CaretBlinkInterval="{TemplateBinding CaretBlinkInterval}"
+                                 CaretBrush="{TemplateBinding CaretBrush}"
+                                 CaretIndex="{TemplateBinding CaretIndex}"
+                                 LineHeight="{TemplateBinding LineHeight}"
+                                 LetterSpacing="{TemplateBinding LetterSpacing}"
+                                 PasswordChar="{TemplateBinding PasswordChar}"
+                                 RevealPassword="{TemplateBinding RevealPassword}"
+                                 SelectionBrush="{TemplateBinding SelectionBrush}"
+                                 SelectionEnd="{TemplateBinding SelectionEnd}"
+                                 SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                                 SelectionStart="{TemplateBinding SelectionStart}"
+                                 Text="{TemplateBinding Text, Mode=TwoWay}"
+                                 TextAlignment="{TemplateBinding TextAlignment}"
+                                 TextWrapping="{TemplateBinding TextWrapping}" />
+                </Panel>
+              </ScrollViewer>
+            </Grid>
+          </Border>
+          <StackPanel Name="message" Orientation="Horizontal" Spacing="4"
+                      IsVisible="{TemplateBinding Message, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+            <pm:Icon Name="errorIcon" IconName="alert-fill" Size="12" IsVisible="False" VerticalAlignment="Center"
+                     Foreground="{{ "fgColor-danger" | tok }}" />
+            <TextBlock Name="messageText" Text="{TemplateBinding Message}" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{{ "fgColor-muted" | tok }}" />
+          </StackPanel>
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#PART_Border">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-emphasis" | tok }}" />
+    </Style>
+    <Style Selector="^:invalid /template/ Border#PART_Border">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-danger-emphasis" | tok }}" />
+    </Style>
+    <Style Selector="^:invalid /template/ pm|Icon#errorIcon">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:invalid /template/ TextBlock#messageText">
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="^:focus /template/ Border#PART_Border">
+      <Setter Property="BorderBrush" Value="{{ "focus-outlineColor" | tok }}" />
+      <Setter Property="BorderThickness" Value="{{ "borderWidth-thick" | tokx("Thickness") }}" />
+    </Style>
+    <Style Selector="^:disabled /template/ Border#PART_Border">
+      <Setter Property="Background" Value="{{ "bgColor-disabled" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "bgColor-disabled" | tok }}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{{ "fgColor-disabled" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

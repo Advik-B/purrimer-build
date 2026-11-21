@@ -1,0 +1,51 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.Button {
+    id: control
+    property string iconName
+    property string label
+    property string variant: "default"
+    property string size: "medium"
+
+    readonly property color fillRest: variant === "primary" ? {{ "button-primary-bgColor-rest" | tok }} : variant === "invisible" ? "transparent" : {{ "button-default-bgColor-rest" | tok }}
+    readonly property color fillHover: variant === "primary" ? {{ "button-primary-bgColor-hover" | tok }} : variant === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : variant === "invisible" ? {{ "control-transparent-bgColor-hover" | tok }} : {{ "button-default-bgColor-hover" | tok }}
+    readonly property color fillActive: variant === "primary" ? {{ "button-primary-bgColor-active" | tok }} : variant === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : variant === "invisible" ? {{ "control-transparent-bgColor-selected" | tok }} : {{ "button-default-bgColor-active" | tok }}
+    readonly property color ink: !enabled ? {{ "fgColor-disabled" | tok }} : variant === "primary" || (variant === "danger" && (hovered || down)) ? {{ "fgColor-onEmphasis" | tok }} : variant === "danger" ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }}
+
+    implicitWidth: implicitBackgroundHeight
+    implicitHeight: implicitBackgroundHeight
+    padding: 0
+    Accessible.name: label
+
+    contentItem: Item {
+        Icon {
+            anchors.centerIn: parent
+            name: control.iconName
+            color: control.variant === "default" && !control.hovered && control.enabled ? {{ "fgColor-muted" | tok }} : control.ink
+        }
+    }
+
+    background: Rectangle {
+        implicitWidth: control.height
+        implicitHeight: control.size === "small" ? {{ "control-small-size" | tok }} : control.size === "large" ? {{ "control-large-size" | tok }} : {{ "control-medium-size" | tok }}
+        radius: {{ "borderRadius-medium" | tok }}
+        color: !control.enabled ? (control.variant === "invisible" ? "transparent" : {{ "bgColor-disabled" | tok }}) : control.down ? control.fillActive : control.hovered ? control.fillHover : control.fillRest
+        border.width: control.variant === "invisible" ? 0 : {{ "borderWidth-thin" | tok }}
+        border.color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.variant === "primary" || (control.variant === "danger" && (control.hovered || control.down)) ? color : {{ "button-default-borderColor-rest" | tok }}
+        Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -4
+            radius: parent.radius + 4
+            color: "transparent"
+            border.width: {{ "borderWidth-thick" | tok }}
+            border.color: {{ "focus-outlineColor" | tok }}
+            visible: control.visualFocus
+        }
+    }
+}

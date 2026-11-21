@@ -1,0 +1,175 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A sheet that slides up from the bottom. Place it last in a Panel that covers the screen; drag the handle down to dismiss.
+[PseudoClasses(":open")]
+[TemplatePart("PART_Sheet", typeof(Border))]
+[TemplatePart("PART_Handle", typeof(Control))]
+[TemplatePart("PART_Backdrop", typeof(Control))]
+public class BottomSheet : ContentControl
+{
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<BottomSheet, bool>(nameof(IsOpen), defaultBindingMode: global::Avalonia.Data.BindingMode.TwoWay);
+
+    public static readonly StyledProperty<string?> TitleProperty =
+        AvaloniaProperty.Register<BottomSheet, string?>(nameof(Title));
+
+    public static readonly StyledProperty<double> SheetHeightProperty =
+        AvaloniaProperty.Register<BottomSheet, double>(nameof(SheetHeight), 320);
+
+    public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
+        RoutedEvent.Register<BottomSheet, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
+
+    private const double DismissDistance = 96;
+
+    private Border? _sheet;
+    private Control? _handle;
+    private Control? _backdrop;
+    private global::Avalonia.Animation.Transitions? _transitions;
+    private Point? _dragStart;
+    private double _dragOffset;
+
+    public bool IsOpen
+    {
+        get => GetValue(IsOpenProperty);
+        set => SetValue(IsOpenProperty, value);
+    }
+
+    public string? Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public double SheetHeight
+    {
+        get => GetValue(SheetHeightProperty);
+        set => SetValue(SheetHeightProperty, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Closed
+    {
+        add => AddHandler(ClosedEvent, value);
+        remove => RemoveHandler(ClosedEvent, value);
+    }
+
+    public void Close()
+    {
+        if (!IsOpen)
+            return;
+        IsOpen = false;
+        RaiseEvent(new RoutedEventArgs(ClosedEvent, this));
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_handle != null)
+        {
+            _handle.PointerPressed -= OnHandlePressed;
+            _handle.PointerMoved -= OnHandleMoved;
+            _handle.PointerReleased -= OnHandleReleased;
+        }
+        if (_backdrop != null)
+            _backdrop.PointerPressed -= OnBackdropPressed;
+        base.OnApplyTemplate(e);
+        _sheet = e.NameScope.Find<Border>("PART_Sheet");
+        _handle = e.NameScope.Find<Control>("PART_Handle");
+        _backdrop = e.NameScope.Find<Control>("PART_Backdrop");
+        _transitions = _sheet?.Transitions;
+        if (_handle != null)
+        {
+            _handle.PointerPressed += OnHandlePressed;
+            _handle.PointerMoved += OnHandleMoved;
+            _handle.PointerReleased += OnHandleReleased;
+        }
+        if (_backdrop != null)
+            _backdrop.PointerPressed += OnBackdropPressed;
+        UpdatePosition();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsOpenProperty)
+        {
+            PseudoClasses.Set(":open", IsOpen);
+            _dragOffset = 0;
+            UpdatePosition();
+        }
+        else if (change.Property == SheetHeightProperty)
+        {
+            UpdatePosition();
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (IsOpen && e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Close();
+        }
+    }
+
+    private void UpdatePosition()
+    {
+        if (_sheet == null)
+            return;
+        var y = IsOpen ? _dragOffset : SheetHeight + 32;
+        _sheet.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse(
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"translateY({y}px)"));
+    }
+
+    private void OnBackdropPressed(object? sender, PointerPressedEventArgs e)
+    {
+        e.Handled = true;
+        Close();
+    }
+
+    private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
+    {
+        _dragStart = e.GetPosition(this);
+        e.Pointer.Capture(_handle);
+        if (_sheet != null)
+            _sheet.Transitions = null;
+        e.Handled = true;
+    }
+
+    private void OnHandleMoved(object? sender, PointerEventArgs e)
+    {
+        if (_dragStart is not { } start)
+            return;
+        _dragOffset = Math.Max(0, e.GetPosition(this).Y - start.Y);
+        UpdatePosition();
+    }
+
+    private void OnHandleReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_dragStart == null)
+            return;
+        _dragStart = null;
+        e.Pointer.Capture(null);
+        if (_sheet != null)
+            _sheet.Transitions = _transitions;
+        if (_dragOffset > DismissDistance)
+        {
+            Close();
+        }
+        else
+        {
+            _dragOffset = 0;
+            UpdatePosition();
+        }
+    }
+}

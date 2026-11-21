@@ -1,0 +1,117 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+Column {
+    id: root
+    property string label
+    property alias options: combo.model
+    property alias currentIndex: combo.currentIndex
+    property string placeholder: "{{ c.spec.props.placeholder.default }}"
+    property bool disabled: false
+    signal activated(int index)
+
+    spacing: 4
+
+    Text {
+        text: root.label
+        font.family: {{ "text-body-medium" | tok }}.family
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+        color: {{ "fgColor-default" | tok }}
+    }
+
+    T.ComboBox {
+        id: combo
+        width: root.width > 0 ? root.width : implicitWidth
+        implicitWidth: 240
+        implicitHeight: {{ "control-medium-size" | tok }}
+        enabled: !root.disabled
+        currentIndex: -1
+        leftPadding: {{ "control-medium-paddingInline-normal" | tok }}
+        rightPadding: 32
+        font: {{ "text-body-medium" | tok }}
+        Accessible.name: root.label
+        onActivated: (index) => root.activated(index)
+
+        contentItem: Text {
+            text: combo.currentIndex >= 0 ? combo.displayText : root.placeholder
+            font: combo.font
+            color: !combo.enabled ? {{ "fgColor-disabled" | tok }} : combo.currentIndex >= 0 ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+
+        indicator: Icon {
+            x: combo.width - width - 10
+            y: (combo.height - height) / 2
+            name: "chevron-down"
+            color: {{ "fgColor-muted" | tok }}
+            rotation: combo.popup.visible ? 180 : 0
+            Behavior on rotation { NumberAnimation { duration: {{ "duration-base" | tok }} } }
+        }
+
+        background: Rectangle {
+            radius: {{ "borderRadius-medium" | tok }}
+            bottomLeftRadius: combo.popup.visible ? 0 : radius
+            bottomRightRadius: combo.popup.visible ? 0 : radius
+            color: !combo.enabled ? {{ "bgColor-disabled" | tok }} : combo.popup.visible ? {{ "overlay-bgColor" | tok }} : {{ "control-bgColor-rest" | tok }}
+            border.width: combo.visualFocus && !combo.popup.visible ? {{ "borderWidth-thick" | tok }} : {{ "borderWidth-thin" | tok }}
+            border.color: combo.visualFocus && !combo.popup.visible ? {{ "focus-outlineColor" | tok }} : combo.popup.visible ? {{ "borderColor-default" | tok }} : {{ "control-borderColor-rest" | tok }}
+        }
+
+        delegate: T.ItemDelegate {
+            id: option
+            required property int index
+            required property var modelData
+            width: ListView.view.width
+            implicitHeight: 32
+            leftPadding: 8
+            rightPadding: 8
+            highlighted: combo.highlightedIndex === option.index
+            contentItem: Row {
+                spacing: 8
+                Text {
+                    width: option.width - 40
+                    text: option.modelData
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 14
+                    font.weight: combo.currentIndex === option.index ? Font.DemiBold : Font.Normal
+                    color: {{ "fgColor-default" | tok }}
+                    verticalAlignment: Text.AlignVCenter
+                    height: parent.height
+                    elide: Text.ElideRight
+                }
+                Icon { name: "check"; color: {{ "fgColor-accent" | tok }}; visible: combo.currentIndex === option.index; anchors.verticalCenter: parent.verticalCenter }
+            }
+            background: Rectangle {
+                radius: {{ "borderRadius-small" | tok }}
+                color: option.highlighted ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+            }
+        }
+
+        popup: T.Popup {
+            y: combo.height - 1
+            width: combo.width
+            implicitHeight: Math.min(contentItem.implicitHeight + 8, 280)
+            padding: 4
+            contentItem: ListView {
+                clip: true
+                implicitHeight: contentHeight
+                model: combo.popup.visible ? combo.delegateModel : null
+                currentIndex: combo.highlightedIndex
+            }
+            background: Rectangle {
+                color: {{ "overlay-bgColor" | tok }}
+                border.width: {{ "borderWidth-thin" | tok }}
+                border.color: {{ "borderColor-default" | tok }}
+                topLeftRadius: 0
+                topRightRadius: 0
+                bottomLeftRadius: {{ "borderRadius-large" | tok }}
+                bottomRightRadius: {{ "borderRadius-large" | tok }}
+            }
+        }
+    }
+}

@@ -1,0 +1,37 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// One destination in a BottomNav.
+public class BottomNavItem
+{
+    public string IconName { get; set; } = "";
+    public string Label { get; set; } = "";
+    public int Badge { get; set; }
+    public bool HasBadge => Badge > 0;
+    public string BadgeText => Badge > 99 ? "99+" : Badge.ToString(System.Globalization.CultureInfo.InvariantCulture);
+}
+
+// The bottom navigation bar of a mobile screen. Items are BottomNavItem values; SelectedIndex is the current one.
+public class BottomNav : ListBox
+{
+    public static readonly StyledProperty<bool> ShowLabelsProperty =
+        AvaloniaProperty.Register<BottomNav, bool>(nameof(ShowLabels), true);
+
+    public bool ShowLabels
+    {
+        get => GetValue(ShowLabelsProperty);
+        set => SetValue(ShowLabelsProperty, value);
+    }
+
+    protected override Type StyleKeyOverride => typeof(BottomNav);
+}

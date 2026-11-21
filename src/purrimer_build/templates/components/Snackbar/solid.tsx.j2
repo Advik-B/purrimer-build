@@ -1,0 +1,36 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type SnackbarProps = { open: boolean; message: string; action?: string; duration?: number; onAction?: () => void; onClose: () => void };
+
+export function Snackbar(props: SnackbarProps): JSX.Element {
+  createEffect(
+    () => (props.open ? props.duration ?? {{ c.spec.props.duration.default }} : 0),
+    (duration) => {
+      if (duration <= 0) return;
+      const id = setTimeout(() => props.onClose(), duration);
+      return () => clearTimeout(id);
+    }
+  );
+  return (
+    <Show when={props.open}>
+      <div class="pm-snackbar" role="status" aria-live="polite">
+        <span class="pm-snackbar__message">{props.message}</span>
+        <Show when={props.action}>
+          <button
+            type="button"
+            class="pm-snackbar__action"
+            onClick={() => {
+              props.onAction?.();
+              props.onClose();
+            }}
+          >
+            {props.action}
+          </button>
+        </Show>
+      </div>
+    </Show>
+  );
+}

@@ -1,0 +1,60 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmTab" TargetType="TabItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="TabItem">
+        <Border Height="32" Margin="0,0,2,-1" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="1,1,1,0" CornerRadius="{{ px("borderRadius-medium") | num }},{{ px("borderRadius-medium") | num }},0,0"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Header}"
+                            ContentTemplate="{TemplateBinding HeaderTemplate}" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^:selected">
+      <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="PmTabs" TargetType="TabControl">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="ItemContainerTheme" Value="{StaticResource PmTab}" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel Orientation="Horizontal" />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="TabControl">
+        <DockPanel>
+          <ItemsPresenter Name="PART_ItemsPresenter" DockPanel.Dock="Top" ZIndex="1" ItemsPanel="{TemplateBinding ItemsPanel}" />
+          <Border Background="{TemplateBinding Background}" BorderBrush="{{ "borderColor-default" | tok }}"
+                  BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}"
+                  CornerRadius="0,{{ px("borderRadius-large") | num }},{{ px("borderRadius-large") | num }},{{ px("borderRadius-large") | num }}"
+                  Padding="{{ "stack-padding-normal" | tokx("Thickness") }}">
+            <ContentPresenter Name="PART_SelectedContentHost" Content="{TemplateBinding SelectedContent}"
+                              ContentTemplate="{TemplateBinding SelectedContentTemplate}" />
+          </Border>
+        </DockPanel>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type TabControl}" TargetType="TabControl" BasedOn="{StaticResource PmTabs}" />
+</ResourceDictionary>

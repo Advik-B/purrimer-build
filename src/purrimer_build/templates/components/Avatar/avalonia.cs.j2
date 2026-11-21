@@ -1,0 +1,94 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A round or square picture of a person or team, with initials while there is no picture.
+public class Avatar : TemplatedControl
+{
+    public static readonly StyledProperty<string?> DisplayNameProperty =
+        AvaloniaProperty.Register<Avatar, string?>(nameof(DisplayName));
+
+    public static readonly StyledProperty<IImage?> SourceProperty =
+        AvaloniaProperty.Register<Avatar, IImage?>(nameof(Source));
+
+    public static readonly StyledProperty<double> SizeProperty =
+        AvaloniaProperty.Register<Avatar, double>(nameof(Size), 32);
+
+    public static readonly StyledProperty<bool> IsSquareProperty =
+        AvaloniaProperty.Register<Avatar, bool>(nameof(IsSquare));
+
+    public static readonly DirectProperty<Avatar, string> InitialsProperty =
+        AvaloniaProperty.RegisterDirect<Avatar, string>(nameof(Initials), o => o.Initials);
+
+    public static readonly DirectProperty<Avatar, CornerRadius> ShapeRadiusProperty =
+        AvaloniaProperty.RegisterDirect<Avatar, CornerRadius>(nameof(ShapeRadius), o => o.ShapeRadius);
+
+    private string _initials = "";
+    private CornerRadius _shapeRadius = new(16);
+
+    public string? DisplayName
+    {
+        get => GetValue(DisplayNameProperty);
+        set => SetValue(DisplayNameProperty, value);
+    }
+
+    public IImage? Source
+    {
+        get => GetValue(SourceProperty);
+        set => SetValue(SourceProperty, value);
+    }
+
+    public double Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    public bool IsSquare
+    {
+        get => GetValue(IsSquareProperty);
+        set => SetValue(IsSquareProperty, value);
+    }
+
+    public string Initials
+    {
+        get => _initials;
+        private set => SetAndRaise(InitialsProperty, ref _initials, value);
+    }
+
+    public CornerRadius ShapeRadius
+    {
+        get => _shapeRadius;
+        private set => SetAndRaise(ShapeRadiusProperty, ref _shapeRadius, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == DisplayNameProperty)
+        {
+            var parts = (DisplayName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var text = parts.Length switch
+            {
+                0 => "",
+                1 => parts[0].Substring(0, Math.Min(2, parts[0].Length)),
+                _ => parts[0].Substring(0, 1) + parts[^1].Substring(0, 1),
+            };
+            Initials = text.ToUpperInvariant();
+            global::Avalonia.Automation.AutomationProperties.SetName(this, DisplayName);
+        }
+        else if (change.Property == SizeProperty || change.Property == IsSquareProperty)
+        {
+            ShapeRadius = new CornerRadius(IsSquare ? {{ px("borderRadius-small") | num }} : Size / 2);
+        }
+    }
+}

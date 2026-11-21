@@ -1,0 +1,16 @@
+.pm-label {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-full" | tok }};
+  color: {{ "fgColor-muted" | tok }};
+  font: 500 12px/18px var(--font-sans);
+  white-space: nowrap;
+}
+.pm-label--accent { border-color: {{ "borderColor-accent-emphasis" | tok }}; color: {{ "fgColor-accent" | tok }}; }
+{% for tone in ["success", "attention", "danger", "done", "info"] %}
+.pm-label--{{ tone }} { border-color: {{ ("borderColor-" ~ tone ~ "-emphasis") | tok }}; color: {{ ("fgColor-" ~ tone) | tok }}; }
+{% endfor %}
+.pm-label--severe { border-color: {{ "bgColor-severe-emphasis" | tok }}; color: {{ "fgColor-severe" | tok }}; }

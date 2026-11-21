@@ -1,0 +1,84 @@
+{% macro themed(values) %}{% for t in themes[1:] %}theme == PurrimerTheme.{{ enum_names[t] }} ? {{ values[t] }} : {% endfor %}{{ values[themes[0]] }}{% endmacro %}
+// {{ note }}
+// {{ tokens.name }} for Slint. import { Purrimer, PurrimerMotion, PurrimerTheme } from "purrimer.slint";
+// Switch themes with Purrimer.theme = PurrimerTheme.noir; from code, set it through the exported global.
+
+{% for f in fonts %}
+import "fonts/{{ f.filename }}";
+{% endfor %}
+
+export enum PurrimerTheme { {% for t in themes %}{{ enum_names[t] }}{{ ", " if not loop.last }}{% endfor %} }
+
+export struct PurrimerShadow {
+    offset-x: length,
+    offset-y: length,
+    blur: length,
+    spread: length,
+    color: color,
+    inset: bool,
+}
+
+export struct PurrimerTextStyle {
+    font-family: string,
+    font-size: length,
+    font-weight: int,
+    line-height: length,
+    letter-spacing: length,
+}
+
+export global Purrimer {
+    in-out property <PurrimerTheme> theme: PurrimerTheme.{{ enum_names[themes[0]] }};
+    out property <bool> dark: {% for t in tokens.dark_themes %}theme == PurrimerTheme.{{ enum_names[t] }}{{ " || " if not loop.last }}{% endfor %};
+
+    // Colours
+{% for n in tokens.colors %}
+    out property <color> {{ n | kebab }}: {{ themed(color_hex[n]) }};
+{% endfor %}
+
+    // Shadows: Slint draws one drop shadow per Rectangle, so each token gives its key layer and,
+    // when there is one, its ambient layer. Inset shadows have no Slint equivalent and are kept as data.
+{% for n in tokens.shadows %}
+{% for idx, suffix in [(0, ""), (1, "-ambient")] %}
+{% set vals = {} %}
+{% for t in themes %}
+{% set layers = tokens.shadows[n][t] %}
+{% if idx < layers | length %}
+{% set s = layers[idx] %}
+{% set _ = vals.update({t: "{ offset-x: %spx, offset-y: %spx, blur: %spx, spread: %spx, color: %s, inset: %s }" | format(s.x | num, s.y | num, s.blur | num, s.spread | num, s.color.rgba_hex(), "true" if s.inset else "false")}) %}
+{% endif %}
+{% endfor %}
+{% if vals | length == themes | length %}
+    out property <PurrimerShadow> {{ n | kebab }}{{ suffix }}: {{ themed(vals) }};
+{% endif %}
+{% endfor %}
+{% endfor %}
+
+    // Lengths
+{% for n, v in tokens.lengths %}
+    out property <length> {{ n | kebab }}: {{ v | num }}px;
+{% endfor %}
+
+    // Font families
+{% for key, fam in tokens.family_names.items() %}
+    out property <string> font-{{ key | kebab }}: "{{ fam }}";
+{% endfor %}
+
+    // Text styles
+{% for s in tokens.type_styles %}
+    out property <PurrimerTextStyle> {{ s.name | kebab }}: { font-family: font-{{ s.family_key | kebab }}, font-size: {{ s.size | num }}px, font-weight: {{ s.weight }}, line-height: {{ s.line_height | num }}px, letter-spacing: {{ s.letter_spacing | num }}px };
+{% endfor %}
+}
+
+// Motion lives in its own global: Slint cannot expose easing properties to native code, so keeping
+// them apart lets an app re-export Purrimer (to set the theme from code) without warnings.
+export global PurrimerMotion {
+    // Durations
+{% for n, v in tokens.durations %}
+    out property <duration> {{ n | kebab }}: {{ v }}ms;
+{% endfor %}
+
+    // Easings. Slint has no piecewise linear() curve, so the spring curves use the closest built-in easing.
+{% for n, e in tokens.easings %}
+    out property <easing> {{ n | kebab }}: {{ slint_easing(n) }};
+{% endfor %}
+}

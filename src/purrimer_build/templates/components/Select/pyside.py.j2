@@ -1,0 +1,47 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Signal
+from PySide6.QtWidgets import QComboBox, QLabel, QVBoxLayout, QWidget
+
+from ..theme import theme
+
+
+class Select(QWidget):
+    """A labelled drop-down list."""
+
+    currentIndexChanged = Signal(int)
+
+    def __init__(self, label: str = "", options: list[str] | None = None, current_index: int = -1,
+                 placeholder: str = "{{ c.spec.props.placeholder.default }}", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        self.label = QLabel(label)
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setBold(True)
+        self.label.setFont(font)
+        self.label.setVisible(bool(label))
+        self.combo = QComboBox()
+        self.combo.setPlaceholderText(placeholder)
+        self.combo.setAccessibleName(label)
+        self.combo.addItems(options or [])
+        self.combo.setCurrentIndex(current_index)
+        self.label.setBuddy(self.combo)
+        layout.addWidget(self.label)
+        layout.addWidget(self.combo)
+        self.combo.currentIndexChanged.connect(self.currentIndexChanged)
+
+    def current_index(self) -> int:
+        return self.combo.currentIndex()
+
+    def current_text(self) -> str:
+        return self.combo.currentText()
+
+    def set_options(self, options: list[str]) -> None:
+        self.combo.clear()
+        self.combo.addItems(options)

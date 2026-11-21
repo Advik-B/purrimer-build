@@ -1,0 +1,30 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Avatar}" TargetType="pm:Avatar">
+    <Setter Property="Background" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-accent" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "borderColor-muted" | tok }}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Avatar">
+        <Border Width="{TemplateBinding Size}" Height="{TemplateBinding Size}" CornerRadius="{TemplateBinding ShapeRadius}"
+                Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
+                ClipToBounds="True">
+          <Panel>
+            <Viewbox Margin="6">
+              <TextBlock Text="{TemplateBinding Initials}" />
+            </Viewbox>
+            <Image Source="{TemplateBinding Source}" Stretch="UniformToFill"
+                   IsVisible="{TemplateBinding Source, Converter={x:Static ObjectConverters.IsNotNull}}" />
+          </Panel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

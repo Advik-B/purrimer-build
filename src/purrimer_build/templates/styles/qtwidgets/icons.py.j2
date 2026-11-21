@@ -1,0 +1,43 @@
+"""{{ note }}
+Octicons (MIT, GitHub Inc.) as SVG path data, and helpers that turn them into tinted icons.
+"""
+
+from PySide6.QtCore import QByteArray, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtSvg import QSvgRenderer
+
+OCTICONS = {{ icons | tojson }}
+
+
+def icon_path(name: str, size: int = 16) -> str:
+    entry = OCTICONS.get(name)
+    if not entry:
+        raise KeyError(f"Unknown Octicon: {name}")
+    return entry.get(str(size)) or next(iter(entry.values()))
+
+
+def _svg(name: str, size: int, color: QColor) -> QByteArray:
+    box = 24 if size >= 24 and "24" in OCTICONS.get(name, {}) else 16
+    path = icon_path(name, box)
+    text = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {box} {box}">'
+            f'<path fill="{color.name(QColor.NameFormat.HexRgb)}" fill-opacity="{color.alphaF():.3f}" d="{path}"/></svg>')
+    return QByteArray(text.encode("utf-8"))
+
+
+def icon_pixmap(name: str, size: int, color: QColor, device_pixel_ratio: float = 1.0) -> QPixmap:
+    pixmap = QPixmap(QSize(round(size * device_pixel_ratio), round(size * device_pixel_ratio)))
+    pixmap.fill(Qt.GlobalColor.transparent)
+    pixmap.setDevicePixelRatio(device_pixel_ratio)
+    painter = QPainter(pixmap)
+    QSvgRenderer(_svg(name, size, color)).render(painter, QRectF(0, 0, size, size))
+    painter.end()
+    return pixmap
+
+
+def paint_icon(painter: QPainter, rect: QRectF, name: str, color: QColor) -> None:
+    size = int(min(rect.width(), rect.height()))
+    QSvgRenderer(_svg(name, size, color)).render(painter, rect)
+
+
+def icon(name: str, size: int, color: QColor) -> QIcon:
+    return QIcon(icon_pixmap(name, size, color, 2.0))

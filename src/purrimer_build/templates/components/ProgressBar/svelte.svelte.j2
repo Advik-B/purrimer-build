@@ -1,0 +1,22 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { value = 0, indeterminate = false, tone = "accent", label = "Progress" }: {
+    value?: number;
+    indeterminate?: boolean;
+    tone?: "accent" | "success" | "attention" | "danger";
+    label?: string;
+  } = $props();
+  const clamped = $derived(Math.max(0, Math.min(100, value)));
+</script>
+
+<div
+  class={["pm-progress", tone !== "accent" && `pm-progress--${tone}`, indeterminate && "pm-progress--indeterminate"]}
+  role="progressbar"
+  aria-label={label}
+  aria-valuemin={0}
+  aria-valuemax={100}
+  aria-valuenow={indeterminate ? undefined : clamped}
+>
+  <div class="pm-progress__fill" style:width={indeterminate ? undefined : `${clamped}%`}></div>
+</div>

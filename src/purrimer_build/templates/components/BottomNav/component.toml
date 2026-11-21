@@ -1,0 +1,19 @@
+name = "BottomNav"
+group = "Mobile"
+order = 51
+summary = "Three to five destinations at the bottom of the screen, marked by a bar on top."
+
+[props.items]
+type = "list"
+default = []
+doc = "Items with icon, label and an optional badge count."
+
+[props.selected]
+type = "int"
+default = 0
+doc = "Index of the current destination."
+
+[props.showLabels]
+type = "bool"
+default = false
+doc = "Shows labels under the icons."

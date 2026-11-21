@@ -1,0 +1,15 @@
+name = "Label"
+group = "Status"
+order = 30
+summary = "An outlined pill naming a state or category."
+
+[props.text]
+type = "string"
+default = ""
+doc = "Label text."
+
+[props.tone]
+type = "enum"
+default = "default"
+doc = "Colour role."
+values = ["default", "accent", "success", "attention", "severe", "danger", "done", "info"]

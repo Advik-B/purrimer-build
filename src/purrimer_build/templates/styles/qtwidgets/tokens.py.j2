@@ -1,0 +1,22 @@
+"""{{ note }}"""
+
+THEMES = {{ qt.themes | tojson }}
+DARK_THEMES = {{ qt.dark | tojson }}
+THEME_LABELS = {{ labels | py }}
+
+# Colours as #rrggbb or #aarrggbb, per theme.
+COLORS = {{ qt.colors | py }}
+
+# Shadow layers per theme: x, y, blur, spread, color, inset.
+SHADOWS = {{ qt.shadows | py }}
+
+LENGTHS = {{ qt.lengths | py }}
+
+DURATIONS = {{ qt.durations | py }}
+
+# QEasingCurve BezierSpline segments: c1x, c1y, c2x, c2y, endx, endy, repeated.
+EASINGS = {{ qt.easings | py }}
+
+TEXT_STYLES = {{ qt.textStyles | py }}
+
+FAMILIES = {{ qt.families | py }}

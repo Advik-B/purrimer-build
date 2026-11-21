@@ -1,0 +1,50 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// The floating action button; set IsExtended to show Label beside the icon.
+public class FAB : Button
+{
+    public static readonly StyledProperty<string> IconNameProperty =
+        AvaloniaProperty.Register<FAB, string>(nameof(IconName), "plus");
+
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<FAB, string?>(nameof(Label));
+
+    public static readonly StyledProperty<bool> IsExtendedProperty =
+        AvaloniaProperty.Register<FAB, bool>(nameof(IsExtended));
+
+    static FAB()
+    {
+        LabelProperty.Changed.AddClassHandler<FAB>((b, e) => global::Avalonia.Automation.AutomationProperties.SetName(b, e.NewValue as string));
+    }
+
+    public string IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public bool IsExtended
+    {
+        get => GetValue(IsExtendedProperty);
+        set => SetValue(IsExtendedProperty, value);
+    }
+
+    protected override Type StyleKeyOverride => typeof(FAB);
+}

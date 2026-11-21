@@ -1,0 +1,14 @@
+name = "SegmentedControl"
+group = "Navigation"
+order = 60
+summary = "Two to five segments that switch a view; the selected one lifts."
+
+[props.items]
+type = "list"
+default = []
+doc = "Segment labels."
+
+[props.selected]
+type = "int"
+default = 0
+doc = "Index of the selected segment."

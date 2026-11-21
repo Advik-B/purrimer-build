@@ -1,0 +1,87 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+import QtQuick.Effects
+
+T.Popup {
+    id: control
+    property string title
+    default property alias content: body.data
+    readonly property real dismissDistance: 96
+
+    parent: T.Overlay.overlay
+    modal: true
+    dim: true
+    width: parent ? Math.min(parent.width, {{ "mobile-sheet-maxWidth" | tok }}) : 360
+    x: parent ? (parent.width - width) / 2 : 0
+    y: parent ? parent.height - height + drag.offset : 0
+    implicitHeight: Math.min(column.implicitHeight, parent ? parent.height * 0.9 : 600)
+    padding: 0
+    closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
+
+    T.Overlay.modal: Rectangle { color: {{ "overlay-backdrop-bgColor" | tok }} }
+
+    enter: Transition {
+        NumberAnimation { property: "y"; from: control.parent ? control.parent.height : 0; to: control.parent ? control.parent.height - control.height : 0; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+    }
+    exit: Transition {
+        NumberAnimation { property: "y"; to: control.parent ? control.parent.height : 0; duration: {{ "duration-sleepy-exit" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-exit" | tok }} }
+    }
+    onClosed: drag.offset = 0
+
+    background: Rectangle {
+        color: {{ "overlay-bgColor" | tok }}
+        topLeftRadius: {{ "borderRadius-xlarge" | tok }}
+        topRightRadius: {{ "borderRadius-xlarge" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: {{ "borderColor-default" | tok }}
+    }
+
+    contentItem: Column {
+        id: column
+        Item {
+            id: drag
+            property real offset: 0
+            width: parent.width
+            height: 24
+            Rectangle {
+                anchors.centerIn: parent
+                width: 36
+                height: 4
+                radius: 2
+                color: {{ "borderColor-emphasis" | tok }}
+            }
+            DragHandler {
+                target: null
+                yAxis.enabled: true
+                xAxis.enabled: false
+                onTranslationChanged: drag.offset = Math.max(0, translation.y)
+                onActiveChanged: {
+                    if (!active) {
+                        if (drag.offset > control.dismissDistance)
+                            control.close()
+                        else
+                            drag.offset = 0
+                    }
+                }
+            }
+            Behavior on offset { enabled: !drag.children[1].active; NumberAnimation { duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} } }
+        }
+        Text {
+            visible: control.title !== ""
+            x: {{ "mobile-gutter" | tok }}
+            bottomPadding: 8
+            text: control.title
+            font: {{ "text-mobile-title" | tok }}
+            color: {{ "fgColor-default" | tok }}
+        }
+        Item {
+            id: body
+            x: {{ "mobile-gutter" | tok }}
+            width: parent.width - 2 * {{ "mobile-gutter" | tok }}
+            implicitHeight: childrenRect.height + {{ "mobile-gutter" | tok }}
+        }
+    }
+}

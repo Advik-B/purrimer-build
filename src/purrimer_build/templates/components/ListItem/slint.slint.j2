@@ -1,0 +1,68 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export component ListItem inherits Rectangle {
+    in property <string> headline;
+    in property <string> supporting;
+    in property <string> icon;
+    in property <string> trailing;
+    in property <bool> chevron;
+    in property <bool> clickable;
+    callback clicked();
+
+    height: supporting != "" ? {{ "mobile-row-height-twoLine" | tok }} : {{ "mobile-row-height" | tok }};
+    background: touch.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+    accessible-role: list-item;
+    accessible-label: headline;
+    accessible-action-default => { if (root.clickable) { root.clicked(); } }
+
+    touch := TouchArea { enabled: root.clickable; clicked => { root.clicked(); } }
+
+    HorizontalLayout {
+        padding-left: {{ "mobile-gutter" | tok }};
+        padding-right: {{ "mobile-gutter" | tok }};
+        spacing: 12px;
+        if root.icon != "": VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 32px;
+                height: 32px;
+                border-radius: {{ "borderRadius-medium" | tok }};
+                background: {{ "bgColor-accent-muted" | tok }};
+                Icon { path: root.icon; color: {{ "fgColor-accent" | tok }}; }
+            }
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Text {
+                text: root.headline;
+                overflow: elide;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-mobile-body" | tok }}.font-family;
+                font-size: {{ "text-mobile-body" | tok }}.font-size;
+            }
+            if root.supporting != "": Text {
+                text: root.supporting;
+                overflow: elide;
+                color: {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+                font-size: {{ "text-mobile-supporting" | tok }}.font-size;
+            }
+        }
+        if root.trailing != "": Text {
+            text: root.trailing;
+            vertical-alignment: center;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+            font-size: {{ "text-mobile-supporting" | tok }}.font-size;
+        }
+        if root.chevron: VerticalLayout {
+            alignment: center;
+            Icon { path: PurrimerIcons.chevron-right-16; color: {{ "fgColor-muted" | tok }}; }
+        }
+    }
+}

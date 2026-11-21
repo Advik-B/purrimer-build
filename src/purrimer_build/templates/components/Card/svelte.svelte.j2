@@ -1,0 +1,19 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { title = "", interactive = false, onclick, children }: { title?: string; interactive?: boolean; onclick?: () => void; children?: Snippet } = $props();
+</script>
+
+{#if interactive}
+  <button type="button" class="pm-card pm-card--interactive" {onclick}>
+    {#if title}<h3 class="pm-card__title">{title}</h3>{/if}
+    {@render children?.()}
+  </button>
+{:else}
+  <section class="pm-card">
+    {#if title}<h3 class="pm-card__title">{title}</h3>{/if}
+    {@render children?.()}
+  </section>
+{/if}

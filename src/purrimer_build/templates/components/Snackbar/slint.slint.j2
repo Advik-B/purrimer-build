@@ -1,0 +1,72 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+// Place it in the window above the bottom bar; it shows while open is true and closes after duration.
+export component Snackbar inherits Rectangle {
+    in-out property <bool> open;
+    in property <string> message;
+    in property <string> action;
+    in property <duration> duration: {{ c.spec.props.duration.default }}ms;
+    callback action-triggered();
+    callback closed();
+
+    visible: self.opacity > 0;
+    opacity: open ? 1 : 0;
+    animate opacity { duration: {{ "duration-sleepy-medium" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+    height: max(48px, row.preferred-height);
+    border-radius: {{ "borderRadius-large" | tok }};
+    background: {{ "bgColor-emphasis" | tok }};
+    drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
+    drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
+    drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
+    accessible-role: AccessibleRole.text;
+    accessible-label: message;
+
+    Timer {
+        interval: root.duration;
+        running: root.open && root.duration > 0ms;
+        triggered => {
+            root.open = false;
+            root.closed();
+        }
+    }
+
+    row := HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 4px;
+        padding-top: 4px;
+        padding-bottom: 4px;
+        spacing: 8px;
+        Text {
+            horizontal-stretch: 1;
+            text: root.message;
+            wrap: word-wrap;
+            vertical-alignment: center;
+            color: {{ "fgColor-onEmphasis" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+        }
+        if root.action != "": Rectangle {
+            height: 40px;
+            width: action-text.preferred-width + 24px;
+            border-radius: {{ "borderRadius-medium" | tok }};
+            background: action-touch.pressed ? {{ "fgColor-onEmphasis" | tok }}.with-alpha(0.12) : transparent;
+            accessible-role: button;
+            accessible-label: root.action;
+            accessible-action-default => { root.action-triggered(); root.open = false; root.closed(); }
+            action-text := Text {
+                text: root.action;
+                color: {{ "fgColor-onEmphasis" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            action-touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.action-triggered(); root.open = false; root.closed(); }
+            }
+        }
+    }
+}

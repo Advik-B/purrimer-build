@@ -1,0 +1,11 @@
+// {{ note }}
+// Octicons (MIT, GitHub Inc.) as path commands: PurrimerIcons.search-16, PurrimerIcons.home-24.
+// Use them with the Icon component or a Path { commands: ...; viewbox-width: 16; viewbox-height: 16; }.
+
+export global PurrimerIcons {
+{% for name, sizes in icons.items() %}
+{% for size, path in sizes.items() %}
+    out property <string> {{ name }}-{{ size }}: "{{ path }}";
+{% endfor %}
+{% endfor %}
+}

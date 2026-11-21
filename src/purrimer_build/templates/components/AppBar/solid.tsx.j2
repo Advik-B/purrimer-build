@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { IconButton } from "./IconButton";
+
+export type AppBarAction = { icon: string; label: string; onClick?: () => void };
+export type AppBarProps = { title: string; back?: boolean; large?: boolean; elevated?: boolean; actions?: AppBarAction[]; onBack?: () => void };
+
+export function AppBar(props: AppBarProps): JSX.Element {
+  return (
+    <>
+      <header class={["pm-appbar", props.elevated && "pm-appbar--elevated"]}>
+        <Show when={props.back}>
+          <IconButton class="pm-appbar__back" icon="arrow-left" label="Back" variant="invisible" onClick={() => props.onBack?.()} />
+        </Show>
+        <h1 class="pm-appbar__title">{props.large ? "" : props.title}</h1>
+        <div class="pm-appbar__actions">
+          <For each={(props.actions ?? []).slice(0, 2)}>
+            {(action) => <IconButton icon={action.icon} label={action.label} variant="invisible" onClick={() => action.onClick?.()} />}
+          </For>
+        </div>
+      </header>
+      <Show when={props.large}><h1 class="pm-appbar-large">{props.title}</h1></Show>
+    </>
+  );
+}

@@ -1,0 +1,39 @@
+// {{ note }}
+// Solid: theme helpers that touch only the DOM, so they work the same on Solid 1.x and 2.x.
+import { themes, type ThemeId } from "./tokens";
+
+const STORAGE_KEY = "purrimer-theme";
+const listeners = new Set<(theme: ThemeId) => void>();
+
+export function currentTheme(root: HTMLElement = document.documentElement): ThemeId {
+  const value = root.getAttribute("data-theme");
+  return (themes as readonly string[]).includes(value ?? "") ? (value as ThemeId) : "{{ themes[0] }}";
+}
+
+export function applyTheme(next: ThemeId, root: HTMLElement = document.documentElement): void {
+  root.setAttribute("data-theme", next);
+  try {
+    localStorage.setItem(STORAGE_KEY, next);
+  } catch {
+    // Storage can be unavailable; the theme still applies for this page.
+  }
+  listeners.forEach((listener) => listener(next));
+}
+
+// Subscribe a signal setter: onThemeChange(setTheme). Returns the unsubscribe function.
+export function onThemeChange(listener: (theme: ThemeId) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+export function restoreTheme(fallback: ThemeId = "{{ themes[0] }}", root: HTMLElement = document.documentElement): ThemeId {
+  let saved: string | null = null;
+  try {
+    saved = localStorage.getItem(STORAGE_KEY);
+  } catch {
+    saved = null;
+  }
+  const next = (themes as readonly string[]).includes(saved ?? "") ? (saved as ThemeId) : fallback;
+  applyTheme(next, root);
+  return next;
+}

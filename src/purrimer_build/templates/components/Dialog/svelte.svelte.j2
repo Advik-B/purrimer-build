@@ -1,0 +1,40 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import IconButton from "./IconButton.svelte";
+
+  let { open = $bindable(false), title, onclose, children, footer }: {
+    open?: boolean;
+    title: string;
+    onclose?: () => void;
+    children?: Snippet;
+    footer?: Snippet;
+  } = $props();
+  const uid = $props.id();
+
+  function close() {
+    open = false;
+    onclose?.();
+  }
+
+  function autofocus(node: HTMLElement) {
+    const target = node.querySelector<HTMLElement>("[autofocus], button, input, select, textarea, [tabindex]:not([tabindex='-1'])");
+    target?.focus();
+  }
+</script>
+
+<svelte:window onkeydown={open ? (e) => e.key === "Escape" && close() : undefined} />
+
+{#if open}
+  <div class="pm-dialog-scrim" role="presentation" onclick={(e) => e.target === e.currentTarget && close()}>
+    <div class="pm-dialog" role="dialog" aria-modal="true" aria-labelledby="pm-dialog-{uid}" {@attach autofocus}>
+      <div class="pm-dialog__header">
+        <h2 class="pm-dialog__title" id="pm-dialog-{uid}">{title}</h2>
+        <IconButton icon="x" label="Close" variant="invisible" onclick={close} />
+      </div>
+      <div class="pm-dialog__body">{@render children?.()}</div>
+      {#if footer}<div class="pm-dialog__footer">{@render footer()}</div>{/if}
+    </div>
+  </div>
+{/if}

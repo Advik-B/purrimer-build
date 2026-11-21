@@ -1,0 +1,29 @@
+// {{ note }}
+// {{ c.summary }}
+import { omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type IconButtonProps = Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class"> & {
+  icon: string;
+  label: string;
+  variant?: "default" | "primary" | "danger" | "invisible";
+  size?: "small" | "medium" | "large";
+  class?: JSX.ClassValue;
+};
+
+export function IconButton(props: IconButtonProps): JSX.Element {
+  const rest = omit(props, "icon", "label", "variant", "size", "class", "type");
+  const size = () => props.size ?? "medium";
+  return (
+    <button
+      {...rest}
+      type={props.type ?? "button"}
+      class={["pm-icon-button", `pm-icon-button--${props.variant ?? "default"}`, size() !== "medium" && `pm-icon-button--${size()}`, props.class]}
+      aria-label={props.label}
+      title={props.label}
+    >
+      <Icon name={props.icon} />
+    </button>
+  );
+}

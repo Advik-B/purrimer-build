@@ -1,0 +1,77 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.Popup {
+    id: control
+    property string message
+    property string action
+    property int duration: {{ c.spec.props.duration.default }}
+    signal actionTriggered()
+
+    parent: T.Overlay.overlay
+    modal: false
+    focus: false
+    closePolicy: T.Popup.NoAutoClose
+    width: parent ? Math.min(parent.width - 2 * {{ "mobile-gutter" | tok }}, 560) : 328
+    x: parent ? (parent.width - width) / 2 : 0
+    y: parent ? parent.height - height - {{ "mobile-bottomNav-height" | tok }} - {{ "base-size-16" | tok }} : 0
+    implicitHeight: Math.max(48, row.implicitHeight + 8)
+    leftPadding: 16
+    rightPadding: 4
+
+    enter: Transition {
+        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: {{ "duration-sleepy-medium" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+    }
+    exit: Transition {
+        NumberAnimation { property: "opacity"; to: 0; duration: {{ "duration-sleepy-exit" | tok }} }
+    }
+
+    Timer {
+        running: control.opened && control.duration > 0
+        interval: control.duration
+        onTriggered: control.close()
+    }
+
+    background: Rectangle {
+        radius: {{ "borderRadius-large" | tok }}
+        color: {{ "bgColor-emphasis" | tok }}
+    }
+
+    contentItem: Row {
+        id: row
+        spacing: 8
+        Text {
+            width: row.width - (actionButton.visible ? actionButton.width + 8 : 0)
+            text: control.message
+            wrapMode: Text.Wrap
+            font: {{ "text-body-medium" | tok }}
+            color: {{ "fgColor-onEmphasis" | tok }}
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        T.Button {
+            id: actionButton
+            visible: control.action !== ""
+            implicitWidth: actionText.implicitWidth + 24
+            implicitHeight: 40
+            onClicked: {
+                control.actionTriggered()
+                control.close()
+            }
+            contentItem: Text {
+                id: actionText
+                text: control.action
+                font.family: {{ "text-body-medium" | tok }}.family
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                font.underline: true
+                color: {{ "fgColor-onEmphasis" | tok }}
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+            background: Rectangle { radius: {{ "borderRadius-medium" | tok }}; color: actionButton.down ? Qt.rgba(1, 1, 1, 0.12) : "transparent" }
+        }
+    }
+}

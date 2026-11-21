@@ -1,0 +1,32 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type ButtonProps = Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "class"> & {
+  label?: string;
+  variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+  size?: {{ c.spec.props.size["values"] | map("tojson") | join(" | ") }};
+  leadingIcon?: string;
+  trailingIcon?: string;
+  block?: boolean;
+  class?: JSX.ClassValue;
+};
+
+export function Button(props: ButtonProps): JSX.Element {
+  const rest = omit(props, "label", "variant", "size", "leadingIcon", "trailingIcon", "block", "class", "children", "type");
+  const variant = () => props.variant ?? "default";
+  const size = () => props.size ?? "medium";
+  return (
+    <button
+      {...rest}
+      type={props.type ?? "button"}
+      class={["pm-button", `pm-button--${variant()}`, size() !== "medium" && `pm-button--${size()}`, props.block && "pm-button--block", props.class]}
+    >
+      <Show when={props.leadingIcon}>{(name) => <Icon name={name()} />}</Show>
+      {props.children ?? props.label}
+      <Show when={props.trailingIcon}>{(name) => <Icon name={name()} />}</Show>
+    </button>
+  );
+}

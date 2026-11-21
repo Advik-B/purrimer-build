@@ -1,0 +1,12 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  let { icon = "plus", label, extended = false, onclick }: { icon?: string; label: string; extended?: boolean; onclick?: () => void } = $props();
+</script>
+
+<button type="button" class={["pm-fab", extended && "pm-fab--extended"]} aria-label={extended ? undefined : label} {onclick}>
+  <Icon name={icon} size={24} />
+  {#if extended}<span>{label}</span>{/if}
+</button>

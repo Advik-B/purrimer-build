@@ -1,0 +1,59 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.Button {
+    id: control
+    property string variant: "default"
+    property string size: "medium"
+    property string leadingIcon
+    property string trailingIcon
+
+    readonly property color fillRest: variant === "primary" ? {{ "button-primary-bgColor-rest" | tok }} : variant === "invisible" ? "transparent" : {{ "button-default-bgColor-rest" | tok }}
+    readonly property color fillHover: variant === "primary" ? {{ "button-primary-bgColor-hover" | tok }} : variant === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : variant === "invisible" ? {{ "control-transparent-bgColor-hover" | tok }} : {{ "button-default-bgColor-hover" | tok }}
+    readonly property color fillActive: variant === "primary" ? {{ "button-primary-bgColor-active" | tok }} : variant === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : variant === "invisible" ? {{ "control-transparent-bgColor-selected" | tok }} : {{ "button-default-bgColor-active" | tok }}
+    readonly property color ink: !enabled ? {{ "fgColor-disabled" | tok }} : variant === "primary" || (variant === "danger" && (hovered || down)) ? {{ "fgColor-onEmphasis" | tok }} : variant === "danger" ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }}
+
+    implicitWidth: Math.max(implicitBackgroundWidth + leftInset + rightInset, implicitContentWidth + leftPadding + rightPadding)
+    implicitHeight: Math.max(implicitBackgroundHeight + topInset + bottomInset, implicitContentHeight + topPadding + bottomPadding)
+    leftPadding: size === "small" ? 8 : size === "large" ? 16 : {{ "control-medium-paddingInline-normal" | tok }}
+    rightPadding: leftPadding
+    spacing: {{ "control-medium-gap" | tok }}
+    font.family: {{ "text-body-medium" | tok }}.family
+    font.pixelSize: size === "small" ? 12 : 14
+    font.weight: Font.DemiBold
+
+    contentItem: Row {
+        spacing: control.spacing
+        Icon { name: control.leadingIcon; color: control.ink; visible: control.leadingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
+        Text {
+            text: control.text
+            font: control.font
+            color: control.ink
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Icon { name: control.trailingIcon; color: control.ink; visible: control.trailingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
+    }
+
+    background: Rectangle {
+        implicitWidth: control.height
+        implicitHeight: control.size === "small" ? {{ "control-small-size" | tok }} : control.size === "large" ? {{ "control-large-size" | tok }} : {{ "control-medium-size" | tok }}
+        radius: {{ "borderRadius-medium" | tok }}
+        color: !control.enabled ? (control.variant === "invisible" ? "transparent" : {{ "bgColor-disabled" | tok }}) : control.down ? control.fillActive : control.hovered ? control.fillHover : control.fillRest
+        border.width: control.variant === "invisible" ? 0 : {{ "borderWidth-thin" | tok }}
+        border.color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.variant === "primary" || (control.variant === "danger" && (control.hovered || control.down)) ? color : {{ "button-default-borderColor-rest" | tok }}
+        Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -4
+            radius: parent.radius + 4
+            color: "transparent"
+            border.width: {{ "borderWidth-thick" | tok }}
+            border.color: {{ "focus-outlineColor" | tok }}
+            visible: control.visualFocus
+        }
+    }
+}

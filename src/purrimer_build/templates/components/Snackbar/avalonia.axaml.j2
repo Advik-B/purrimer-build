@@ -1,0 +1,57 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="PmSnackbarAction" TargetType="Button">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="Button">
+        <Border Name="bg" Background="{TemplateBinding Background}" CornerRadius="{{ "borderRadius-medium" | tok }}"
+                Padding="{TemplateBinding Padding}">
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#bg">
+      <Setter Property="Opacity" Value="0.85" />
+    </Style>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:Snackbar}" TargetType="pm:Snackbar">
+    <Setter Property="Background" Value="{{ "bgColor-emphasis" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-large" | tok }}" />
+    <Setter Property="VerticalAlignment" Value="Bottom" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="Opacity" Value="0" />
+    <Setter Property="IsHitTestVisible" Value="False" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Opacity" Duration="{{ "duration-sleepy-medium" | tok }}" Easing="{{ "easing-sleepy-enter" | tok }}" />
+      </Transitions>
+    </Setter>
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Snackbar">
+        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" MinHeight="48"
+                Padding="16,4,4,4" BoxShadow="{{ "shadow-floating-small" | tok }}">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="{TemplateBinding Message}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <Button Name="PART_Action" Grid.Column="1" Theme="{StaticResource PmSnackbarAction}"
+                    Content="{TemplateBinding ActionText}"
+                    IsVisible="{TemplateBinding ActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:open">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

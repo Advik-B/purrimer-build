@@ -1,0 +1,24 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  let { headline, supporting = "", icon = "", trailing = "", chevron = false, onclick }: {
+    headline: string;
+    supporting?: string;
+    icon?: string;
+    trailing?: string;
+    chevron?: boolean;
+    onclick?: () => void;
+  } = $props();
+</script>
+
+<svelte:element this={onclick ? "button" : "div"} type={onclick ? "button" : undefined} class={["pm-list-item", supporting && "pm-list-item--two-line"]} {onclick} role={onclick ? undefined : "listitem"}>
+  {#if icon}<span class="pm-list-item__tile"><Icon name={icon} /></span>{/if}
+  <span class="pm-list-item__text">
+    <span class="pm-list-item__headline">{headline}</span>
+    {#if supporting}<span class="pm-list-item__supporting">{supporting}</span>{/if}
+  </span>
+  {#if trailing}<span class="pm-list-item__trailing">{trailing}</span>{/if}
+  {#if chevron}<Icon name="chevron-right" class="pm-list-item__chevron" />{/if}
+</svelte:element>

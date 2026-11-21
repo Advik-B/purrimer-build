@@ -1,0 +1,29 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  type Item = { icon: string; label: string; badge?: number };
+
+  let { items, selected = $bindable(0), showLabels = false, onselect }: {
+    items: Item[];
+    selected?: number;
+    showLabels?: boolean;
+    onselect?: (index: number) => void;
+  } = $props();
+
+  function pick(i: number) {
+    selected = i;
+    onselect?.(i);
+  }
+</script>
+
+<nav class="pm-bottomnav" aria-label="Main">
+  {#each items as item, i}
+    <button type="button" class="pm-bottomnav__item" aria-current={i === selected ? "page" : undefined} aria-label={showLabels ? undefined : item.label} onclick={() => pick(i)}>
+      <Icon name={item.icon} size={24} />
+      {#if showLabels}<span>{item.label}</span>{/if}
+      {#if item.badge}<span class="pm-bottomnav__badge">{item.badge > 99 ? "99+" : item.badge}</span>{/if}
+    </button>
+  {/each}
+</nav>

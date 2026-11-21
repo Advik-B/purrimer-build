@@ -1,0 +1,39 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { HTMLInputAttributes } from "svelte/elements";
+  import Icon from "./Icon.svelte";
+
+  type Props = Omit<HTMLInputAttributes, "value"> & {
+    label: string;
+    value?: string;
+    caption?: string;
+    error?: string;
+    leadingIcon?: string;
+  };
+
+  let { label, value = $bindable(""), caption = "", error = "", leadingIcon = "", disabled = false, id, class: className = "", ...rest }: Props = $props();
+  const uid = $props.id();
+  const inputId = $derived(id ?? `pm-field-${uid}`);
+</script>
+
+<div class={["pm-field", error && "pm-field--invalid", disabled && "pm-field--disabled", className]}>
+  <label class="pm-field__label" for={inputId}>{label}</label>
+  <div class="pm-field__control">
+    {#if leadingIcon}<Icon name={leadingIcon} />{/if}
+    <input
+      {...rest}
+      id={inputId}
+      class="pm-field__input"
+      bind:value
+      {disabled}
+      aria-invalid={error ? "true" : undefined}
+      aria-describedby={error || caption ? `${inputId}-note` : undefined}
+    />
+  </div>
+  {#if error}
+    <span class="pm-field__error" id="{inputId}-note"><Icon name="alert-fill" size={16} />{error}</span>
+  {:else if caption}
+    <span class="pm-field__caption" id="{inputId}-note">{caption}</span>
+  {/if}
+</div>

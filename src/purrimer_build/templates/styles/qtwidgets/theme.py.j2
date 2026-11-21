@@ -1,0 +1,120 @@
+"""{{ note }}
+Theme state for Qt Widgets: the active theme, token lookups and the stylesheet that goes with it.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from PySide6.QtCore import QEasingCurve, QObject, QPointF, Signal
+from PySide6.QtGui import QColor, QFont, QFontDatabase
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QWidget
+
+from . import tokens as T
+
+HERE = Path(__file__).resolve().parent
+FONT_FILES = {{ fonts | map(attribute="filename") | list | tojson }}
+WEIGHTS = {100: QFont.Weight.Thin, 200: QFont.Weight.ExtraLight, 300: QFont.Weight.Light, 400: QFont.Weight.Normal,
+           500: QFont.Weight.Medium, 600: QFont.Weight.DemiBold, 700: QFont.Weight.Bold, 800: QFont.Weight.ExtraBold,
+           900: QFont.Weight.Black}
+
+
+class Theme(QObject):
+    """The active theme. Components repaint when `changed` fires."""
+
+    changed = Signal(str)
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._name = T.THEMES[0]
+        self._fonts_loaded = False
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def dark(self) -> bool:
+        return self._name in T.DARK_THEMES
+
+    def color(self, token: str) -> QColor:
+        return QColor(T.COLORS[token][self._name])
+
+    def length(self, token: str) -> float:
+        return float(T.LENGTHS[token])
+
+    def duration(self, token: str) -> int:
+        return int(T.DURATIONS[token])
+
+    def easing(self, token: str) -> QEasingCurve:
+        seg = T.EASINGS[token]
+        curve = QEasingCurve(QEasingCurve.Type.BezierSpline)
+        for i in range(0, len(seg), 6):
+            curve.addCubicBezierSegment(QPointF(seg[i], seg[i + 1]), QPointF(seg[i + 2], seg[i + 3]),
+                                        QPointF(seg[i + 4], seg[i + 5]))
+        return curve
+
+    def font(self, style: str) -> QFont:
+        s = T.TEXT_STYLES[style]
+        font = QFont(s["family"])
+        font.setPixelSize(round(s["pixelSize"]))
+        font.setWeight(WEIGHTS.get(int(s["weight"]), QFont.Weight.Normal))
+        if s["letterSpacing"]:
+            font.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, s["letterSpacing"])
+        return font
+
+    def text_css(self, style: str) -> str:
+        """A widget-level stylesheet for a text style; the application stylesheet's QWidget font rule wins over setFont."""
+        s = T.TEXT_STYLES[style]
+        return (f'font-family: "{s["family"]}"; font-size: {round(s["pixelSize"])}px; '
+                f'font-weight: {int(s["weight"])};')
+
+    def line_height(self, style: str) -> float:
+        return float(T.TEXT_STYLES[style]["lineHeight"])
+
+    def shadow_layers(self, token: str) -> list[dict]:
+        return T.SHADOWS[token][self._name]
+
+    def apply_shadow(self, widget: QWidget, token: str) -> QGraphicsDropShadowEffect | None:
+        """Qt draws one drop shadow per widget, so this uses the token's first (key) layer."""
+        layers = [layer for layer in self.shadow_layers(token) if not layer["inset"]]
+        if not layers:
+            widget.setGraphicsEffect(None)
+            return None
+        layer = layers[0]
+        effect = QGraphicsDropShadowEffect(widget)
+        effect.setOffset(layer["x"], layer["y"])
+        effect.setBlurRadius(layer["blur"] * 2)
+        effect.setColor(QColor(layer["color"]))
+        widget.setGraphicsEffect(effect)
+        return effect
+
+    def stylesheet(self, name: str | None = None) -> str:
+        text = (HERE / "qss" / f"purrimer-{name or self._name}.qss").read_text(encoding="utf-8")
+        return text.replace("url(:/purrimer/icons/", "url(" + (HERE / "icons").as_posix() + "/")
+
+    def load_fonts(self) -> None:
+        if self._fonts_loaded:
+            return
+        for file in FONT_FILES:
+            QFontDatabase.addApplicationFont(str(HERE / "fonts" / file))
+        self._fonts_loaded = True
+
+    def set(self, name: str, app: QApplication | None = None) -> None:
+        if name not in T.THEMES:
+            raise ValueError(f"Unknown theme {name!r}; choose from {', '.join(T.THEMES)}")
+        self.load_fonts()
+        self._name = name
+        app = app or QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(self.stylesheet(name))
+        self.changed.emit(name)
+
+
+theme = Theme()
+
+
+def apply(app: QApplication, name: str = T.THEMES[0]) -> Theme:
+    """Load the fonts and the stylesheet for `name` into `app`."""
+    theme.set(name, app)
+    return theme

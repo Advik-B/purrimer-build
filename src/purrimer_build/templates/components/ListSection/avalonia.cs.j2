@@ -1,0 +1,34 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A titled group of ListItem rows, inset into a rounded card or plain edge to edge.
+public class ListSection : ItemsControl
+{
+    public static readonly StyledProperty<string?> HeaderProperty =
+        AvaloniaProperty.Register<ListSection, string?>(nameof(Header));
+
+    public static readonly StyledProperty<bool> IsInsetProperty =
+        AvaloniaProperty.Register<ListSection, bool>(nameof(IsInset), true);
+
+    public string? Header
+    {
+        get => GetValue(HeaderProperty);
+        set => SetValue(HeaderProperty, value);
+    }
+
+    public bool IsInset
+    {
+        get => GetValue(IsInsetProperty);
+        set => SetValue(IsInsetProperty, value);
+    }
+}

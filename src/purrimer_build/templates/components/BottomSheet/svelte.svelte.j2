@@ -1,0 +1,59 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { open = $bindable(false), title = "", onclose, children }: { open?: boolean; title?: string; onclose?: () => void; children?: Snippet } = $props();
+
+  const DISMISS = 96;
+  let offset = $state(0);
+  let startY = 0;
+  let dragging = $state(false);
+
+  function close() {
+    open = false;
+    offset = 0;
+    onclose?.();
+  }
+
+  function down(e: PointerEvent) {
+    dragging = true;
+    startY = e.clientY;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function move(e: PointerEvent) {
+    if (dragging) offset = Math.max(0, e.clientY - startY);
+  }
+
+  function up() {
+    dragging = false;
+    if (offset > DISMISS) close();
+    else offset = 0;
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (e.key === "Escape") close();
+  }
+</script>
+
+<svelte:window onkeydown={open ? onkeydown : undefined} />
+
+{#if open}
+  <div class="pm-sheet-scrim" role="presentation" style:opacity={1 - Math.min(offset / 300, 0.6)} onclick={(e) => e.target === e.currentTarget && close()}>
+    <div
+      class="pm-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-label={title || undefined}
+      style:translate="0 {offset}px"
+      style:transition={dragging ? "none" : "translate {{ 'duration-slow' | tok }} {{ 'easing-sleepy-move' | tok }}"}
+    >
+      <div class="pm-sheet__handle" role="button" tabindex="0" aria-label="Close" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onkeydown={(e) => (e.key === "Enter" || e.key === " ") && close()}>
+        <span class="pm-sheet__grabber"></span>
+      </div>
+      {#if title}<h2 class="pm-sheet__title">{title}</h2>{/if}
+      <div class="pm-sheet__body">{@render children?.()}</div>
+    </div>
+  </div>
+{/if}

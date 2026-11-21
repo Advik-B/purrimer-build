@@ -1,0 +1,40 @@
+// {{ note }}
+// {{ c.summary }}
+import { createEffect, omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type CheckboxProps = Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "class" | "type" | "checked" | "onChange"> & {
+  label: string;
+  checked?: boolean;
+  indeterminate?: boolean;
+  onChange?: (checked: boolean) => void;
+  class?: JSX.ClassValue;
+};
+
+export function Checkbox(props: CheckboxProps): JSX.Element {
+  const rest = omit(props, "label", "checked", "indeterminate", "onChange", "class");
+  let input: HTMLInputElement | undefined;
+  // indeterminate is a DOM property with no attribute, so it is written from an effect.
+  createEffect(
+    () => props.indeterminate ?? false,
+    (value) => {
+      if (input) input.indeterminate = value;
+    }
+  );
+  return (
+    <label class={["pm-check", props.class]}>
+      <input
+        {...rest}
+        class="pm-check__input"
+        type="checkbox"
+        checked={props.checked ?? false}
+        ref={(el) => {
+          input = el;
+          el.indeterminate = props.indeterminate ?? false;
+        }}
+        onChange={(e) => props.onChange?.(e.currentTarget.checked)}
+      />
+      <span>{props.label}</span>
+    </label>
+  );
+}

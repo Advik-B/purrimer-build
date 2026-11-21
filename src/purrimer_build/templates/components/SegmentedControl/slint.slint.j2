@@ -1,0 +1,41 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+
+export component SegmentedControl inherits Rectangle {
+    in property <[string]> items;
+    in-out property <int> selected;
+    callback activated(int);
+
+    height: 32px;
+    border-radius: {{ "borderRadius-medium" | tok }};
+    background: {{ "bgColor-muted" | tok }};
+
+    HorizontalLayout {
+        padding: 2px;
+        spacing: 2px;
+        for item[i] in root.items: Rectangle {
+            property <bool> current: i == root.selected;
+            min-width: max(64px, label.preferred-width + 24px);
+            border-radius: {{ "borderRadius-medium" | tok }};
+            background: current ? {{ "bgColor-default" | tok }} : transparent;
+            border-width: current ? {{ "borderWidth-thin" | tok }} : 0px;
+            border-color: {{ "borderColor-default" | tok }};
+            animate background { duration: {{ "duration-fast" | tok }}; }
+            accessible-role: radio-button;
+            accessible-label: item;
+            accessible-checkable: true;
+            accessible-checked: current;
+            accessible-action-default => { root.selected = i; root.activated(i); }
+            label := Text {
+                text: item;
+                color: current ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: current ? 600 : 500;
+            }
+            TouchArea { mouse-cursor: pointer; clicked => { root.selected = i; root.activated(i); } }
+        }
+    }
+}

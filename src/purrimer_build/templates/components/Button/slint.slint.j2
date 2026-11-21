@@ -1,0 +1,85 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export component Button inherits Rectangle {
+    in property <string> text;
+    // "default", "primary", "danger" or "invisible"
+    in property <string> variant: "default";
+    // "small", "medium" or "large"
+    in property <string> size: "medium";
+    in property <string> leading-icon;
+    in property <string> trailing-icon;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    out property <bool> has-focus: focus.has-focus;
+    property <bool> hovered: touch.has-hover;
+    property <bool> down: touch.pressed;
+    property <bool> emphasised: variant == "primary" || (variant == "danger" && (hovered || down));
+    property <brush> ink: !enabled ? {{ "fgColor-disabled" | tok }} : emphasised ? {{ "fgColor-onEmphasis" | tok }} : variant == "danger" ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }};
+
+    border-radius: {{ "borderRadius-medium" | tok }};
+    border-width: variant == "invisible" ? 0px : {{ "borderWidth-thin" | tok }};
+    border-color: !enabled ? {{ "bgColor-disabled" | tok }} : emphasised ? self.background : {{ "button-default-borderColor-rest" | tok }};
+    background: !enabled ? (variant == "invisible" ? transparent : {{ "bgColor-disabled" | tok }})
+        : variant == "primary" ? (down ? {{ "button-primary-bgColor-active" | tok }} : hovered ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }})
+        : variant == "danger" && (hovered || down) ? {{ "bgColor-danger-emphasis" | tok }}
+        : variant == "invisible" ? (down ? {{ "control-transparent-bgColor-selected" | tok }} : hovered ? {{ "control-transparent-bgColor-hover" | tok }} : transparent)
+        : (down ? {{ "button-default-bgColor-active" | tok }} : hovered ? {{ "button-default-bgColor-hover" | tok }} : {{ "button-default-bgColor-rest" | tok }});
+    animate background { duration: {{ "duration-fast" | tok }}; }
+
+    accessible-role: button;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if (event.text == " " || event.text == "\n") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    min-height: size == "small" ? {{ "control-small-size" | tok }} : size == "large" ? {{ "control-large-size" | tok }} : {{ "control-medium-size" | tok }};
+    max-height: self.min-height;
+    accessible-label: text;
+
+    HorizontalLayout {
+        padding-left: root.size == "small" ? 8px : root.size == "large" ? 16px : {{ "control-medium-paddingInline-normal" | tok }};
+        padding-right: self.padding-left;
+        spacing: {{ "control-medium-gap" | tok }};
+        alignment: center;
+        if root.leading-icon != "": Icon { path: root.leading-icon; color: root.ink; y: (parent.height - self.height) / 2; }
+        Text {
+            text: root.text;
+            color: root.ink;
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: root.size == "small" ? 12px : 14px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+        if root.trailing-icon != "": Icon { path: root.trailing-icon; color: root.ink; y: (parent.height - self.height) / 2; }
+    }
+
+        if root.has-focus: Rectangle {
+            x: -4px;
+            y: -4px;
+            width: parent.width + 8px;
+            height: parent.height + 8px;
+            border-radius: parent.border-radius + 4px;
+            border-width: {{ "borderWidth-thick" | tok }};
+            border-color: {{ "focus-outlineColor" | tok }};
+        }
+}

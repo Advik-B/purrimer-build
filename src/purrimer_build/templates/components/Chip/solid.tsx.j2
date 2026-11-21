@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type ChipProps = {
+  text: string;
+  tone?: {{ c.spec.props.tone["values"] | map("tojson") | join(" | ") }};
+  icon?: string;
+  removable?: boolean;
+  onRemove?: () => void;
+};
+
+export function Chip(props: ChipProps): JSX.Element {
+  return (
+    <span class={["pm-chip", `pm-chip--${props.tone ?? "accent"}`]}>
+      <Show when={props.icon}>{(name) => <Icon name={name()} />}</Show>
+      {props.text}
+      <Show when={props.removable}>
+        <button type="button" class="pm-chip__remove" aria-label={`Remove ${props.text}`} onClick={() => props.onRemove?.()}>
+          <Icon name="x" />
+        </button>
+      </Show>
+    </span>
+  );
+}

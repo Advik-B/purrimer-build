@@ -1,0 +1,47 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Card}" TargetType="pm:Card">
+    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-large" | tok }}" />
+    <Setter Property="Padding" Value="{{ "stack-padding-normal" | tokx("Thickness") }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Card">
+        <Panel>
+          <Border Name="focusRing" Margin="-4" IsVisible="False" IsHitTestVisible="False"
+                  BorderThickness="2" BorderBrush="{{ "focus-outlineColor" | tok }}"
+                  CornerRadius="{{ "borderRadius-xlarge" | tok }}" />
+          <Border Name="surface" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                  BoxShadow="{{ "shadow-resting-small" | tok }}" Padding="{TemplateBinding Padding}">
+            <StackPanel Spacing="{{ "stack-gap-condensed" | tok }}">
+              <TextBlock Text="{TemplateBinding Title}" FontFamily="{{ "heading" | font }}"
+                         FontSize="{{ "text-title-small" | tokx("FontSize") }}" FontWeight="{{ "text-title-small" | tokx("FontWeight") }}"
+                         IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </StackPanel>
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[IsInteractive=True]">
+      <Setter Property="Cursor" Value="Hand" />
+    </Style>
+    <Style Selector="^[IsInteractive=True]:pointerover /template/ Border#surface">
+      <Setter Property="BoxShadow" Value="{{ "shadow-resting-medium" | tok }}" />
+    </Style>
+    <Style Selector="^:pressed /template/ Border#surface">
+      <Setter Property="Background" Value="{{ "bgColor-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#focusRing">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

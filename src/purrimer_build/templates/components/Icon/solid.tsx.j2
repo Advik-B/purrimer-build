@@ -1,0 +1,24 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+import { iconPath } from "../icons";
+
+export type IconProps = { name: string; size?: 16 | 24; label?: string; class?: JSX.ClassValue };
+
+export function Icon(props: IconProps): JSX.Element {
+  const size = () => props.size ?? 16;
+  const box = () => (size() >= 24 && iconPath(props.name, 24) !== iconPath(props.name, 16) ? 24 : 16);
+  return (
+    <svg
+      class={["pm-icon", props.class]}
+      width={size()}
+      height={size()}
+      viewBox={`0 0 ${box()} ${box()}`}
+      role={props.label ? "img" : undefined}
+      aria-label={props.label || undefined}
+      aria-hidden={props.label ? undefined : "true"}
+    >
+      <path d={iconPath(props.name, size())} />
+    </svg>
+  );
+}

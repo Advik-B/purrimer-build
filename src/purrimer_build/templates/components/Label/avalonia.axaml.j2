@@ -1,0 +1,51 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Label}" TargetType="pm:Label">
+    <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Label">
+        <Border Height="20" Padding="7,0" CornerRadius="10" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}">
+          <TextBlock Text="{TemplateBinding Text}" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[Tone=accent]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-accent-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-accent" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=success]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-success-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-success" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=attention]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-attention-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-attention" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=severe]">
+      <Setter Property="BorderBrush" Value="{{ "bgColor-severe-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-severe" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=danger]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-danger-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=done]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-done-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-done" | tok }}" />
+    </Style>
+    <Style Selector="^[Tone=info]">
+      <Setter Property="BorderBrush" Value="{{ "borderColor-info-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-info" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

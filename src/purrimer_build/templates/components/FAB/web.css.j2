@@ -1,0 +1,23 @@
+.pm-fab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: {{ "mobile-fab-size" | tok }};
+  height: {{ "mobile-fab-size" | tok }};
+  padding: 0 16px;
+  border: 0;
+  border-radius: {{ "borderRadius-large" | tok }};
+  corner-shape: squircle;
+  background: {{ "button-primary-bgColor-rest" | tok }};
+  color: {{ "fgColor-onEmphasis" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  font: 600 16px/24px var(--font-sans);
+  cursor: pointer;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-fab svg { width: 24px; height: 24px; fill: currentColor; flex: none; }
+.pm-fab:not(.pm-fab--extended) { width: {{ "mobile-fab-size" | tok }}; padding: 0; }
+.pm-fab:hover { background: {{ "button-primary-bgColor-hover" | tok }}; }
+.pm-fab:active { background: {{ "button-primary-bgColor-active" | tok }}; scale: 0.96; }
+.pm-fab:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }

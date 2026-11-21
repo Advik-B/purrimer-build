@@ -1,0 +1,21 @@
+// {{ note }}
+// Octicons (MIT, GitHub Inc.) as SVG path data. Octicons.path("search", 16) returns the path for PathSvg.
+pragma Singleton
+import QtQuick
+
+QtObject {
+    readonly property var data: ({{ icons | tojson }})
+
+    function path(name, size) {
+        const entry = data[name]
+        if (!entry)
+            return ""
+        const key = size >= 24 ? "24" : "16"
+        return entry[key] !== undefined ? entry[key] : (entry["16"] !== undefined ? entry["16"] : entry["24"])
+    }
+
+    function box(name, size) {
+        const entry = data[name]
+        return (size >= 24 && entry && entry["24"] !== undefined) || (entry && entry["16"] === undefined) ? 24 : 16
+    }
+}

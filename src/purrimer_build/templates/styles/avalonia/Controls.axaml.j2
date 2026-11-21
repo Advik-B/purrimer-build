@@ -1,0 +1,10 @@
+<!-- {{ note }} -->
+<!-- Merge after Purrimer.axaml and Icons.axaml. Each control theme is keyed Pm<Name>; the built-in controls get it as their default theme. -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.MergedDictionaries>
+{% for c in done %}
+    <ResourceInclude Source="avares://{{ assembly }}/Purrimer/Themes/{{ c.name }}.axaml" />
+{% endfor %}
+  </ResourceDictionary.MergedDictionaries>
+</ResourceDictionary>

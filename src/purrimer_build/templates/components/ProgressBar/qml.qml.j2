@@ -1,0 +1,40 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+T.ProgressBar {
+    id: control
+    property string tone: "accent"
+    from: 0
+    to: 100
+    implicitWidth: 200
+    implicitHeight: 8
+
+    background: Rectangle {
+        radius: height / 2
+        color: {{ "controlTrack-bgColor-rest" | tok }}
+    }
+
+    contentItem: Item {
+        clip: true
+        Rectangle {
+            id: fill
+            height: parent.height
+            radius: height / 2
+            color: control.tone === "success" ? {{ "bgColor-success-emphasis" | tok }} : control.tone === "attention" ? {{ "bgColor-attention-emphasis" | tok }} : control.tone === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : {{ "bgColor-accent-emphasis" | tok }}
+            width: control.indeterminate ? parent.width * 0.4 : parent.width * control.visualPosition
+            Behavior on width { enabled: !control.indeterminate; NumberAnimation { duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} } }
+            NumberAnimation on x {
+                running: control.indeterminate && control.visible
+                loops: Animation.Infinite
+                from: -fill.width
+                to: control.width
+                duration: 1400
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: {{ "easing-sleepy-move" | tok }}
+            }
+        }
+    }
+}

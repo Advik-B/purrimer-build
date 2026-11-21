@@ -1,0 +1,58 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+import { IconButton } from "icon-button.slint";
+
+export component Banner inherits Rectangle {
+    // "info", "success", "attention", "danger" or "done"
+    in property <string> tone: "info";
+    in property <string> title;
+    in property <string> text;
+    in property <bool> dismissible;
+    callback dismissed();
+
+    border-radius: {{ "borderRadius-large" | tok }};
+    background: tone == "success" ? {{ "bgColor-success-muted" | tok }} : tone == "attention" ? {{ "bgColor-attention-muted" | tok }} : tone == "danger" ? {{ "bgColor-danger-muted" | tok }} : tone == "done" ? {{ "bgColor-done-muted" | tok }} : {{ "bgColor-info-muted" | tok }};
+    border-width: {{ "borderWidth-thin" | tok }};
+    border-color: tone == "success" ? {{ "borderColor-success-emphasis" | tok }} : tone == "attention" ? {{ "borderColor-attention-emphasis" | tok }} : tone == "danger" ? {{ "borderColor-danger-emphasis" | tok }} : tone == "done" ? {{ "borderColor-done-emphasis" | tok }} : {{ "borderColor-info-emphasis" | tok }};
+    accessible-role: AccessibleRole.text;
+    accessible-label: title + " " + text;
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: root.dismissible ? 8px : 16px;
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: 12px;
+        alignment: stretch;
+        Icon {
+            y: 2px;
+            path: root.tone == "success" ? PurrimerIcons.check-circle-16 : root.tone == "attention" ? PurrimerIcons.alert-16 : root.tone == "danger" ? PurrimerIcons.stop-16 : root.tone == "done" ? PurrimerIcons.check-circle-fill-16 : PurrimerIcons.info-16;
+            color: root.tone == "success" ? {{ "fgColor-success" | tok }} : root.tone == "attention" ? {{ "fgColor-attention" | tok }} : root.tone == "danger" ? {{ "fgColor-danger" | tok }} : root.tone == "done" ? {{ "fgColor-done" | tok }} : {{ "fgColor-info" | tok }};
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            if root.title != "": Text {
+                text: root.title;
+                wrap: word-wrap;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            if root.text != "": Text {
+                text: root.text;
+                wrap: word-wrap;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+            }
+        }
+        if root.dismissible: VerticalLayout {
+            alignment: start;
+            IconButton { icon: PurrimerIcons.x-16; label: "Dismiss"; variant: "invisible"; size: "small"; clicked => { root.dismissed(); } }
+        }
+    }
+}

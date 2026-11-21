@@ -1,0 +1,21 @@
+// {{ note }}
+// {{ c.summary }}
+import { omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type RadioProps = Omit<JSX.InputHTMLAttributes<HTMLInputElement>, "class" | "type" | "onChange"> & {
+  label: string;
+  value: string;
+  onSelect?: (value: string) => void;
+  class?: JSX.ClassValue;
+};
+
+export function Radio(props: RadioProps): JSX.Element {
+  const rest = omit(props, "label", "onSelect", "class");
+  return (
+    <label class={["pm-radio", props.class]}>
+      <input {...rest} class="pm-radio__input" type="radio" onChange={(e) => e.currentTarget.checked && props.onSelect?.(props.value)} />
+      <span>{props.label}</span>
+    </label>
+  );
+}

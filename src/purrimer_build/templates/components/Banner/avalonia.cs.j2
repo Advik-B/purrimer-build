@@ -1,0 +1,106 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// An inline message in info, success, attention, danger or done tone.
+[TemplatePart("PART_Dismiss", typeof(Button))]
+public class Banner : ContentControl
+{
+    public static readonly StyledProperty<string?> TitleProperty =
+        AvaloniaProperty.Register<Banner, string?>(nameof(Title));
+
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<Banner, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> ToneProperty =
+        AvaloniaProperty.Register<Banner, string>(nameof(Tone), "info");
+
+    public static readonly StyledProperty<bool> IsDismissibleProperty =
+        AvaloniaProperty.Register<Banner, bool>(nameof(IsDismissible));
+
+    public static readonly DirectProperty<Banner, string> IconNameProperty =
+        AvaloniaProperty.RegisterDirect<Banner, string>(nameof(IconName), o => o.IconName);
+
+    public static readonly RoutedEvent<RoutedEventArgs> DismissedEvent =
+        RoutedEvent.Register<Banner, RoutedEventArgs>(nameof(Dismissed), RoutingStrategies.Bubble);
+
+    private Button? _dismiss;
+    private string _iconName = "info";
+
+    public string? Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    public string Tone
+    {
+        get => GetValue(ToneProperty);
+        set => SetValue(ToneProperty, value);
+    }
+
+    public bool IsDismissible
+    {
+        get => GetValue(IsDismissibleProperty);
+        set => SetValue(IsDismissibleProperty, value);
+    }
+
+    public string IconName
+    {
+        get => _iconName;
+        private set => SetAndRaise(IconNameProperty, ref _iconName, value);
+    }
+
+    public event EventHandler<RoutedEventArgs>? Dismissed
+    {
+        add => AddHandler(DismissedEvent, value);
+        remove => RemoveHandler(DismissedEvent, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ToneProperty)
+        {
+            IconName = Tone switch
+            {
+                "success" => "check-circle",
+                "attention" => "alert",
+                "danger" => "stop",
+                "done" => "check-circle-fill",
+                _ => "info",
+            };
+        }
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_dismiss != null)
+            _dismiss.Click -= OnDismissClick;
+        base.OnApplyTemplate(e);
+        _dismiss = e.NameScope.Find<Button>("PART_Dismiss");
+        if (_dismiss != null)
+            _dismiss.Click += OnDismissClick;
+    }
+
+    private void OnDismissClick(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        RaiseEvent(new RoutedEventArgs(DismissedEvent, this));
+    }
+}

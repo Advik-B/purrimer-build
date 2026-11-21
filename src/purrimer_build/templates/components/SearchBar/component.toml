@@ -1,0 +1,14 @@
+name = "SearchBar"
+group = "Mobile"
+order = 57
+summary = "A rounded search field with a leading icon and a clear button."
+
+[props.value]
+type = "string"
+default = ""
+doc = "Query text."
+
+[props.placeholder]
+type = "string"
+default = "Search"
+doc = "Hint while empty."

@@ -1,0 +1,18 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Icon}" TargetType="pm:Icon">
+    <Setter Property="Focusable" Value="False" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Icon">
+        <Viewbox Width="{TemplateBinding Size}" Height="{TemplateBinding Size}">
+          <Canvas Width="{TemplateBinding Box}" Height="{TemplateBinding Box}">
+            <Path Data="{TemplateBinding Data}" Fill="{TemplateBinding Foreground}" />
+          </Canvas>
+        </Viewbox>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

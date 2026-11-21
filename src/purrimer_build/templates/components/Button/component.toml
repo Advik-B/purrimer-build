@@ -1,0 +1,41 @@
+name = "Button"
+group = "Actions"
+order = 10
+summary = "A labelled button for actions, in default, primary, danger and invisible variants."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Text on the button."
+
+[props.variant]
+type = "enum"
+default = "default"
+doc = "Fill style."
+values = ["default", "primary", "danger", "invisible"]
+
+[props.size]
+type = "enum"
+default = "medium"
+doc = "Height: 28, 32 or 40px."
+values = ["small", "medium", "large"]
+
+[props.leadingIcon]
+type = "icon"
+default = ""
+doc = "Octicon before the label."
+
+[props.trailingIcon]
+type = "icon"
+default = ""
+doc = "Octicon after the label."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the button and ignores presses."
+
+[props.block]
+type = "bool"
+default = false
+doc = "Fills the available width."

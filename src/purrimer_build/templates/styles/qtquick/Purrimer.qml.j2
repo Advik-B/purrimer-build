@@ -1,0 +1,62 @@
+// {{ note }}
+// {{ tokens.name }} for Qt Quick: theme singleton of the Purrimer module. Switch themes with Purrimer.theme = "noir".
+pragma Singleton
+import QtQuick
+
+QtObject {
+    id: root
+
+    // One of: {% for t in themes %}"{{ t }}" ({{ labels[t] }}){{ ", " if not loop.last }}{% endfor %}.
+    property string theme: "{{ themes[0] }}"
+    readonly property var themes: {{ themes | tojson }}
+    readonly property bool dark: {% for t in tokens.dark_themes %}theme === "{{ t }}"{{ " || " if not loop.last }}{% endfor %}
+
+    function pick(values) {
+        return values[theme] !== undefined ? values[theme] : values["{{ themes[0] }}"]
+    }
+
+    // Colours
+{% for n in tokens.colors %}
+    readonly property color {{ n | camel }}: pick({{ color_argb[n] | tojson }})
+{% endfor %}
+
+    // Shadows: layers {x, y, blur, spread, color, inset}, key layer first, for MultiEffect or custom items
+{% for n in tokens.shadows %}
+    readonly property var {{ n | camel }}: pick({{ qml_shadows[n] | tojson }})
+{% endfor %}
+
+    // Lengths in device-independent pixels
+{% for n, v in tokens.lengths %}
+    readonly property real {{ n | camel }}: {{ v | num }}
+{% endfor %}
+
+    // Durations in milliseconds
+{% for n, v in tokens.durations %}
+    readonly property int {{ n | camel }}: {{ v }}
+{% endfor %}
+
+    // Easings as BezierSpline curves: easing.type: Easing.BezierSpline; easing.bezierCurve: Purrimer.easingStandard
+{% for n, e in tokens.easings %}
+    readonly property list<real> {{ n | camel }}: {{ e.bezier_segments() | tojson }}
+{% endfor %}
+
+    // Font families
+{% for key, fam in tokens.family_names.items() %}
+    readonly property string font{{ key | pascal }}: "{{ fam }}"
+{% endfor %}
+
+    // Text styles: a font plus its line height in pixels (lineHeightMode: Text.FixedHeight)
+{% for s in tokens.type_styles %}
+    readonly property font {{ s.name | camel }}: Qt.font({ family: font{{ s.family_key | pascal }}, pixelSize: {{ s.size | num }}, weight: {{ s.weight }}, letterSpacing: {{ s.letter_spacing | num }} })
+    readonly property real {{ s.name | camel }}LineHeight: {{ s.line_height | num }}
+{% endfor %}
+{% if fonts %}
+
+    // Bundled fonts, loaded once when the singleton is created
+    readonly property list<FontLoader> fontLoaders: [
+{% for f in fonts %}
+        FontLoader { source: Qt.resolvedUrl("fonts/{{ f.filename }}") }{{ "," if not loop.last }}
+{% endfor %}
+    ]
+{% endif %}
+}

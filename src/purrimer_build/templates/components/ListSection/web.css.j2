@@ -1,0 +1,5 @@
+.pm-list-section { display: flex; flex-direction: column; gap: 6px; margin-bottom: {{ "mobile-section-gap" | tok }}; }
+.pm-list-section__header { margin: 0; padding: 0 {{ "mobile-gutter" | tok }}; font: 600 14px/20px var(--font-sans); color: {{ "fgColor-muted" | tok }}; }
+.pm-list-section__rows { display: flex; flex-direction: column; }
+.pm-list-section--inset .pm-list-section__rows { margin: 0 {{ "mobile-gutter" | tok }}; overflow: hidden; border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; border-radius: {{ "borderRadius-large" | tok }}; background: {{ "bgColor-default" | tok }}; }
+.pm-list-section--inset .pm-list-section__rows > * + * { box-shadow: inset 0 1px 0 {{ "borderColor-muted" | tok }}; }

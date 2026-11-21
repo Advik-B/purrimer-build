@@ -1,0 +1,44 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Column {
+    id: root
+    property string header
+    property string variant: "inset"
+    default property alias rows: rowColumn.data
+
+    spacing: 6
+    bottomPadding: {{ "mobile-section-gap" | tok }}
+
+    Text {
+        visible: root.header !== ""
+        x: {{ "mobile-gutter" | tok }}
+        text: root.header
+        font.family: {{ "text-mobile-supporting" | tok }}.family
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+        color: {{ "fgColor-muted" | tok }}
+    }
+
+    Rectangle {
+        x: root.variant === "inset" ? {{ "mobile-gutter" | tok }} : 0
+        width: root.width - 2 * x
+        height: rowColumn.implicitHeight
+        radius: root.variant === "inset" ? {{ "borderRadius-large" | tok }} : 0
+        color: root.variant === "inset" ? {{ "bgColor-default" | tok }} : "transparent"
+        border.width: root.variant === "inset" ? {{ "borderWidth-thin" | tok }} : 0
+        border.color: {{ "borderColor-default" | tok }}
+        clip: true
+
+        Column {
+            id: rowColumn
+            width: parent.width
+            onChildrenChanged: {
+                for (let i = 0; i < children.length; i++)
+                    children[i].width = Qt.binding(() => rowColumn.width)
+            }
+        }
+    }
+}

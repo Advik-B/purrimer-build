@@ -1,0 +1,150 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QRect, QRectF, Qt, Signal
+from PySide6.QtGui import QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+
+from ..theme import theme
+
+DISMISS_DISTANCE = 96
+
+
+class _Sheet(QWidget):
+    def __init__(self, owner: BottomSheet) -> None:
+        super().__init__(owner)
+        self._owner = owner
+        self._press_y: float | None = None
+
+    def mousePressEvent(self, event) -> None:
+        if event.position().y() <= 24:
+            self._press_y = event.globalPosition().y()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._press_y is not None:
+            self._owner._drag(max(0.0, event.globalPosition().y() - self._press_y))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._press_y is not None:
+            self._press_y = None
+            self._owner._release()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        radius = {{ px("borderRadius-xlarge") | num }}
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, radius)
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+        painter.setBrush(theme.color({{ "overlay-bgColor" | tok }}))
+        painter.drawPath(path)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "borderColor-emphasis" | tok }}))
+        painter.drawRoundedRect(QRectF(self.width() / 2 - 18, 10, 36, 4), 2, 2)
+
+
+class BottomSheet(QWidget):
+    """A sheet that slides up over its parent. Add widgets to `body`; drag the handle down or tap outside to dismiss."""
+
+    closed = Signal()
+
+    def __init__(self, parent: QWidget, title: str = "", sheet_height: int = 320) -> None:
+        super().__init__(parent)
+        self._height = sheet_height
+        self._open = False
+        self._offset = 0.0
+        self.sheet = _Sheet(self)
+        layout = QVBoxLayout(self.sheet)
+        gutter = {{ px("mobile-gutter") | int }}
+        layout.setContentsMargins(gutter, 24, gutter, gutter)
+        layout.setSpacing(8)
+        self.title = QLabel(title)
+        self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
+        self.title.setVisible(bool(title))
+        layout.addWidget(self.title)
+        self.body = QVBoxLayout()
+        self.body.setAlignment(Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(self.body, 1)
+        self._anim = QPropertyAnimation(self.sheet, b"pos", self)
+        self._anim.setDuration(theme.duration({{ "duration-slow" | tok }}))
+        self._anim.setEasingCurve(theme.easing({{ "easing-sleepy-enter" | tok }}))
+        self._anim.finished.connect(self._finished)
+        parent.installEventFilter(self)
+        self.hide()
+        theme.changed.connect(self.update)
+
+    def is_open(self) -> bool:
+        return self._open
+
+    def open(self) -> None:
+        self._open = True
+        self._offset = 0.0
+        self._fit()
+        self.sheet.move(self._sheet_x(), self.height())
+        self.show()
+        self.raise_()
+        self._slide_to(self._open_y())
+
+    def close_sheet(self) -> None:
+        if not self._open:
+            return
+        self._open = False
+        self._slide_to(self.height())
+        self.closed.emit()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.parent() and event.type() == QEvent.Type.Resize and self.isVisible():
+            self._fit()
+            self.sheet.move(self._sheet_x(), self._open_y())
+        return False
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self.close_sheet()
+            return
+        super().keyPressEvent(event)
+
+    def mousePressEvent(self, event) -> None:
+        if not self.sheet.geometry().contains(event.position().toPoint()):
+            self.close_sheet()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), theme.color({{ "overlay-backdrop-bgColor" | tok }}))
+
+    def _fit(self) -> None:
+        self.setGeometry(QRect(QPoint(0, 0), self.parentWidget().size()))
+        width = min(self.width(), {{ px("mobile-sheet-maxWidth") | int }})
+        self.sheet.resize(width, self._height)
+
+    def _sheet_x(self) -> int:
+        return (self.width() - self.sheet.width()) // 2
+
+    def _open_y(self) -> int:
+        return self.height() - self._height
+
+    def _slide_to(self, y: int) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self.sheet.pos())
+        self._anim.setEndValue(QPoint(self._sheet_x(), y))
+        self._anim.start()
+
+    def _finished(self) -> None:
+        if not self._open:
+            self.hide()
+
+    def _drag(self, offset: float) -> None:
+        self._anim.stop()
+        self._offset = offset
+        self.sheet.move(self._sheet_x(), self._open_y() + int(offset))
+
+    def _release(self) -> None:
+        if self._offset > DISMISS_DISTANCE:
+            self.close_sheet()
+        else:
+            self._offset = 0.0
+            self._slide_to(self._open_y())

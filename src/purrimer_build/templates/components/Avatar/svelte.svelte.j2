@@ -1,0 +1,12 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { name, src = "", size = 32, square = false }: { name: string; src?: string; size?: 20 | 24 | 32 | 40 | 48; square?: boolean } = $props();
+
+  const initials = $derived(name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join(""));
+  let failed = $state(false);
+</script>
+
+<span class={["pm-avatar", square && "pm-avatar--square"]} style:width="{size}px" style:height="{size}px" style:font-size="{Math.round(size * 0.4)}px" role="img" aria-label={name}>
+  {#if src && !failed}<img {src} alt="" onerror={() => (failed = true)} />{:else}{initials}{/if}
+</span>

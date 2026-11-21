@@ -1,0 +1,62 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:SearchBar}" TargetType="pm:SearchBar">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="CaretBrush" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="PlaceholderForeground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="SelectionBrush" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="SelectionForegroundBrush" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="ScrollViewer.IsScrollChainingEnabled" Value="True" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Background" Value="{{ "bgColor-muted" | tok }}" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thick" | tokx("Thickness") }}" />
+    <Setter Property="CornerRadius" Value="{{ "borderRadius-medium" | tok }}" />
+    <Setter Property="Padding" Value="12,0,2,0" />
+    <Setter Property="FontSize" Value="{{ "text-mobile-body" | tokx("FontSize") }}" />
+    <Setter Property="PlaceholderText" Value="{{ c.spec.props.placeholder.default }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:SearchBar">
+        <Border Name="PART_Border" Height="{{ "control-large-size" | tok }}" Background="{TemplateBinding Background}"
+                BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"
+                CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}">
+          <Grid ColumnDefinitions="Auto,*,Auto">
+            <pm:Icon IconName="search" Margin="0,0,8,0" VerticalAlignment="Center" Foreground="{{ "fgColor-muted" | tok }}" />
+              <ScrollViewer Name="PART_ScrollViewer" Grid.Column="1" VerticalAlignment="Center"
+                            HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled">
+                <Panel>
+                  <TextBlock Name="placeholder" Text="{TemplateBinding PlaceholderText}"
+                             Foreground="{TemplateBinding PlaceholderForeground}" VerticalAlignment="Center"
+                             IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNullOrEmpty}}" />
+                  <TextPresenter Name="PART_TextPresenter"
+                                 CaretBlinkInterval="{TemplateBinding CaretBlinkInterval}"
+                                 CaretBrush="{TemplateBinding CaretBrush}"
+                                 CaretIndex="{TemplateBinding CaretIndex}"
+                                 LineHeight="{TemplateBinding LineHeight}"
+                                 LetterSpacing="{TemplateBinding LetterSpacing}"
+                                 PasswordChar="{TemplateBinding PasswordChar}"
+                                 RevealPassword="{TemplateBinding RevealPassword}"
+                                 SelectionBrush="{TemplateBinding SelectionBrush}"
+                                 SelectionEnd="{TemplateBinding SelectionEnd}"
+                                 SelectionForegroundBrush="{TemplateBinding SelectionForegroundBrush}"
+                                 SelectionStart="{TemplateBinding SelectionStart}"
+                                 Text="{TemplateBinding Text, Mode=TwoWay}"
+                                 TextAlignment="{TemplateBinding TextAlignment}"
+                                 TextWrapping="{TemplateBinding TextWrapping}" />
+                </Panel>
+              </ScrollViewer>
+            <pm:IconButton Name="PART_Clear" Grid.Column="2" Classes="invisible" IconName="x" Label="Clear"
+                           IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+          </Grid>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:focus /template/ Border#PART_Border">
+      <Setter Property="BorderBrush" Value="{{ "focus-outlineColor" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

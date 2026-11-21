@@ -1,0 +1,58 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property var items: []
+    property int selected: 0
+    signal activated(int index)
+
+    implicitWidth: row.implicitWidth + 4
+    implicitHeight: 32
+    radius: {{ "borderRadius-medium" | tok }}
+    color: {{ "bgColor-muted" | tok }}
+    Accessible.role: Accessible.RadioButton
+
+    Row {
+        id: row
+        anchors.centerIn: parent
+        spacing: 2
+        Repeater {
+            model: root.items
+            Rectangle {
+                id: seg
+                required property var modelData
+                required property int index
+                readonly property bool current: root.selected === seg.index
+                width: Math.max(64, label.implicitWidth + 24)
+                height: 28
+                radius: {{ "borderRadius-medium" | tok }}
+                color: seg.current ? {{ "bgColor-default" | tok }} : "transparent"
+                border.width: seg.current ? {{ "borderWidth-thin" | tok }} : 0
+                border.color: {{ "borderColor-default" | tok }}
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: seg.modelData
+                Accessible.checked: seg.current
+                Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+
+                Text {
+                    id: label
+                    anchors.centerIn: parent
+                    text: seg.modelData
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 14
+                    font.weight: seg.current ? Font.DemiBold : Font.Medium
+                    color: seg.current ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+                }
+                TapHandler {
+                    onTapped: {
+                        root.selected = seg.index
+                        root.activated(seg.index)
+                    }
+                }
+            }
+        }
+    }
+}

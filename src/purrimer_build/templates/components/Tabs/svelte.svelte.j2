@@ -1,0 +1,39 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { items, selected = $bindable(0), label = "Tabs", onselect, panel }: {
+    items: string[];
+    selected?: number;
+    label?: string;
+    onselect?: (index: number) => void;
+    panel?: Snippet<[number]>;
+  } = $props();
+  const uid = $props.id();
+
+  function pick(i: number) {
+    selected = i;
+    onselect?.(i);
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+    if (!step) return;
+    e.preventDefault();
+    const next = (selected + step + items.length) % items.length;
+    pick(next);
+    ((e.currentTarget as HTMLElement).children[next] as HTMLElement).focus();
+  }
+</script>
+
+<div class="pm-tabs">
+  <div class="pm-tabs__list" role="tablist" aria-label={label} tabindex="-1" {onkeydown}>
+    {#each items as item, i}
+      <button type="button" class="pm-tabs__tab" role="tab" id="pm-tab-{uid}-{i}" aria-controls="pm-tabpanel-{uid}" aria-selected={i === selected} tabindex={i === selected ? 0 : -1} onclick={() => pick(i)}>{item}</button>
+    {/each}
+  </div>
+  <div class="pm-tabs__panel" role="tabpanel" id="pm-tabpanel-{uid}" aria-labelledby="pm-tab-{uid}-{selected}" tabindex="0">
+    {@render panel?.(selected)}
+  </div>
+</div>

@@ -1,0 +1,57 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+
+Rectangle {
+    id: root
+    property string title
+    property bool interactive: false
+    default property alias content: body.data
+    signal clicked()
+
+    implicitWidth: Math.max(body.implicitWidth, titleText.implicitWidth) + 2 * {{ "stack-padding-normal" | tok }}
+    implicitHeight: column.implicitHeight + 2 * {{ "stack-padding-normal" | tok }}
+    radius: {{ "borderRadius-large" | tok }}
+    color: {{ "bgColor-default" | tok }}
+    border.width: {{ "borderWidth-thin" | tok }}
+    border.color: {{ "borderColor-default" | tok }}
+
+    RectangularShadow {
+        readonly property var key: (hover.hovered && root.interactive ? {{ "shadow-resting-medium" | tok }} : {{ "shadow-resting-small" | tok }})[0]
+        anchors.fill: parent
+        z: -1
+        radius: root.radius
+        offset.x: key.x
+        offset.y: key.y
+        blur: key.blur
+        spread: key.spread
+        color: key.color
+    }
+
+    Column {
+        id: column
+        anchors.fill: parent
+        anchors.margins: {{ "stack-padding-normal" | tok }}
+        spacing: {{ "stack-gap-condensed" | tok }}
+        Text {
+            id: titleText
+            visible: root.title !== ""
+            text: root.title
+            font: {{ "text-title-small" | tok }}
+            color: {{ "fgColor-default" | tok }}
+        }
+        Item {
+            id: body
+            width: parent.width
+            implicitWidth: childrenRect.width
+            implicitHeight: childrenRect.height
+        }
+    }
+
+    HoverHandler { id: hover; enabled: root.interactive; cursorShape: Qt.PointingHandCursor }
+    TapHandler { enabled: root.interactive; onTapped: root.clicked() }
+    Accessible.role: interactive ? Accessible.Button : Accessible.Grouping
+    Accessible.name: title
+}

@@ -1,0 +1,8 @@
+// {{ note }}
+// Import "./purrimer.css" and "./purrimer-components.css" once, in the root layout.
+export * from "./tokens";
+export * from "./theme.svelte";
+export { octicons, iconPath } from "./icons";
+{% for c in done %}
+export { default as {{ c.name }} } from "./components/{{ c.name }}.svelte";
+{% endfor %}

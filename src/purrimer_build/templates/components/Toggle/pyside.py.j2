@@ -1,0 +1,97 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Property, QPropertyAnimation, QRectF, QSize, Qt
+from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QAbstractButton, QWidget
+
+from ..theme import theme
+
+TRACK_W = 36
+TRACK_H = 20
+KNOB = 14
+GAP = 12
+
+
+class Toggle(QAbstractButton):
+    """An on and off switch with an optional label before it."""
+
+    def __init__(self, text: str = "", checked: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setText(text)
+        self.setCheckable(True)
+        self.setChecked(checked)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._font = (theme.font({{ "text-body-medium" | tok }}))
+        self._pos = 1.0 if checked else 0.0
+        self._anim = QPropertyAnimation(self, b"knob", self)
+        self._anim.setDuration(theme.duration({{ "duration-base" | tok }}))
+        self._anim.setEasingCurve(theme.easing({{ "easing-standard" | tok }}))
+        self.toggled.connect(self._animate)
+        theme.changed.connect(self.update)
+
+    def _get_knob(self) -> float:
+        return self._pos
+
+    def _set_knob(self, value: float) -> None:
+        self._pos = value
+        self.update()
+
+    knob = Property(float, _get_knob, _set_knob)
+
+    def _animate(self, checked: bool) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self._pos)
+        self._anim.setEndValue(1.0 if checked else 0.0)
+        self._anim.start()
+
+    def sizeHint(self) -> QSize:
+        text_w = QFontMetrics(self._font).horizontalAdvance(self.text()) + GAP if self.text() else 0
+        return QSize(text_w + TRACK_W + 8, max(TRACK_H + 8, QFontMetrics(self._font).height()))
+
+    def hitButton(self, pos) -> bool:
+        return self.rect().contains(pos)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setFont(self._font)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        enabled = self.isEnabled()
+        x = 4
+        if self.text():
+            painter.setPen(theme.color({{ "fgColor-default" | tok }} if enabled else {{ "fgColor-disabled" | tok }}))
+            text_w = QFontMetrics(self._font).horizontalAdvance(self.text())
+            painter.drawText(QRectF(x, 0, text_w, self.height()), Qt.AlignmentFlag.AlignVCenter, self.text())
+            x += text_w + GAP
+        track = QRectF(x, (self.height() - TRACK_H) / 2, TRACK_W, TRACK_H)
+        on = theme.color({{ "bgColor-accent-emphasis" | tok }})
+        off = theme.color({{ "controlTrack-bgColor-rest" | tok }})
+        if not enabled:
+            fill = theme.color({{ "bgColor-disabled" | tok }})
+        else:
+            fill = QColor(
+                round(off.red() + (on.red() - off.red()) * self._pos),
+                round(off.green() + (on.green() - off.green()) * self._pos),
+                round(off.blue() + (on.blue() - off.blue()) * self._pos),
+                round(off.alpha() + (on.alpha() - off.alpha()) * self._pos))
+        border = fill if self._pos > 0.5 or not enabled else theme.color({{ "control-borderColor-rest" | tok }})
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(fill)
+        painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), TRACK_H / 2, TRACK_H / 2)
+        knob_x = track.left() + 3 + (TRACK_W - KNOB - 6) * self._pos
+        knob = QRectF(knob_x, track.top() + (TRACK_H - KNOB) / 2, KNOB, KNOB)
+        if self._pos > 0.5:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "fgColor-onEmphasis" | tok }}))
+        else:
+            painter.setPen(QPen(theme.color({{ "control-borderColor-rest" | tok }}), 1))
+            painter.setBrush(theme.color({{ "controlKnob-bgColor-rest" | tok }}))
+        painter.drawEllipse(knob)
+        if self.hasFocus():
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(track.adjusted(-3, -3, 3, 3), TRACK_H / 2 + 3, TRACK_H / 2 + 3)

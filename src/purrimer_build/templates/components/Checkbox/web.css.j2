@@ -1,0 +1,22 @@
+.pm-check { display: inline-flex; align-items: center; gap: 8px; font: 400 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; cursor: pointer; }
+.pm-check__input {
+  appearance: none;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-small" | tok }};
+  background: {{ "control-bgColor-rest" | tok }};
+  cursor: inherit;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-check__input::after { content: ""; width: 12px; height: 12px; background: {{ "fgColor-onEmphasis" | tok }}; clip-path: path("M10.3 2.7 4.7 8.3 1.7 5.3 0.6 6.4 4.7 10.5 11.4 3.8Z"); scale: 0; transition: scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+.pm-check__input:checked, .pm-check__input:indeterminate { background: {{ "bgColor-accent-emphasis" | tok }}; border-color: {{ "bgColor-accent-emphasis" | tok }}; }
+.pm-check__input:checked::after { scale: 1; }
+.pm-check__input:indeterminate::after { clip-path: inset(5px 1px); scale: 1; }
+.pm-check__input:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+.pm-check__input:disabled { background: {{ "bgColor-disabled" | tok }}; border-color: {{ "bgColor-disabled" | tok }}; }
+.pm-check:has(:disabled) { color: {{ "fgColor-disabled" | tok }}; cursor: not-allowed; }
+[data-density="touch"] .pm-check { min-height: {{ "touch-target-min" | tok }}; }
