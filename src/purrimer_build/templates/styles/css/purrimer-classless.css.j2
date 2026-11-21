@@ -1,0 +1,266 @@
+/* {{ note }} */
+/* {{ tokens.name }} without classes: plain HTML elements get the Purrimer look, like Pico's classless build.
+   Use this file on its own, instead of purrimer.css and purrimer-components.css. Themes: {% for t in themes %}{{ labels[t] }} (data-theme="{{ t }}"){{ ", " if not loop.last }}{% endfor %}. */
+
+{% include "t/styles/css/_base.css.j2" %}
+
+{## Icons drawn as backgrounds take the theme's muted colour, so each theme carries its own copy. ##}
+{% for theme in themes %}
+{% if loop.first %}
+:root,
+[data-theme="{{ theme }}"] {
+{% else %}
+[data-theme="{{ theme }}"] {
+{% endif %}
+  --pm-icon-chevron: {{ svg_uri("chevron-down", tokens.colors["fgColor-muted"][theme].hex6()) }};
+  --pm-icon-search: {{ svg_uri("search", tokens.colors["fgColor-muted"][theme].hex6()) }};
+}
+
+{% endfor %}
+/* Page */
+
+*, *::before, *::after { box-sizing: border-box; }
+html {
+  -webkit-text-size-adjust: 100%;
+  background: {{ "bgColor-default" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 16px/24px var(--font-sans);
+}
+body { margin: 0; }
+body > header, body > main, body > footer { width: min(100% - 2 * {{ "mobile-gutter" | tok }}, 768px); margin-inline: auto; }
+body > main { padding-block: {{ "stack-padding-normal" | tok }}; }
+::selection { background: {{ "bgColor-accent-muted" | tok }}; }
+:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+
+/* Text */
+
+h1, h2, h3, h4, h5, h6 { margin: 0 0 0.5em; font-family: var(--font-heading); font-weight: 600; color: {{ "fgColor-default" | tok }}; }
+h1 { font-size: 32px; line-height: 40px; }
+h2 { font-size: 24px; line-height: 32px; }
+h3 { font-size: 20px; line-height: 28px; }
+h4 { font-size: 16px; line-height: 24px; }
+h5, h6 { font-size: 14px; line-height: 20px; }
+p, ul, ol, dl, pre, blockquote, table, figure { margin: 0 0 1em; }
+a { color: {{ "fgColor-accent" | tok }}; text-underline-offset: 2px; }
+a:hover { text-decoration-thickness: 2px; }
+small { font-size: 12px; line-height: 16px; color: {{ "fgColor-muted" | tok }}; }
+strong, b { font-weight: 600; }
+mark { padding: 0 2px; border-radius: {{ "borderRadius-small" | tok }}; background: {{ "bgColor-attention-muted" | tok }}; color: inherit; }
+code, kbd, samp, pre { font-family: var(--font-mono); font-size: 0.875em; }
+code, kbd { padding: 1px 4px; border-radius: {{ "borderRadius-small" | tok }}; background: {{ "bgColor-muted" | tok }}; }
+kbd { border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; }
+pre { overflow: auto; padding: 12px 16px; border-radius: {{ "borderRadius-medium" | tok }}; background: {{ "bgColor-muted" | tok }}; }
+pre code { padding: 0; background: none; }
+blockquote { padding-left: 16px; border-left: 4px solid {{ "borderColor-default" | tok }}; color: {{ "fgColor-muted" | tok }}; }
+hr { height: 0; margin: 24px 0; border: 0; border-top: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; line-height: 20px; }
+th, td { padding: 8px 12px; border-bottom: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; text-align: left; }
+th { font-weight: 600; }
+
+/* Button: <button>, <input type="submit|button|reset">, role="button". type="submit" is the primary action. */
+
+button, input[type="submit"], input[type="button"], input[type="reset"], [role="button"] {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: {{ "control-medium-gap" | tok }};
+  height: {{ "control-medium-size" | tok }};
+  margin: 0;
+  padding: 0 {{ "control-medium-paddingInline-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "button-default-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "button-default-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-resting-xsmall" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 600 14px/20px var(--font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+:is(button, input[type="submit"], input[type="button"], input[type="reset"], [role="button"]):hover { background: {{ "button-default-bgColor-hover" | tok }}; }
+:is(button, input[type="submit"], input[type="button"], input[type="reset"], [role="button"]):active { background: {{ "button-default-bgColor-active" | tok }}; }
+button[type="submit"], input[type="submit"] { background: {{ "button-primary-bgColor-rest" | tok }}; border-color: {{ "button-primary-bgColor-rest" | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }
+:is(button[type="submit"], input[type="submit"]):hover { background: {{ "button-primary-bgColor-hover" | tok }}; border-color: {{ "button-primary-bgColor-hover" | tok }}; }
+:is(button[type="submit"], input[type="submit"]):active { background: {{ "button-primary-bgColor-active" | tok }}; border-color: {{ "button-primary-bgColor-active" | tok }}; }
+:is(button, input[type="submit"], input[type="button"], input[type="reset"]):disabled, [role="button"][aria-disabled="true"] {
+  background: {{ "bgColor-disabled" | tok }};
+  border-color: {{ "bgColor-disabled" | tok }};
+  box-shadow: none;
+  color: {{ "fgColor-disabled" | tok }};
+  cursor: not-allowed;
+}
+
+/* Fields: <label>Name <input></label>, with an optional <small> under the input. aria-invalid="true" marks an error. */
+
+label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 16px; font: 600 14px/20px var(--font-sans); }
+fieldset { margin: 0 0 16px; padding: 0; border: 0; }
+legend { margin-bottom: 8px; padding: 0; font: 600 14px/20px var(--font-sans); }
+input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="submit"], [type="button"], [type="reset"], [type="image"], [type="hidden"]),
+select, textarea {
+  width: 100%;
+  height: {{ "control-medium-size" | tok }};
+  margin: 0;
+  padding: 0 {{ "control-medium-paddingInline-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background-color: {{ "control-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-inset" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+}
+textarea { height: auto; min-height: 80px; padding-block: 6px; resize: vertical; }
+::placeholder { color: {{ "fgColor-muted" | tok }}; opacity: 1; }
+:is(input, select, textarea):focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -1px; }
+:is(input, select, textarea)[aria-invalid="true"] { border-color: {{ "borderColor-danger-emphasis" | tok }}; }
+:is(input, select, textarea):disabled { background-color: {{ "bgColor-disabled" | tok }}; border-color: {{ "bgColor-disabled" | tok }}; box-shadow: none; color: {{ "fgColor-disabled" | tok }}; cursor: not-allowed; }
+label small, label + small, :is(input, select, textarea) + small { font-weight: 400; }
+[aria-invalid="true"] + small { font-weight: 600; color: {{ "fgColor-danger" | tok }}; }
+select {
+  appearance: none;
+  padding-right: 32px;
+  background-image: var(--pm-icon-chevron);
+  background-position: right 8px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  cursor: pointer;
+}
+input[type="search"] {
+  height: {{ "control-large-size" | tok }};
+  padding-left: 36px;
+  border-color: transparent;
+  background-color: {{ "bgColor-muted" | tok }};
+  background-image: var(--pm-icon-search);
+  background-position: left 12px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+  box-shadow: none;
+  font-size: 16px;
+  line-height: 24px;
+}
+
+/* Checkbox, radio and switch: <label><input type="checkbox"> Text</label>; add role="switch" for a switch. */
+
+label:has(> input:is([type="checkbox"], [type="radio"])) { flex-direction: row; align-items: center; gap: 8px; margin-bottom: 12px; font-weight: 400; cursor: pointer; }
+label:has(> input[role="switch"]) { gap: 12px; }
+label:has(> input:disabled) { color: {{ "fgColor-disabled" | tok }}; cursor: not-allowed; }
+input:is([type="checkbox"], [type="radio"]) {
+  appearance: none;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-small" | tok }};
+  background: {{ "control-bgColor-rest" | tok }};
+  vertical-align: middle;
+  cursor: inherit;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+input[type="radio"] { border-radius: {{ "borderRadius-full" | tok }}; }
+input:is([type="checkbox"], [type="radio"])::after { content: ""; background: {{ "fgColor-onEmphasis" | tok }}; scale: 0; transition: scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+input[type="checkbox"]::after { width: 12px; height: 12px; clip-path: path("M10.3 2.7 4.7 8.3 1.7 5.3 0.6 6.4 4.7 10.5 11.4 3.8Z"); }
+input[type="radio"]::after { width: 6px; height: 6px; border-radius: 50%; }
+input:is([type="checkbox"], [type="radio"]):is(:checked, :indeterminate) { background: {{ "bgColor-accent-emphasis" | tok }}; border-color: {{ "bgColor-accent-emphasis" | tok }}; }
+input:is([type="checkbox"], [type="radio"]):checked::after { scale: 1; }
+input[type="checkbox"]:indeterminate::after { clip-path: inset(5px 1px); scale: 1; }
+input:is([type="checkbox"], [type="radio"]):disabled { background: {{ "bgColor-disabled" | tok }}; border-color: {{ "bgColor-disabled" | tok }}; }
+input[type="checkbox"][role="switch"] {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "controlTrack-bgColor-rest" | tok }};
+  transition: background-color {{ "duration-base" | tok }} {{ "easing-standard" | tok }}, border-color {{ "duration-base" | tok }} {{ "easing-standard" | tok }};
+}
+input[type="checkbox"][role="switch"]::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: {{ "controlKnob-bgColor-rest" | tok }};
+  box-shadow: 0 0 0 1px {{ "control-borderColor-rest" | tok }};
+  clip-path: none;
+  scale: 1;
+  transition: translate {{ "duration-base" | tok }} {{ "easing-standard" | tok }};
+}
+input[type="checkbox"][role="switch"]:checked { background: {{ "bgColor-accent-emphasis" | tok }}; border-color: {{ "bgColor-accent-emphasis" | tok }}; }
+input[type="checkbox"][role="switch"]:disabled { background: {{ "bgColor-disabled" | tok }}; border-color: {{ "bgColor-disabled" | tok }}; }
+input[type="checkbox"][role="switch"]:checked::after { translate: 16px 0; background: {{ "fgColor-onEmphasis" | tok }}; box-shadow: none; }
+input[type="checkbox"][role="switch"]:disabled::after { box-shadow: none; }
+
+/* Progress: <progress value="40" max="100">; without a value it sweeps. */
+
+progress {
+  appearance: none;
+  display: block;
+  width: 100%;
+  height: 8px;
+  margin: 0 0 16px;
+  overflow: hidden;
+  border: 0;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "controlTrack-bgColor-rest" | tok }};
+  color: {{ "bgColor-accent-emphasis" | tok }};
+}
+progress::-webkit-progress-bar { background: transparent; }
+progress::-webkit-progress-value { border-radius: inherit; background: currentColor; }
+progress::-moz-progress-bar { border-radius: inherit; background: currentColor; }
+progress:indeterminate { background: linear-gradient(90deg, transparent 0 30%, currentColor 30% 70%, transparent 70%) {{ "controlTrack-bgColor-rest" | tok }} no-repeat; background-size: 60% 100%; animation: pm-classless-sweep 1.4s {{ "easing-sleepy-move" | tok }} infinite; }
+progress:indeterminate::-webkit-progress-bar { background: transparent; }
+progress:indeterminate::-moz-progress-bar { background: transparent; }
+@keyframes pm-classless-sweep { from { background-position: -150% 0; } to { background-position: 250% 0; } }
+
+/* Card: <article>, with an optional <header> and <footer>. */
+
+article {
+  display: flex;
+  flex-direction: column;
+  gap: {{ "stack-gap-condensed" | tok }};
+  margin: 0 0 16px;
+  padding: {{ "stack-padding-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-large" | tok }};
+  background: {{ "bgColor-default" | tok }};
+  box-shadow: {{ "shadow-resting-small" | tok }};
+  font-size: 14px;
+  line-height: 20px;
+}
+article > header :is(h1, h2, h3, h4, h5, h6), article > :is(h1, h2, h3, h4, h5, h6):first-child { margin: 0; font-size: 16px; line-height: 24px; }
+article > :last-child { margin-bottom: 0; }
+article > footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* Dialog: <dialog> with <header>, content and a <footer> of buttons; open it with showModal(). */
+
+dialog {
+  width: min(100% - 2 * {{ "mobile-gutter" | tok }}, 440px);
+  max-height: calc(100dvh - 64px);
+  padding: 0;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-large" | tok }};
+  background: {{ "overlay-bgColor" | tok }};
+  box-shadow: {{ "shadow-floating-large" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font-size: 14px;
+  line-height: 20px;
+}
+dialog[open] { display: flex; flex-direction: column; animation: pm-classless-in {{ "duration-slow" | tok }} {{ "easing-sleepy-enter" | tok }}; }
+dialog::backdrop { background: {{ "overlay-backdrop-bgColor" | tok }}; }
+dialog > header { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 8px 16px; border-bottom: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; }
+dialog > header :is(h1, h2, h3, h4, h5, h6) { flex: 1; margin: 0; font-size: 20px; line-height: 32px; }
+dialog > :not(header, footer) { margin: 16px 16px 0; }
+dialog > :not(header, footer):last-child { margin-bottom: 16px; }
+dialog > footer { display: flex; justify-content: flex-end; gap: 8px; padding: 16px; }
+@keyframes pm-classless-in { from { opacity: 0; scale: 0.96; } }
+@media (prefers-reduced-motion: reduce) { dialog[open] { animation: none; } }
+
+/* Disclosure: <details><summary>Title</summary> content</details>. */
+
+details { margin: 0 0 16px; border-bottom: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; }
+summary { padding: 8px 0; font-weight: 600; cursor: pointer; }
+details[open] > summary { margin-bottom: 8px; }

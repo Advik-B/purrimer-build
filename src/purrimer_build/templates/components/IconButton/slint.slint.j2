@@ -58,7 +58,7 @@ export component IconButton inherits Rectangle {
         path: root.icon;
         box: root.box;
         size: root.box >= 24 ? 24px : 16px;
-        color: root.variant == "default" && !root.hovered && root.enabled ? {{ "fgColor-muted" | tok }} : root.ink;
+        color: (root.variant == "default" || root.variant == "invisible") && !root.hovered && root.enabled ? {{ "fgColor-muted" | tok }} : root.ink;
     }
 
         if root.has-focus: Rectangle {

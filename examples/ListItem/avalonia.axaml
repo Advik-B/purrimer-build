@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel>
+    <pm:ListItem IconName="bell" Headline="Notifications" Supporting="Mentions and replies" Trailing="On" ShowChevron="True" />
+    <pm:ListItem IconName="globe" Headline="Language" Trailing="English" />
+  </StackPanel>
+</UserControl>

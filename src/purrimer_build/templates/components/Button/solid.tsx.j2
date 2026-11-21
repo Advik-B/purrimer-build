@@ -22,7 +22,7 @@ export function Button(props: ButtonProps): JSX.Element {
     <button
       {...rest}
       type={props.type ?? "button"}
-      class={["pm-button", `pm-button--${variant()}`, size() !== "medium" && `pm-button--${size()}`, props.block && "pm-button--block", props.class]}
+      class={["pm-button", variant() !== "default" && `pm-button--${variant()}`, size() !== "medium" && `pm-button--${size()}`, props.block && "pm-button--block", props.class]}
     >
       <Show when={props.leadingIcon}>{(name) => <Icon name={name()} />}</Show>
       {props.children ?? props.label}

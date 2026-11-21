@@ -1,0 +1,17 @@
+import { TextField, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 16px;
+    alignment: start;
+    TextField {
+        label: "Email";
+        placeholder: "you@example.com";
+        caption: "We never share it.";
+        leading-icon: PurrimerIcons.mail-16;
+    }
+    TextField {
+        label: "Username";
+        text: "purr";
+        error: self.text == "purr" ? "That name is taken." : "";
+    }
+}

@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="16">
+    <pm:SearchBar PlaceholderText="Search messages" />
+    <pm:SearchBar Text="kittens" />
+  </StackPanel>
+</UserControl>

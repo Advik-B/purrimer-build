@@ -14,7 +14,8 @@
       <ControlTemplate TargetType="ProgressBar">
         <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" ClipToBounds="True">
           <Panel>
-            <Border Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="{TemplateBinding CornerRadius}"
+            <!-- Width starts at 0, not NaN: a Width transition from NaN stays NaN and the fill never shows. -->
+            <Border Name="PART_Indicator" Width="0" Background="{TemplateBinding Foreground}" CornerRadius="{TemplateBinding CornerRadius}"
                     HorizontalAlignment="Left" IsVisible="{Binding !IsIndeterminate, RelativeSource={RelativeSource TemplatedParent}}">
               <Border.Transitions>
                 <Transitions>

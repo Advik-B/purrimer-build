@@ -1,0 +1,21 @@
+import { Button, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 12px;
+    alignment: start;
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button { text: "Save"; variant: "primary"; leading-icon: PurrimerIcons.check-16; clicked => { debug("saved"); } }
+        Button { text: "Cancel"; }
+        Button { text: "Delete"; variant: "danger"; }
+        Button { text: "Disabled"; enabled: false; }
+    }
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
+        Button { text: "Small"; size: "small"; y: 6px; }
+        Button { text: "Medium"; y: 4px; }
+        Button { text: "Large"; size: "large"; }
+    }
+}

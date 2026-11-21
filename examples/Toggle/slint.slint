@@ -1,0 +1,9 @@
+import { Toggle } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 12px;
+    alignment: start;
+    Toggle { text: "Wi-Fi"; checked: true; }
+    Toggle { text: "Bluetooth"; toggled(on) => { debug("bluetooth", on); } }
+    Toggle { text: "Airplane mode"; enabled: false; }
+}

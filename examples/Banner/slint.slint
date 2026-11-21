@@ -1,0 +1,15 @@
+import { Banner } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    in-out property <bool> shown: true;
+    spacing: 12px;
+    alignment: start;
+    if shown: Banner {
+        tone: "success";
+        title: "Deployed";
+        text: "Version 2.4 is live for everyone.";
+        dismissible: true;
+        dismissed => { shown = false; }
+    }
+    Banner { tone: "danger"; text: "The build failed on two checks."; }
+}

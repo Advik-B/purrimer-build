@@ -47,6 +47,11 @@ QLabel[textStyle="{{ st.name[5:] if st.name.startswith("text-") else st.name }}"
 }
 {% endfor %}
 
+/* Field validation messages are semibold, as on the web. */
+QLabel[textStyle="caption"][role="danger"] {
+    font-weight: 600;
+}
+
 QPushButton {
     background-color: {{ c["button-default-bgColor-rest"] }};
     border: 1px solid {{ c["button-default-borderColor-rest"] }};
@@ -114,13 +119,13 @@ QPushButton[variant="invisible"]:hover, QPushButton:flat:hover {
     background-color: {{ c["control-transparent-bgColor-hover"] }};
 }
 
-QPushButton[size="small"] {
+QPushButton[pmSize="small"] {
     min-height: {{ L["control-small-size"] - 2 - 6 }}px;
     padding: 3px 8px;
     font-size: 12px;
 }
 
-QPushButton[size="large"] {
+QPushButton[pmSize="large"] {
     min-height: {{ L["control-large-size"] - 2 - 16 }}px;
     padding: 8px 16px;
 }
@@ -128,6 +133,11 @@ QPushButton[size="large"] {
 QPushButton[iconOnly="true"] {
     padding: {{ pad_y }}px;
     min-width: {{ inner_h }}px;
+}
+
+QPushButton[iconOnly="true"][pmSize="small"] {
+    padding: 3px;
+    min-width: {{ L["control-small-size"] - 2 - 6 }}px;
 }
 
 QToolButton {
@@ -188,6 +198,14 @@ QLineEdit:focus, QAbstractSpinBox:focus, QComboBox:focus {
     padding: {{ pad_y - 1 }}px {{ pad_x - 1 }}px;
 }
 
+QLineEdit[leadingIcon="true"] {
+    padding-left: 4px;
+}
+
+QLineEdit[leadingIcon="true"]:focus {
+    padding-left: 3px;
+}
+
 QTextEdit:focus, QPlainTextEdit:focus {
     border: 2px solid {{ c["focus-outlineColor"] }};
     padding: {{ pad_y - 1 }}px {{ pad_x - 5 }}px;
@@ -205,12 +223,16 @@ QLineEdit[invalid="true"], QAbstractSpinBox[invalid="true"], QComboBox[invalid="
 
 QLineEdit[search="true"] {
     padding-left: 32px;
+    border: 1px solid transparent;
     border-radius: {{ r_ctl }}px;
     background-color: {{ c["bgColor-muted"] }};
+    min-height: {{ L["control-large-size"] - 2 - 2 * pad_y }}px;
+    max-height: {{ L["control-large-size"] - 2 - 2 * pad_y }}px;
 }
 
 QLineEdit[search="true"]:focus {
     padding-left: 31px;
+    border: 2px solid {{ c["focus-outlineColor"] }};
 }
 
 QComboBox {
@@ -439,7 +461,9 @@ QScrollBar::add-page, QScrollBar::sub-page {
 QTabWidget::pane {
     background-color: {{ c["bgColor-default"] }};
     border: 1px solid {{ c["borderColor-default"] }};
-    border-radius: {{ r_ctl }}px;
+    border-radius: {{ r_box }}px;
+    border-top-left-radius: 0px;
+    padding: {{ L["stack-padding-normal"] }}px;
     top: -1px;
 }
 

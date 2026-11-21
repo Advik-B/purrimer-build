@@ -14,7 +14,7 @@ export type ChipProps = {
 
 export function Chip(props: ChipProps): JSX.Element {
   return (
-    <span class={["pm-chip", `pm-chip--${props.tone ?? "accent"}`]}>
+    <span class={["pm-chip", props.tone && props.tone !== "accent" && `pm-chip--${props.tone}`]}>
       <Show when={props.icon}>{(name) => <Icon name={name()} />}</Show>
       {props.text}
       <Show when={props.removable}>

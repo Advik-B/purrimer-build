@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Purrimer example</title>
+    <style>
+      /* Deterministic screenshots: no motion, no caret. */
+      *, *::before, *::after { transition: none !important; animation: none !important; caret-color: transparent !important; }
+      html, body { margin: 0; }
+      /* transform makes #frame the containing block of position: fixed overlays, so they cover the frame. */
+      #frame { box-sizing: border-box; padding: 16px; overflow: hidden; transform: translateZ(0); background: var(--bgColor-default); color: var(--fgColor-default); position: relative; }
+      #frame.bleed { padding: 0; }
+    </style>
+  </head>
+  <body>
+    <div id="frame"></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

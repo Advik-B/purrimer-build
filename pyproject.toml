@@ -25,11 +25,16 @@ dev = [
     "pytest>=9.2.0",
     "ruff>=0.17.6",
 ]
+# Runs the generated components and takes screenshots: scripts/showcase.py.
+showcase = [
+    "pillow>=11",
+    "pyside6>=6.12,<6.13",
+]
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-extend-exclude = ["dist"]
+extend-exclude = ["dist", "showcase/dist", "showcase/out", "showcase/web/node_modules"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

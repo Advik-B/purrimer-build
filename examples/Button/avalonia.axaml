@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="12">
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Classes="primary" Content="Save" pm:ButtonAssist.LeadingIcon="check" />
+      <Button Content="Cancel" />
+      <Button Classes="danger" Content="Delete" />
+      <Button Content="Disabled" IsEnabled="False" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <Button Classes="small" Content="Small" VerticalAlignment="Center" />
+      <Button Content="Medium" VerticalAlignment="Center" />
+      <Button Classes="large" Content="Large" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

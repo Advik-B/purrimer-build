@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <Panel>
+    <TextBlock Margin="16" Text="Inbox" />
+    <pm:Snackbar IsOpen="True" Message="Message archived" ActionText="Undo" />
+  </Panel>
+</UserControl>

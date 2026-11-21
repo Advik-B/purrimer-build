@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:ListSection Header="Account" Margin="0,16,0,0" VerticalAlignment="Top">
+    <pm:ListItem IconName="person" Headline="Profile" ShowChevron="True" />
+    <pm:ListItem IconName="key" Headline="Password" ShowChevron="True" />
+  </pm:ListSection>
+</UserControl>

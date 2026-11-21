@@ -17,6 +17,8 @@ T.Popup {
     anchors.centerIn: parent
     width: parent ? Math.min(parent.width - 2 * {{ "mobile-gutter" | tok }}, 440) : 440
     padding: 0
+    // T.Popup leaves its implicit size to the style; without this the dialog is 0 high.
+    implicitHeight: contentItem.implicitHeight
     closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
 
     T.Overlay.modal: Rectangle { color: {{ "overlay-backdrop-bgColor" | tok }} }

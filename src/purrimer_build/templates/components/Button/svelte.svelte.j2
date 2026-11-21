@@ -21,7 +21,7 @@
 <button
   {...rest}
   {type}
-  class={["pm-button", `pm-button--${variant}`, size !== "medium" && `pm-button--${size}`, block && "pm-button--block", className]}
+  class={["pm-button", variant !== "default" && `pm-button--${variant}`, size !== "medium" && `pm-button--${size}`, block && "pm-button--block", className]}
 >
   {#if leadingIcon}<Icon name={leadingIcon} />{/if}
   {#if children}{@render children()}{:else}{label}{/if}

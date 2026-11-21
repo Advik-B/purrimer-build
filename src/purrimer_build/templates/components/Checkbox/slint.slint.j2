@@ -4,7 +4,7 @@ import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
 
-export component Checkbox inherits HorizontalLayout {
+export component Checkbox inherits Rectangle {
     in property <string> text;
     in-out property <bool> checked;
     in property <bool> indeterminate;
@@ -43,31 +43,34 @@ export component Checkbox inherits HorizontalLayout {
         }
     }
 
-    spacing: 8px;
-    alignment: start;
+    // TouchArea and FocusScope above cover the whole row; only the visible parts are laid out.
+    HorizontalLayout {
+        spacing: 8px;
+        alignment: start;
 
-    Rectangle {
-        width: 16px;
-        height: 16px;
-        y: (parent.height - self.height) / 2;
-        border-radius: {{ "borderRadius-small" | tok }};
-        background: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }};
-        border-width: {{ "borderWidth-thin" | tok }};
-        border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? self.background : touch.has-hover ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
-        if root.on: Icon { size: 12px; path: root.indeterminate ? PurrimerIcons.dash-16 : PurrimerIcons.check-16; color: {{ "fgColor-onEmphasis" | tok }}; }
-        if root.has-focus: Rectangle {
-            x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;
-            border-radius: parent.border-radius + 4px;
-            border-width: {{ "borderWidth-thick" | tok }};
-            border-color: {{ "focus-outlineColor" | tok }};
+        Rectangle {
+            width: 16px;
+            height: 16px;
+            y: (parent.height - self.height) / 2;
+            border-radius: {{ "borderRadius-small" | tok }};
+            background: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }};
+            border-width: {{ "borderWidth-thin" | tok }};
+            border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? self.background : touch.has-hover ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
+            if root.on: Icon { size: 12px; path: root.indeterminate ? PurrimerIcons.dash-16 : PurrimerIcons.check-16; color: {{ "fgColor-onEmphasis" | tok }}; }
+            if root.has-focus: Rectangle {
+                x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;
+                border-radius: parent.border-radius + 4px;
+                border-width: {{ "borderWidth-thick" | tok }};
+                border-color: {{ "focus-outlineColor" | tok }};
+            }
         }
-    }
 
-    Text {
-        text: root.text;
-        color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
-        font-family: {{ "text-body-medium" | tok }}.font-family;
-        font-size: 14px;
-        vertical-alignment: center;
+        Text {
+            text: root.text;
+            color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            vertical-alignment: center;
+        }
     }
 }

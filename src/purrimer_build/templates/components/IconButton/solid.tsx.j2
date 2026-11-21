@@ -19,7 +19,7 @@ export function IconButton(props: IconButtonProps): JSX.Element {
     <button
       {...rest}
       type={props.type ?? "button"}
-      class={["pm-icon-button", `pm-icon-button--${props.variant ?? "default"}`, size() !== "medium" && `pm-icon-button--${size()}`, props.class]}
+      class={["pm-icon-button", props.variant && props.variant !== "default" && `pm-icon-button--${props.variant}`, size() !== "medium" && `pm-icon-button--${size()}`, props.class]}
       aria-label={props.label}
       title={props.label}
     >

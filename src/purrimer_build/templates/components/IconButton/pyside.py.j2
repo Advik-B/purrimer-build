@@ -29,7 +29,8 @@ class IconButton(QPushButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setProperty("iconOnly", "true")
         self.setProperty("variant", variant)
-        self.setProperty("size", size)
+        # "size" would shadow QWidget.size, so the stylesheet reads pmSize.
+        self.setProperty("pmSize", size)
         side = {"small": {{ px("control-small-size") | int }}, "large": {{ px("control-large-size") | int }}}.get(
             size, {{ px("control-medium-size") | int }})
         self.setFixedSize(side, side)
@@ -42,7 +43,8 @@ class IconButton(QPushButton):
         self._refresh_icon()
 
     def _refresh_icon(self) -> None:
-        size = 24 if self.property("size") == "large" else 16
-        token = {{ "fgColor-onEmphasis" | tok }} if self.property("variant") == "primary" else {{ "fgColor-muted" | tok }}
+        size = 24 if self.property("pmSize") == "large" else 16
+        token = {"primary": {{ "fgColor-onEmphasis" | tok }}, "danger": {{ "fgColor-danger" | tok }}}.get(
+            self.property("variant"), {{ "fgColor-muted" | tok }})
         self.setIcon(icon(self._icon_name, size, theme.color(token)))
         self.setIconSize(QSize(size, size))

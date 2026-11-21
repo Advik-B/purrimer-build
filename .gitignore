@@ -8,3 +8,11 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Showcase build output and tool caches
+showcase/dist/
+showcase/out/
+showcase/web/stage/
+node_modules/
+bin/
+obj/

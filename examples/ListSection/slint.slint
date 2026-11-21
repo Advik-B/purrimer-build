@@ -1,0 +1,11 @@
+import { ListItem, ListSection, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    padding-top: 16px;
+    alignment: start;
+    ListSection {
+        header: "Account";
+        ListItem { icon: PurrimerIcons.person-16; headline: "Profile"; chevron: true; }
+        ListItem { icon: PurrimerIcons.key-16; headline: "Password"; chevron: true; }
+    }
+}

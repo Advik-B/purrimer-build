@@ -1,0 +1,16 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <!-- The dialog draws over its parent: put it last in a panel that covers the window. -->
+  <Panel>
+    <TextBlock Margin="16" Text="Repository settings" />
+    <pm:Dialog IsOpen="True" Title="Delete repository?">
+      <TextBlock Text="This deletes purrimer-build and its history for good." TextWrapping="Wrap" />
+      <pm:Dialog.Footer>
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button Content="Cancel" />
+          <Button Classes="danger" Content="Delete" />
+        </StackPanel>
+      </pm:Dialog.Footer>
+    </pm:Dialog>
+  </Panel>
+</UserControl>

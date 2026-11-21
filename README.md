@@ -5,7 +5,7 @@ templates.
 
 | Target | Output | What you get |
 | --- | --- | --- |
-| `css` | `css/` | `purrimer.css` (custom properties, fonts, base styles) and `purrimer-components.css` (`pm-*` classes) |
+| `css` | `css/` | Two flavours: `purrimer.css` (custom properties, fonts, `.text-*` styles) with `purrimer-components.css` (`pm-*` classes), or `purrimer-classless.css`, which styles plain HTML |
 | `svelte` | `svelte/` | Svelte 5 components (runes, snippets), theme store, tokens and icons as TypeScript |
 | `solid` | `solid/` | Solid 2 components (`@solidjs/web`), theme helpers, tokens and icons as TypeScript |
 | `qtwidgets` | `qtwidgets/purrimer_qt/` | A PySide6 package: one QSS file per theme, `theme`, `icons`, `tokens` and widget classes |
@@ -16,6 +16,61 @@ templates.
 Every target covers the same 25 components: Icon, Button, IconButton, TextField, Checkbox, Radio, Toggle, Select,
 Label, Chip, Banner, ProgressBar, Card, Dialog, AppBar, BottomNav, BottomSheet, ListItem, ListSection, FAB, Snackbar,
 SearchBar, SegmentedControl, Tabs and Avatar. The themes are Blanc (default), Noir, Latte and Mocha.
+
+## Components
+
+Each component has a page in [docs/components](docs/components/README.md) with its props and a working example for
+every target, screenshotted in Blanc and Noir. The gallery shows the CSS target in Blanc.
+
+<!-- gallery:start -->
+
+<table>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Icon.md"><img src="docs/screenshots/css/Icon-blanc.png" width="240" alt="Icon"><br><b>Icon</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Button.md"><img src="docs/screenshots/css/Button-blanc.png" width="240" alt="Button"><br><b>Button</b></a></td>
+<td align="center" valign="top"><a href="docs/components/IconButton.md"><img src="docs/screenshots/css/IconButton-blanc.png" width="240" alt="IconButton"><br><b>IconButton</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/TextField.md"><img src="docs/screenshots/css/TextField-blanc.png" width="240" alt="TextField"><br><b>TextField</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Checkbox.md"><img src="docs/screenshots/css/Checkbox-blanc.png" width="240" alt="Checkbox"><br><b>Checkbox</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Radio.md"><img src="docs/screenshots/css/Radio-blanc.png" width="240" alt="Radio"><br><b>Radio</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Toggle.md"><img src="docs/screenshots/css/Toggle-blanc.png" width="240" alt="Toggle"><br><b>Toggle</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Select.md"><img src="docs/screenshots/css/Select-blanc.png" width="240" alt="Select"><br><b>Select</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Label.md"><img src="docs/screenshots/css/Label-blanc.png" width="240" alt="Label"><br><b>Label</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Chip.md"><img src="docs/screenshots/css/Chip-blanc.png" width="240" alt="Chip"><br><b>Chip</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Banner.md"><img src="docs/screenshots/css/Banner-blanc.png" width="240" alt="Banner"><br><b>Banner</b></a></td>
+<td align="center" valign="top"><a href="docs/components/ProgressBar.md"><img src="docs/screenshots/css/ProgressBar-blanc.png" width="240" alt="ProgressBar"><br><b>ProgressBar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Card.md"><img src="docs/screenshots/css/Card-blanc.png" width="240" alt="Card"><br><b>Card</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Dialog.md"><img src="docs/screenshots/css/Dialog-blanc.png" width="240" alt="Dialog"><br><b>Dialog</b></a></td>
+<td align="center" valign="top"><a href="docs/components/AppBar.md"><img src="docs/screenshots/css/AppBar-blanc.png" width="240" alt="AppBar"><br><b>AppBar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/BottomNav.md"><img src="docs/screenshots/css/BottomNav-blanc.png" width="240" alt="BottomNav"><br><b>BottomNav</b></a></td>
+<td align="center" valign="top"><a href="docs/components/BottomSheet.md"><img src="docs/screenshots/css/BottomSheet-blanc.png" width="240" alt="BottomSheet"><br><b>BottomSheet</b></a></td>
+<td align="center" valign="top"><a href="docs/components/ListItem.md"><img src="docs/screenshots/css/ListItem-blanc.png" width="240" alt="ListItem"><br><b>ListItem</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/ListSection.md"><img src="docs/screenshots/css/ListSection-blanc.png" width="240" alt="ListSection"><br><b>ListSection</b></a></td>
+<td align="center" valign="top"><a href="docs/components/FAB.md"><img src="docs/screenshots/css/FAB-blanc.png" width="240" alt="FAB"><br><b>FAB</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Snackbar.md"><img src="docs/screenshots/css/Snackbar-blanc.png" width="240" alt="Snackbar"><br><b>Snackbar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/SearchBar.md"><img src="docs/screenshots/css/SearchBar-blanc.png" width="240" alt="SearchBar"><br><b>SearchBar</b></a></td>
+<td align="center" valign="top"><a href="docs/components/SegmentedControl.md"><img src="docs/screenshots/css/SegmentedControl-blanc.png" width="240" alt="SegmentedControl"><br><b>SegmentedControl</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Tabs.md"><img src="docs/screenshots/css/Tabs-blanc.png" width="240" alt="Tabs"><br><b>Tabs</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Avatar.md"><img src="docs/screenshots/css/Avatar-blanc.png" width="240" alt="Avatar"><br><b>Avatar</b></a></td>
+</tr>
+</table>
+
+<!-- gallery:end -->
 
 ## Install
 
@@ -52,8 +107,27 @@ system; copy its `tokens.json` and fonts into `tokens/` when they change.
 
 ## Using the output
 
-**CSS.** Link `css/purrimer.css` and `css/purrimer-components.css`, copy `fonts/woff2/`, and set `data-theme` on
-`<html>` to `noir`, `light` (Latte) or `dark` (Mocha). Without the attribute you get Blanc.
+**CSS.** Copy `fonts/woff2/` next to `css/` and set `data-theme` on `<html>` to `noir`, `light` (Latte) or `dark`
+(Mocha); without it you get Blanc. Then pick one of the two flavours:
+
+- **Classes.** Link `css/purrimer.css` and `css/purrimer-components.css`. They only style the `pm-*` and `.text-*`
+  classes and never touch plain elements, so they sit alongside your own CSS or a framework. The Svelte and Solid
+  targets use this flavour.
+- **Classless.** Link `css/purrimer-classless.css` on its own. Like Pico's classless build, it styles semantic HTML
+  directly: the page, headings and text, tables, and the elements below. Components with no HTML element, such as
+  Chip or Tabs, need the class flavour.
+
+| Element | Looks like |
+| --- | --- |
+| `<button>`, `<input type="button\|reset">`, `role="button"` | Button; `type="submit"` is the primary one |
+| `<label>Name <input></label>`, `<textarea>`, `<small>` under the input | TextField; `aria-invalid="true"` shows an error |
+| `<input type="checkbox">`, `<input type="radio">` inside a `<label>` | Checkbox and Radio |
+| `<input type="checkbox" role="switch">` | Toggle |
+| `<select>` | Select |
+| `<input type="search">` | SearchBar |
+| `<progress>` | ProgressBar; without `value` it sweeps |
+| `<article>` with an optional `<header>` and `<footer>` | Card |
+| `<dialog>` with `<header>`, content and a `<footer>` of buttons | Dialog; open it with `showModal()` for the scrim |
 
 **Svelte and Solid.** Copy the folder into your source tree, import `purrimer.css` and `purrimer-components.css` once
 at the app root, and import components from its `index.ts`. Solid targets 2.x (`jsxImportSource: "@solidjs/web"`).
@@ -80,11 +154,12 @@ and Dialog shadows use `RectangularShadow`, so Qt 6.9 or later is required.
 and TabControl get Purrimer as their default theme; the other components are `pm:` controls.
 
 **Slint.** Import from `slint/purrimer-components.slint` and set `Purrimer.theme = PurrimerTheme.noir` (or `latte`,
-`mocha`). Icons are path
-commands such as `PurrimerIcons.search-16`.
+`mocha`). Icons are path commands such as `PurrimerIcons.search-16`. Set
+`default-font-family: Purrimer.text-body-medium.font-family` on your `Window` so plain `Text` uses Mona Sans.
 
-**Overlays.** Dialog, BottomSheet and Snackbar on Avalonia, Slint and PySide6 draw inside their parent: place them
-last in a panel that covers the window or screen.
+**Overlays.** Dialog, BottomSheet and Snackbar on Avalonia and Slint, and BottomSheet and Snackbar on PySide6, draw
+inside their parent: place them last in a panel that covers the window or screen. The PySide6 Dialog is a `QDialog`;
+show it with `open()` or `exec()`. On Qt Quick all three are popups on the window overlay.
 
 ## Adding a component
 
@@ -107,7 +182,8 @@ uv run purrimer new DatePicker --group Forms
 uv run purrimer components
 ```
 
-A target skips a component that lacks its layers and says so in the build output. Pass `--components-dir path` to
+Add `examples/DatePicker/` too, with one example per target (see [Examples and screenshots](#examples-and-screenshots));
+the tests fail without it. A target skips a component that lacks its layers and says so in the build output. Pass `--components-dir path` to
 keep components outside this repository; a folder there with the same name as a built-in one replaces it.
 
 ## Template rules
@@ -130,10 +206,36 @@ uv run ruff format --check
 uv run pytest
 ```
 
-The tests build every target once and check names, coverage and output. The generated code was also checked with
-each platform's own tools during development: lightningcss, svelte-check, `tsc` with Solid 2.0.3, `pyside6-qmllint`
-and an offscreen render with PySide6 6.12, a `dotnet build` and headless render with Avalonia 12.1.5, and the Slint
-1.18 compiler with a software-rendered window.
+The tests build every target once and check names, coverage and output, plus the bugs that the examples below
+turned up.
+
+## Examples and screenshots
+
+`examples/<Name>/` holds one small example per target: `css.html`, `svelte.svelte`, `solid.tsx`, `qtwidgets.py`,
+`qtquick.qml`, `avalonia.axaml` and `slint.slint`, plus `classless.html` where a plain HTML element fits and
+`example.toml` with the frame size. `scripts/showcase.py` builds every target, runs each example on its real toolkit
+and screenshots it in Blanc and Noir:
+
+```sh
+uv sync --group showcase
+uv run scripts/showcase.py build
+uv run scripts/showcase.py run                      # all targets; or --targets svelte,slint --only Button,Card
+uv run scripts/showcase.py docs                     # docs/components/*.md and the README gallery
+```
+
+| Target | Checked with | Fails on |
+| --- | --- | --- |
+| css, classless, svelte, solid | `svelte-check`, `tsc` with Solid 2.0.3, Vite, Playwright and Chromium | console errors or warnings, failed requests, `pm-*` classes with no CSS rule, any class in a classless example |
+| qtwidgets | PySide6 6.12, offscreen | any Qt warning |
+| qtquick | `pyside6-qmllint`, PySide6 6.12 in a window | any QML warning, the software renderer (it drops shadows) |
+| avalonia | `dotnet build -warnaserror`, Avalonia 12.1.5 headless with Skia | XAML errors, Avalonia warnings such as binding errors |
+| slint | `slint-viewer` 1.18 `--check` and `--screenshot` | any diagnostic |
+
+Every screenshot must also be more than one flat colour. The run needs Node 24, the .NET 10 SDK and `slint-viewer`
+on `PATH`. Screenshots land in `showcase/out/`; only CI writes `docs/screenshots/`, so that pixels do not change
+with the machine. On every push to `master`, the Showcase workflow runs all of this on Linux and commits the
+screenshots that visibly changed (it ignores one-step anti-aliasing noise) and the docs; on pull requests it only runs
+the checks.
 
 ## Licences
 

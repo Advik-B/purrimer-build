@@ -12,12 +12,8 @@ from ..theme import theme
 
 
 def initials(name: str) -> str:
-    parts = name.split()
-    if not parts:
-        return ""
-    if len(parts) == 1:
-        return parts[0][:2].upper()
-    return (parts[0][0] + parts[-1][0]).upper()
+    """The first letters of the first two words, as on every other target."""
+    return "".join(word[0] for word in name.split()[:2]).upper()
 
 
 class Avatar(QWidget):

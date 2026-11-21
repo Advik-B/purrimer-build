@@ -1,0 +1,7 @@
+{
+  "extends": ["@tsconfig/svelte/tsconfig.json", "./tsconfig.base.json"],
+  "compilerOptions": {
+    "paths": { "$lib/purrimer": ["./stage/purrimer/svelte/index.ts"] }
+  },
+  "include": ["stage/purrimer/svelte/**/*.ts", "stage/purrimer/svelte/**/*.svelte", "stage/examples/*/svelte.svelte"]
+}

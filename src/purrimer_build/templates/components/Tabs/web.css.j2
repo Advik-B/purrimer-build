@@ -18,5 +18,5 @@
 .pm-tabs__tab:hover { background: {{ "control-transparent-bgColor-hover" | tok }}; color: {{ "fgColor-default" | tok }}; }
 .pm-tabs__tab[aria-selected="true"] { z-index: 1; border-color: {{ "borderColor-default" | tok }}; background: {{ "bgColor-default" | tok }}; color: {{ "fgColor-default" | tok }}; font-weight: 600; }
 .pm-tabs__tab:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -2px; }
-.pm-tabs__panel { padding: {{ "stack-padding-normal" | tok }}; border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; border-radius: 0 {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }}; background: {{ "bgColor-default" | tok }}; }
+.pm-tabs__panel { font: 400 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; padding: {{ "stack-padding-normal" | tok }}; border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; border-radius: 0 {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }}; background: {{ "bgColor-default" | tok }}; }
 [data-density="touch"] .pm-tabs__tab { height: {{ "touch-target-min" | tok }}; }

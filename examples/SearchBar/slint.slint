@@ -1,0 +1,8 @@
+import { SearchBar } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 16px;
+    alignment: start;
+    SearchBar { placeholder: "Search messages"; accepted(query) => { debug("search", query); } }
+    SearchBar { text: "kittens"; }
+}

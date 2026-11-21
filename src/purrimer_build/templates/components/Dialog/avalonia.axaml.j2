@@ -12,7 +12,7 @@
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:Dialog">
         <Border Name="PART_Backdrop" Background="{{ "overlay-backdrop-bgColor" | tok }}">
-          <Border Width="{TemplateBinding DialogWidth}" Margin="{{ px("mobile-gutter") | num }}" HorizontalAlignment="Center"
+          <Border MaxWidth="{TemplateBinding DialogWidth}" Margin="{{ px("mobile-gutter") | num }}" HorizontalAlignment="Stretch"
                   VerticalAlignment="Center" Background="{{ "overlay-bgColor" | tok }}" BorderBrush="{{ "borderColor-default" | tok }}"
                   BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}" CornerRadius="{{ "borderRadius-large" | tok }}"
                   BoxShadow="{{ "shadow-floating-large" | tok }}" ClipToBounds="True">

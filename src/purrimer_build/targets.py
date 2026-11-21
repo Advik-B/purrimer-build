@@ -63,6 +63,20 @@ def build_css(build: Build) -> None:
         web_fonts=build.web_fonts,
     )
     build.write("css/purrimer-components.css", components_css(build, env))
+    env.globals["svg_uri"] = lambda name, color: _svg_uri(build.icon_path(name, 16), color)
+    build.render(
+        env,
+        "t/styles/css/purrimer-classless.css.j2",
+        "css/purrimer-classless.css",
+        font_prefix="../fonts/woff2/",
+        web_fonts=build.web_fonts,
+    )
+
+
+def _svg_uri(path: str, color: str) -> str:
+    """A 16px Octicon as a CSS url() for backgrounds."""
+    svg = f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path fill='{color}' d='{path}'/></svg>"
+    return 'url("data:image/svg+xml,%s")' % svg.replace("#", "%23").replace("<", "%3C").replace(">", "%3E")
 
 
 def _web_framework(build: Build, name: str, ext: str, layer: str, theme_template: str, theme_file: str) -> None:

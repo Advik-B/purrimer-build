@@ -1,0 +1,11 @@
+import { Radio } from "purrimer-components.slint";
+
+// Slint has no radio groups; keep the choice in one property.
+export component Example inherits VerticalLayout {
+    in-out property <int> plan: 1;
+    spacing: 12px;
+    alignment: start;
+    Radio { text: "Free"; checked: plan == 0; toggled => { plan = 0; } }
+    Radio { text: "Pro"; checked: plan == 1; toggled => { plan = 1; } }
+    Radio { text: "Team (invite only)"; enabled: false; }
+}

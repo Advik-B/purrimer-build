@@ -12,7 +12,7 @@
   } = $props();
 </script>
 
-<span class={["pm-chip", `pm-chip--${tone}`]}>
+<span class={["pm-chip", tone !== "accent" && `pm-chip--${tone}`]}>
   {#if icon}<Icon name={icon} />{/if}
   {text}
   {#if removable}

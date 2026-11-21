@@ -19,6 +19,20 @@ T.TextField {
     inputMethodHints: Qt.ImhNoPredictiveText
     Accessible.name: "Search"
 
+    // T.TextField leaves drawing placeholderText to the style.
+    Text {
+        x: control.leftPadding
+        y: control.topPadding
+        width: control.width - control.leftPadding - control.rightPadding
+        height: control.height - control.topPadding - control.bottomPadding
+        text: control.placeholderText
+        font: control.font
+        color: control.placeholderTextColor
+        verticalAlignment: control.verticalAlignment
+        elide: Text.ElideRight
+        visible: !control.length && !control.preeditText
+    }
+
     background: Rectangle {
         radius: {{ "borderRadius-medium" | tok }}
         color: {{ "bgColor-muted" | tok }}
