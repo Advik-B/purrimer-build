@@ -1,0 +1,389 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Globalization;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A labelled slider with an optional value read-out. RangeBase keeps Minimum, Maximum, Value, SmallChange (the
+// step) and LargeChange (the page step); SliderBar draws it.
+[TemplatePart("PART_Bar", typeof(SliderBar))]
+public class Slider : RangeBase
+{
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<Slider, string?>(nameof(Label));
+
+    public static readonly StyledProperty<Orientation> OrientationProperty =
+        AvaloniaProperty.Register<Slider, Orientation>(nameof(Orientation), Orientation.Horizontal);
+
+    public static readonly StyledProperty<string> TickPositionProperty =
+        AvaloniaProperty.Register<Slider, string>(nameof(TickPosition), "none");
+
+    public static readonly StyledProperty<double> TickIntervalProperty =
+        AvaloniaProperty.Register<Slider, double>(nameof(TickInterval));
+
+    public static readonly StyledProperty<double> LengthProperty =
+        AvaloniaProperty.Register<Slider, double>(nameof(Length));
+
+    public static readonly StyledProperty<bool> ShowValueProperty =
+        AvaloniaProperty.Register<Slider, bool>(nameof(ShowValue));
+
+    public static readonly StyledProperty<string?> SuffixProperty =
+        AvaloniaProperty.Register<Slider, string?>(nameof(Suffix));
+
+    public static readonly DirectProperty<Slider, string> ValueTextProperty =
+        AvaloniaProperty.RegisterDirect<Slider, string>(nameof(ValueText), o => o.ValueText);
+
+    public static readonly DirectProperty<Slider, bool> HasHeadProperty =
+        AvaloniaProperty.RegisterDirect<Slider, bool>(nameof(HasHead), o => o.HasHead);
+
+    private string _valueText = "0";
+    private bool _hasHead;
+    private SliderBar? _bar;
+
+    static Slider()
+    {
+        MaximumProperty.OverrideDefaultValue<Slider>({{ c.spec.props.max.default }});
+        SmallChangeProperty.OverrideDefaultValue<Slider>({{ c.spec.props.step.default }});
+        LargeChangeProperty.OverrideDefaultValue<Slider>({{ c.spec.props.pageStep.default }});
+    }
+
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public Orientation Orientation
+    {
+        get => GetValue(OrientationProperty);
+        set => SetValue(OrientationProperty, value);
+    }
+
+    // none, above, below or both; vertical sliders use left and right.
+    public string TickPosition
+    {
+        get => GetValue(TickPositionProperty);
+        set => SetValue(TickPositionProperty, value);
+    }
+
+    // Distance between ticks; 0 uses LargeChange.
+    public double TickInterval
+    {
+        get => GetValue(TickIntervalProperty);
+        set => SetValue(TickIntervalProperty, value);
+    }
+
+    // Track length in px; 0 fills the width, or 160px when vertical.
+    public double Length
+    {
+        get => GetValue(LengthProperty);
+        set => SetValue(LengthProperty, value);
+    }
+
+    public bool ShowValue
+    {
+        get => GetValue(ShowValueProperty);
+        set => SetValue(ShowValueProperty, value);
+    }
+
+    // Text after the shown value, such as "%".
+    public string? Suffix
+    {
+        get => GetValue(SuffixProperty);
+        set => SetValue(SuffixProperty, value);
+    }
+
+    public string ValueText
+    {
+        get => _valueText;
+        private set => SetAndRaise(ValueTextProperty, ref _valueText, value);
+    }
+
+    public bool HasHead
+    {
+        get => _hasHead;
+        private set => SetAndRaise(HasHeadProperty, ref _hasHead, value);
+    }
+
+    internal bool Dragging { get; set; }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        _bar = e.NameScope.Find<SliderBar>("PART_Bar");
+        if (_bar != null)
+            _bar.Owner = this;
+        Refresh();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == LabelProperty)
+            AutomationProperties.SetName(this, Label);
+        Refresh();
+    }
+
+    private void Refresh()
+    {
+        ValueText = Value.ToString(CultureInfo.CurrentCulture) + Suffix;
+        HasHead = !string.IsNullOrEmpty(Label) || ShowValue;
+        _bar?.InvalidateMeasure();
+        _bar?.InvalidateVisual();
+    }
+
+    // Sets a value from a raw number: snapped to SmallChange and kept in range.
+    internal void SetSnapped(double raw)
+    {
+        var step = SmallChange > 0 ? SmallChange : 1;
+        var snapped = Math.Round((raw - Minimum) / step) * step + Minimum;
+        Value = Math.Clamp(Math.Round(snapped, 10), Minimum, Maximum);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (!IsEnabled)
+            return;
+        double? next = e.Key switch
+        {
+            Key.Up or Key.Right => Value + SmallChange,
+            Key.Down or Key.Left => Value - SmallChange,
+            Key.PageUp => Value + LargeChange,
+            Key.PageDown => Value - LargeChange,
+            Key.Home => Minimum,
+            Key.End => Maximum,
+            _ => null,
+        };
+        if (next is { } v)
+        {
+            SetSnapped(v);
+            e.Handled = true;
+        }
+    }
+}
+
+// The track, fill, ticks and squircle-fallback thumb of a Slider, drawn by Purrimer.
+public class SliderBar : Control
+{
+    private const double Thumb = 16;
+    private const double Track = 4;
+    private const double Tick = 6;
+    private const double TickGap = 4;
+    private const double Pad = 8;
+    private const double Depth = 28;
+    private const double Radius = {{ px("borderRadius-small") | num }};
+
+    public static readonly StyledProperty<IBrush?> TrackBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(TrackBrush));
+
+    public static readonly StyledProperty<IBrush?> FillBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(FillBrush));
+
+    public static readonly StyledProperty<IBrush?> DisabledFillBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(DisabledFillBrush));
+
+    public static readonly StyledProperty<IBrush?> KnobBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(KnobBrush));
+
+    public static readonly StyledProperty<IBrush?> DisabledKnobBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(DisabledKnobBrush));
+
+    public static readonly StyledProperty<IBrush?> KnobBorderBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(KnobBorderBrush));
+
+    public static readonly StyledProperty<IBrush?> ActiveKnobBorderBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(ActiveKnobBorderBrush));
+
+    public static readonly StyledProperty<IBrush?> DisabledKnobBorderBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(DisabledKnobBorderBrush));
+
+    public static readonly StyledProperty<IBrush?> TickBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(TickBrush));
+
+    public static readonly StyledProperty<IBrush?> FocusBrushProperty =
+        AvaloniaProperty.Register<SliderBar, IBrush?>(nameof(FocusBrush));
+
+    public static readonly StyledProperty<BoxShadows> RestShadowProperty =
+        AvaloniaProperty.Register<SliderBar, BoxShadows>(nameof(RestShadow));
+
+    public static readonly StyledProperty<BoxShadows> ActiveShadowProperty =
+        AvaloniaProperty.Register<SliderBar, BoxShadows>(nameof(ActiveShadow));
+
+    private Slider? _owner;
+
+    static SliderBar()
+    {
+        AffectsRender<SliderBar>(TrackBrushProperty, FillBrushProperty, DisabledFillBrushProperty, KnobBrushProperty,
+            DisabledKnobBrushProperty, KnobBorderBrushProperty, ActiveKnobBorderBrushProperty,
+            DisabledKnobBorderBrushProperty, TickBrushProperty, FocusBrushProperty, RestShadowProperty,
+            ActiveShadowProperty, IsPointerOverProperty);
+    }
+
+    public IBrush? TrackBrush { get => GetValue(TrackBrushProperty); set => SetValue(TrackBrushProperty, value); }
+    public IBrush? FillBrush { get => GetValue(FillBrushProperty); set => SetValue(FillBrushProperty, value); }
+    public IBrush? DisabledFillBrush { get => GetValue(DisabledFillBrushProperty); set => SetValue(DisabledFillBrushProperty, value); }
+    public IBrush? KnobBrush { get => GetValue(KnobBrushProperty); set => SetValue(KnobBrushProperty, value); }
+    public IBrush? DisabledKnobBrush { get => GetValue(DisabledKnobBrushProperty); set => SetValue(DisabledKnobBrushProperty, value); }
+    public IBrush? KnobBorderBrush { get => GetValue(KnobBorderBrushProperty); set => SetValue(KnobBorderBrushProperty, value); }
+    public IBrush? ActiveKnobBorderBrush { get => GetValue(ActiveKnobBorderBrushProperty); set => SetValue(ActiveKnobBorderBrushProperty, value); }
+    public IBrush? DisabledKnobBorderBrush { get => GetValue(DisabledKnobBorderBrushProperty); set => SetValue(DisabledKnobBorderBrushProperty, value); }
+    public IBrush? TickBrush { get => GetValue(TickBrushProperty); set => SetValue(TickBrushProperty, value); }
+    public IBrush? FocusBrush { get => GetValue(FocusBrushProperty); set => SetValue(FocusBrushProperty, value); }
+    public BoxShadows RestShadow { get => GetValue(RestShadowProperty); set => SetValue(RestShadowProperty, value); }
+    public BoxShadows ActiveShadow { get => GetValue(ActiveShadowProperty); set => SetValue(ActiveShadowProperty, value); }
+
+    internal Slider? Owner
+    {
+        get => _owner;
+        set
+        {
+            if (_owner != null)
+                _owner.PropertyChanged -= OnOwnerChanged;
+            _owner = value;
+            if (_owner != null)
+                _owner.PropertyChanged += OnOwnerChanged;
+        }
+    }
+
+    private void OnOwnerChanged(object? sender, AvaloniaPropertyChangedEventArgs e) => InvalidateVisual();
+
+    private bool Vertical => _owner?.Orientation == Orientation.Vertical;
+    private bool Before => _owner != null && (_owner.TickPosition == "both" || _owner.TickPosition == (Vertical ? "left" : "above"));
+    private bool After => _owner != null && (_owner.TickPosition == "both" || _owner.TickPosition == (Vertical ? "right" : "below"));
+
+    // The track and its tick rows are centred together across the 28px control.
+    private double Centre
+    {
+        get
+        {
+            var before = Before ? 1 : 0;
+            var group = Track + (Tick + TickGap) * (before + (After ? 1 : 0));
+            return (Depth - group) / 2 + (Tick + TickGap) * before + Track / 2;
+        }
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var length = _owner?.Length ?? 0;
+        return Vertical ? new Size(Depth, length > 0 ? length : 160) : new Size(length > 0 ? length : 120, Depth);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var length = _owner?.Length ?? 0;
+        if (Vertical)
+            return new Size(Depth, length > 0 ? length : finalSize.Height);
+        return new Size(length > 0 ? length : finalSize.Width, Depth);
+    }
+
+    private (double Start, double Length) Span()
+    {
+        var size = Vertical ? Bounds.Height : Bounds.Width;
+        return (Pad, Math.Max(1, size - Pad * 2));
+    }
+
+    private double Fraction()
+    {
+        if (_owner == null || _owner.Maximum <= _owner.Minimum)
+            return 0;
+        return (Math.Clamp(_owner.Value, _owner.Minimum, _owner.Maximum) - _owner.Minimum) / (_owner.Maximum - _owner.Minimum);
+    }
+
+    private double ValueAt(Point p)
+    {
+        var (start, length) = Span();
+        var f = Vertical ? 1 - (p.Y - start) / length : (p.X - start) / length;
+        return _owner!.Minimum + Math.Clamp(f, 0, 1) * (_owner.Maximum - _owner.Minimum);
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (_owner == null || !_owner.IsEnabled || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        e.Pointer.Capture(this);
+        _owner.Dragging = true;
+        _owner.Focus();
+        _owner.SetSnapped(ValueAt(e.GetPosition(this)));
+        e.Handled = true;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_owner is { Dragging: true })
+            _owner.SetSnapped(ValueAt(e.GetPosition(this)));
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_owner is { Dragging: true })
+        {
+            _owner.Dragging = false;
+            e.Pointer.Capture(null);
+            InvalidateVisual();
+        }
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        if (_owner == null)
+            return;
+        var enabled = _owner.IsEffectivelyEnabled;
+        var (start, length) = Span();
+        var centre = Centre;
+        if (Before)
+            DrawTicks(context, centre - Track / 2 - TickGap - Tick, start, length);
+        if (After)
+            DrawTicks(context, centre + Track / 2 + TickGap, start, length);
+        var along = start + Fraction() * length;
+        Rect track, fill;
+        Point thumbCentre;
+        if (Vertical)
+        {
+            track = new Rect(centre - Track / 2, start, Track, length);
+            fill = new Rect(centre - Track / 2, start + length - (along - start), Track, along - start);
+            thumbCentre = new Point(centre, start + length - (along - start));
+        }
+        else
+        {
+            track = new Rect(start, centre - Track / 2, length, Track);
+            fill = new Rect(start, centre - Track / 2, along - start, Track);
+            thumbCentre = new Point(along, centre);
+        }
+        context.DrawRectangle(TrackBrush, null, new RoundedRect(track, Track / 2));
+        context.DrawRectangle(enabled ? FillBrush : DisabledFillBrush, null, new RoundedRect(fill, Track / 2));
+        var thumb = new Rect(thumbCentre.X - Thumb / 2, thumbCentre.Y - Thumb / 2, Thumb, Thumb);
+        var active = enabled && (IsPointerOver || _owner.Dragging);
+        var border = !enabled ? DisabledKnobBorderBrush : active ? ActiveKnobBorderBrush : KnobBorderBrush;
+        context.DrawRectangle(enabled ? KnobBrush : DisabledKnobBrush, new Pen(border, 1),
+            new RoundedRect(thumb.Deflate(0.5), Radius), enabled ? (active ? ActiveShadow : RestShadow) : default);
+        if (enabled && _owner.Classes.Contains(":focus-visible"))
+            context.DrawRectangle(null, new Pen(FocusBrush, 2), new RoundedRect(thumb.Inflate(3), Radius + 3));
+    }
+
+    private void DrawTicks(DrawingContext context, double across, double start, double length)
+    {
+        var range = _owner!.Maximum - _owner.Minimum;
+        var every = _owner.TickInterval > 0 ? _owner.TickInterval : _owner.LargeChange;
+        if (range <= 0 || every <= 0)
+            return;
+        for (var t = _owner.Minimum; t <= _owner.Maximum + 1e-9; t += every)
+        {
+            var at = start + (t - _owner.Minimum) / range * length;
+            var rect = Vertical ? new Rect(across, start + length - (at - start) - 0.5, Tick, 1) : new Rect(at - 0.5, across, 1, Tick);
+            context.DrawRectangle(TickBrush, null, rect);
+        }
+    }
+}

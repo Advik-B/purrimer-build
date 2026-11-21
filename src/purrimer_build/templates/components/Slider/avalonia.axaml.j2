@@ -1,0 +1,39 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:SliderBar}" TargetType="pm:SliderBar">
+    <Setter Property="TrackBrush" Value="{{ "controlTrack-bgColor-rest" | tok }}" />
+    <Setter Property="FillBrush" Value="{{ "bgColor-accent-emphasis" | tok }}" />
+    <Setter Property="DisabledFillBrush" Value="{{ "fgColor-disabled" | tok }}" />
+    <Setter Property="KnobBrush" Value="{{ "controlKnob-bgColor-rest" | tok }}" />
+    <Setter Property="DisabledKnobBrush" Value="{{ "bgColor-disabled" | tok }}" />
+    <Setter Property="KnobBorderBrush" Value="{{ "control-borderColor-rest" | tok }}" />
+    <Setter Property="ActiveKnobBorderBrush" Value="{{ "borderColor-accent-emphasis" | tok }}" />
+    <Setter Property="DisabledKnobBorderBrush" Value="{{ "borderColor-default" | tok }}" />
+    <Setter Property="TickBrush" Value="{{ "borderColor-emphasis" | tok }}" />
+    <Setter Property="FocusBrush" Value="{{ "focus-outlineColor" | tok }}" />
+    <Setter Property="RestShadow" Value="{{ "shadow-resting-small" | tok }}" />
+    <Setter Property="ActiveShadow" Value="{{ "shadow-resting-medium" | tok }}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:Slider}" TargetType="pm:Slider">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Slider">
+        <StackPanel Spacing="4">
+          <Grid ColumnDefinitions="*,Auto" IsVisible="{TemplateBinding HasHead}">
+            <TextBlock Text="{TemplateBinding Label}" FontWeight="SemiBold" />
+            <TextBlock Grid.Column="1" Text="{TemplateBinding ValueText}" Foreground="{{ "fgColor-muted" | tok }}"
+                       IsVisible="{TemplateBinding ShowValue}" />
+          </Grid>
+          <pm:SliderBar Name="PART_Bar" />
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

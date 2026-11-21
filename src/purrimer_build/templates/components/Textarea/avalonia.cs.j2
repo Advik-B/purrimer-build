@@ -1,0 +1,88 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+
+namespace {{ ns }};
+
+// A multi-line text box with a label above and a caption or error below.
+[PseudoClasses(":invalid")]
+public class Textarea : TextBox
+{
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<Textarea, string?>(nameof(Label));
+
+    public static readonly StyledProperty<string?> CaptionProperty =
+        AvaloniaProperty.Register<Textarea, string?>(nameof(Caption));
+
+    public static readonly StyledProperty<string?> ErrorProperty =
+        AvaloniaProperty.Register<Textarea, string?>(nameof(Error));
+
+    public static readonly StyledProperty<int> RowsProperty =
+        AvaloniaProperty.Register<Textarea, int>(nameof(Rows), {{ c.spec.props.rows.default }});
+
+    public static readonly DirectProperty<Textarea, string?> MessageProperty =
+        AvaloniaProperty.RegisterDirect<Textarea, string?>(nameof(Message), o => o.Message);
+
+    public static readonly DirectProperty<Textarea, double> BoxHeightProperty =
+        AvaloniaProperty.RegisterDirect<Textarea, double>(nameof(BoxHeight), o => o.BoxHeight);
+
+    private string? _message;
+    private double _boxHeight = Math.Max(80, {{ c.spec.props.rows.default }} * 20 + 12);
+
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public string? Caption
+    {
+        get => GetValue(CaptionProperty);
+        set => SetValue(CaptionProperty, value);
+    }
+
+    public string? Error
+    {
+        get => GetValue(ErrorProperty);
+        set => SetValue(ErrorProperty, value);
+    }
+
+    // Visible lines; the field is never shorter than 80px.
+    public int Rows
+    {
+        get => GetValue(RowsProperty);
+        set => SetValue(RowsProperty, value);
+    }
+
+    // The error when there is one, otherwise the caption.
+    public string? Message
+    {
+        get => _message;
+        private set => SetAndRaise(MessageProperty, ref _message, value);
+    }
+
+    // The frame's minimum height, from Rows.
+    public double BoxHeight
+    {
+        get => _boxHeight;
+        private set => SetAndRaise(BoxHeightProperty, ref _boxHeight, value);
+    }
+
+    protected override Type StyleKeyOverride => typeof(Textarea);
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == ErrorProperty || change.Property == CaptionProperty)
+        {
+            var invalid = !string.IsNullOrEmpty(Error);
+            PseudoClasses.Set(":invalid", invalid);
+            Message = invalid ? Error : Caption;
+        }
+        else if (change.Property == RowsProperty)
+            BoxHeight = Math.Max(80, Rows * 20 + 12);
+    }
+}

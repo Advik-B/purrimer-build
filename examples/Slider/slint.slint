@@ -1,0 +1,9 @@
+import { Slider } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 12px;
+    alignment: start;
+    Slider { label: "Volume"; value: 40; show-value: true; suffix: "%"; changed(value) => { debug("volume", value); } }
+    Slider { label: "Zoom"; value: 50; step: 5; page-step: 25; tick-position: "below"; }
+    Slider { label: "Balance"; value: 70; enabled: false; }
+}

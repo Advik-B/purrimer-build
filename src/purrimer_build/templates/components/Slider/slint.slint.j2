@@ -1,0 +1,176 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+export component Slider inherits VerticalLayout {
+    in property <string> label;
+    in-out property <float> value: {{ c.spec.props.value.default }};
+    in property <float> minimum: {{ c.spec.props.min.default }};
+    in property <float> maximum: {{ c.spec.props.max.default }};
+    in property <float> step: {{ c.spec.props.step.default }};
+    in property <float> page-step: {{ c.spec.props.pageStep.default }};
+    // horizontal or vertical
+    in property <string> orientation: "horizontal";
+    // none, above, below or both; vertical sliders use left and right
+    in property <string> tick-position: "none";
+    in property <float> tick-interval: 0;
+    in property <length> length: 0px;
+    in property <bool> show-value;
+    in property <string> suffix;
+    in property <bool> enabled: true;
+    callback changed(float);
+    callback released(float);
+
+    property <bool> vertical: root.orientation == "vertical";
+    property <bool> before: root.tick-position == "both" || root.tick-position == (root.vertical ? "left" : "above");
+    property <bool> after: root.tick-position == "both" || root.tick-position == (root.vertical ? "right" : "below");
+    // The track and its tick rows are centred together across the 28px control.
+    property <length> centre: (28px - (4px + 10px * ((root.before ? 1 : 0) + (root.after ? 1 : 0)))) / 2 + (root.before ? 10px : 0px) + 2px;
+    property <float> fraction: root.maximum > root.minimum ? (clamp(root.value, root.minimum, root.maximum) - root.minimum) / (root.maximum - root.minimum) : 0;
+    property <float> every: root.tick-interval > 0 ? root.tick-interval : root.page-step;
+    property <int> tick-count: root.tick-position == "none" || root.every <= 0 || root.maximum <= root.minimum ? 0 : floor((root.maximum - root.minimum) / root.every + 0.000001) + 1;
+    property <bool> dragging: touch.pressed;
+    property <bool> active: root.enabled && (touch.has-hover || touch.pressed);
+
+    function set(raw: float) {
+        if (!root.enabled) { return; }
+        let snapped = round((raw - root.minimum) / root.step) * root.step + root.minimum;
+        let next = clamp(snapped, root.minimum, root.maximum);
+        if (next != root.value) {
+            root.value = next;
+            root.changed(next);
+        }
+    }
+    function from-pointer(x: length, y: length) -> float {
+        let f = root.vertical ? 1 - (y - 8px) / (bar.height - 16px) : (x - 8px) / (bar.width - 16px);
+        return root.minimum + clamp(f, 0, 1) * (root.maximum - root.minimum);
+    }
+
+    spacing: 4px;
+    alignment: start;
+
+    if root.label != "" || root.show-value: HorizontalLayout {
+        Text {
+            text: root.label;
+            horizontal-stretch: 1;
+            color: {{ "fgColor-default" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        if root.show-value: Text {
+            text: round(root.value * 1000) / 1000 + root.suffix;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+        }
+    }
+
+    bar := Rectangle {
+        height: root.vertical ? (root.length > 0 ? root.length : 160px) : 28px;
+        preferred-width: root.vertical ? 28px : (root.length > 0 ? root.length : 240px);
+        min-width: root.vertical ? 28px : (root.length > 0 ? root.length : 120px);
+        max-width: root.vertical ? 28px : (root.length > 0 ? root.length : 100000px);
+        accessible-role: slider;
+        accessible-label: root.label;
+        accessible-value: root.value;
+        accessible-value-minimum: root.minimum;
+        accessible-value-maximum: root.maximum;
+        accessible-value-step: root.step;
+        accessible-enabled: root.enabled;
+        accessible-action-increment => { root.set(root.value + root.step); }
+        accessible-action-decrement => { root.set(root.value - root.step); }
+
+        for i in root.tick-count: Rectangle {
+            property <float> at: (i * root.every) / (root.maximum - root.minimum);
+            background: {{ "borderColor-emphasis" | tok }};
+            visible: root.before;
+            width: root.vertical ? 6px : 1px;
+            height: root.vertical ? 1px : 6px;
+            x: root.vertical ? root.centre - 12px : 8px + self.at * (bar.width - 16px) - 0.5px;
+            y: root.vertical ? 8px + (1 - self.at) * (bar.height - 16px) - 0.5px : root.centre - 12px;
+        }
+        for i in root.tick-count: Rectangle {
+            property <float> at: (i * root.every) / (root.maximum - root.minimum);
+            background: {{ "borderColor-emphasis" | tok }};
+            visible: root.after;
+            width: root.vertical ? 6px : 1px;
+            height: root.vertical ? 1px : 6px;
+            x: root.vertical ? root.centre + 6px : 8px + self.at * (bar.width - 16px) - 0.5px;
+            y: root.vertical ? 8px + (1 - self.at) * (bar.height - 16px) - 0.5px : root.centre + 6px;
+        }
+
+        Rectangle {
+            x: root.vertical ? root.centre - 2px : 8px;
+            y: root.vertical ? 8px : root.centre - 2px;
+            width: root.vertical ? 4px : bar.width - 16px;
+            height: root.vertical ? bar.height - 16px : 4px;
+            border-radius: 2px;
+            background: {{ "controlTrack-bgColor-rest" | tok }};
+            Rectangle {
+                x: 0;
+                y: root.vertical ? parent.height * (1 - root.fraction) : 0;
+                width: root.vertical ? 4px : parent.width * root.fraction;
+                height: root.vertical ? parent.height * root.fraction : 4px;
+                border-radius: 2px;
+                background: root.enabled ? {{ "bgColor-accent-emphasis" | tok }} : {{ "fgColor-disabled" | tok }};
+            }
+        }
+
+        thumb := Rectangle {
+            x: root.vertical ? root.centre - 8px : 8px + root.fraction * (bar.width - 16px) - 8px;
+            y: root.vertical ? 8px + (1 - root.fraction) * (bar.height - 16px) - 8px : root.centre - 8px;
+            width: 16px;
+            height: 16px;
+            border-radius: {{ "borderRadius-small" | tok }};
+            background: root.enabled ? {{ "controlKnob-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
+            border-width: {{ "borderWidth-thin" | tok }};
+            border-color: !root.enabled ? {{ "borderColor-default" | tok }} : root.active ? {{ "borderColor-accent-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
+            drop-shadow-offset-y: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.offset-y : {{ "shadow-resting-small" | tok }}.offset-y) : 0px;
+            drop-shadow-blur: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.blur : {{ "shadow-resting-small" | tok }}.blur) : 0px;
+            drop-shadow-color: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.color : {{ "shadow-resting-small" | tok }}.color) : transparent;
+            animate border-color { duration: {{ "duration-fast" | tok }}; }
+        }
+        if focus.has-focus && root.enabled: Rectangle {
+            x: thumb.x - 3px;
+            y: thumb.y - 3px;
+            width: 22px;
+            height: 22px;
+            border-radius: {{ px("borderRadius-small") + 3 }}px;
+            border-width: {{ "borderWidth-thick" | tok }};
+            border-color: {{ "focus-outlineColor" | tok }};
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled;
+            mouse-cursor: pointer;
+            pointer-event(event) => {
+                if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
+                    focus.focus();
+                    root.set(root.from-pointer(self.mouse-x, self.mouse-y));
+                }
+                if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
+                    root.released(root.value);
+                }
+            }
+            moved => {
+                if (self.pressed) {
+                    root.set(root.from-pointer(self.mouse-x, self.mouse-y));
+                }
+            }
+        }
+
+        focus := FocusScope {
+            enabled: root.enabled;
+            key-pressed(event) => {
+                if (event.text == Key.RightArrow || event.text == Key.UpArrow) { root.set(root.value + root.step); return accept; }
+                if (event.text == Key.LeftArrow || event.text == Key.DownArrow) { root.set(root.value - root.step); return accept; }
+                if (event.text == Key.PageUp) { root.set(root.value + root.page-step); return accept; }
+                if (event.text == Key.PageDown) { root.set(root.value - root.page-step); return accept; }
+                if (event.text == Key.Home) { root.set(root.minimum); return accept; }
+                if (event.text == Key.End) { root.set(root.maximum); return accept; }
+                reject
+            }
+        }
+    }
+}

@@ -1,0 +1,71 @@
+name = "Slider"
+group = "Forms"
+order = 26
+summary = "Picks a value from a continuous range by dragging a squircle thumb."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Label above the slider; without one, pass an accessible name."
+
+[props.value]
+type = "number"
+default = 0
+doc = "Current value."
+
+[props.min]
+type = "number"
+default = 0
+doc = "Lowest value."
+
+[props.max]
+type = "number"
+default = 100
+doc = "Highest value."
+
+[props.step]
+type = "number"
+default = 1
+doc = "Arrow-key step; values snap to it."
+
+[props.pageStep]
+type = "number"
+default = 10
+doc = "Page Up and Page Down step."
+
+[props.orientation]
+type = "enum"
+default = "horizontal"
+doc = "Track direction; vertical fills from the bottom."
+values = ["horizontal", "vertical"]
+
+[props.tickPosition]
+type = "enum"
+default = "none"
+doc = "Where tick marks go: above and below for horizontal sliders, left and right for vertical ones."
+values = ["none", "above", "below", "both", "left", "right"]
+
+[props.tickInterval]
+type = "number"
+default = 0
+doc = "Distance between ticks; 0 uses pageStep."
+
+[props.length]
+type = "int"
+default = 0
+doc = "Track length in px; 0 fills the width, or 160px when vertical."
+
+[props.showValue]
+type = "bool"
+default = false
+doc = "Shows the value at the end of the label row."
+
+[props.suffix]
+type = "string"
+default = ""
+doc = "Text after the shown value, such as \"%\"."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Greys the slider and ignores input."

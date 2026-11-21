@@ -1,0 +1,78 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+Column {
+    id: root
+    property string label
+    property alias text: area.text
+    property alias placeholder: area.placeholderText
+    property string caption
+    property string error
+    property int rows: {{ c.spec.props.rows.default }}
+    property bool disabled: false
+
+    spacing: 4
+
+    Text {
+        text: root.label
+        visible: root.label !== ""
+        font.family: {{ "text-body-medium" | tok }}.family
+        font.pixelSize: 14
+        font.weight: Font.DemiBold
+        color: {{ "fgColor-default" | tok }}
+    }
+
+    T.TextArea {
+        id: area
+        width: root.width > 0 ? root.width : implicitWidth
+        implicitWidth: 320
+        implicitHeight: Math.max(80, Math.max(contentHeight, root.rows * 20) + topPadding + bottomPadding)
+        enabled: !root.disabled
+        leftPadding: 8
+        rightPadding: 8
+        topPadding: 5
+        bottomPadding: 5
+        wrapMode: TextEdit.Wrap
+        font: {{ "text-body-medium" | tok }}
+        color: enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }}
+        placeholderTextColor: {{ "fgColor-muted" | tok }}
+        selectionColor: {{ "bgColor-accent-muted" | tok }}
+        selectedTextColor: {{ "fgColor-default" | tok }}
+        Accessible.name: root.label
+
+        // T.TextArea leaves drawing placeholderText to the style.
+        Text {
+            x: area.leftPadding
+            y: area.topPadding
+            width: area.width - area.leftPadding - area.rightPadding
+            text: area.placeholderText
+            font: area.font
+            color: area.placeholderTextColor
+            wrapMode: Text.Wrap
+            visible: !area.length && !area.preeditText
+        }
+
+        background: Rectangle {
+            radius: {{ "borderRadius-medium" | tok }}
+            color: area.enabled ? {{ "control-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }}
+            border.width: area.activeFocus ? {{ "borderWidth-thick" | tok }} : {{ "borderWidth-thin" | tok }}
+            border.color: !area.enabled ? {{ "borderColor-default" | tok }} : area.activeFocus ? {{ "focus-outlineColor" | tok }} : root.error ? {{ "borderColor-danger-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }}
+        }
+    }
+
+    Row {
+        spacing: 4
+        visible: root.error !== "" || root.caption !== ""
+        Icon { name: "alert-fill"; size: 16; color: {{ "fgColor-danger" | tok }}; visible: root.error !== ""; scale: 0.75 }
+        Text {
+            text: root.error || root.caption
+            font.family: {{ "text-caption" | tok }}.family
+            font.pixelSize: 12
+            font.weight: root.error ? Font.DemiBold : Font.Normal
+            color: root.error ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }}
+        }
+    }
+}

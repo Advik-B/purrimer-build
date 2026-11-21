@@ -1,0 +1,133 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type SliderProps = {
+  label?: string;
+  ariaLabel?: string;
+  value?: number;
+  min?: number;
+  max?: number;
+  step?: number;
+  pageStep?: number;
+  orientation?: "horizontal" | "vertical";
+  tickPosition?: {{ c.spec.props.tickPosition["values"] | map("tojson") | join(" | ") }};
+  tickInterval?: number;
+  length?: number;
+  showValue?: boolean;
+  suffix?: string;
+  valueText?: (value: number) => string;
+  disabled?: boolean;
+  onChange?: (value: number) => void;
+  onRelease?: (value: number) => void;
+};
+
+export function Slider(props: SliderProps): JSX.Element {
+  const id = createUniqueId();
+  const min = () => props.min ?? {{ c.spec.props.min.default }};
+  const max = () => props.max ?? {{ c.spec.props.max.default }};
+  const step = () => props.step ?? {{ c.spec.props.step.default }};
+  const page = () => props.pageStep ?? Math.max(step(), Math.round((max() - min()) / 10));
+  const vertical = () => props.orientation === "vertical";
+  const [value, setValue] = createSignal(() => props.value ?? min());
+  const [dragging, setDragging] = createSignal(false);
+  let track!: HTMLDivElement;
+  let thumb!: HTMLDivElement;
+  const pct = () => (max() > min() ? ((Math.min(Math.max(value(), min()), max()) - min()) / (max() - min())) * 100 : 0);
+  const text = () => (props.valueText ? props.valueText(value()) : `${value()}${props.suffix ?? ""}`);
+  const marks = createMemo(() => {
+    const every = props.tickInterval && props.tickInterval > 0 ? props.tickInterval : page();
+    if (!props.tickPosition || props.tickPosition === "none" || every <= 0 || max() <= min()) return [];
+    const out: number[] = [];
+    for (let t = min(); t <= max() + 1e-9; t += every) out.push(((t - min()) / (max() - min())) * 100);
+    return out;
+  });
+  const before = () => props.tickPosition === "both" || props.tickPosition === (vertical() ? "left" : "above");
+  const after = () => props.tickPosition === "both" || props.tickPosition === (vertical() ? "right" : "below");
+
+  const set = (v: number) => {
+    const snapped = Math.round((v - min()) / step()) * step() + min();
+    const next = Math.min(Math.max(Number(snapped.toFixed(10)), min()), max());
+    if (next !== value()) {
+      setValue(next);
+      props.onChange?.(next);
+    }
+  };
+  const fromPointer = (e: PointerEvent) => {
+    const r = track.getBoundingClientRect();
+    const f = vertical() ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+    return min() + Math.min(Math.max(f, 0), 1) * (max() - min());
+  };
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (props.disabled) return;
+    const v = value();
+    const next =
+      e.key === "ArrowUp" || e.key === "ArrowRight" ? v + step()
+      : e.key === "ArrowDown" || e.key === "ArrowLeft" ? v - step()
+      : e.key === "PageUp" ? v + page()
+      : e.key === "PageDown" ? v - page()
+      : e.key === "Home" ? min()
+      : e.key === "End" ? max()
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    set(next);
+  };
+  const ticks = (side: "before" | "after") => (
+    <div class={`pm-slider__ticks pm-slider__ticks--${side}`} aria-hidden="true">
+      <For each={marks()}>{(m) => <span class="pm-slider__tick" style={vertical() ? `bottom: ${m}%` : `left: ${m}%`} />}</For>
+    </div>
+  );
+
+  return (
+    <div class={["pm-slider", vertical() && "pm-slider--vertical", dragging() && "pm-slider--dragging", props.disabled && "pm-slider--disabled"]}>
+      <Show when={props.label || props.showValue}>
+        <div class="pm-slider__head">
+          <Show when={props.label}><span class="pm-slider__label" id={`pm-slider-${id}-label`}>{props.label}</span></Show>
+          <Show when={props.showValue}><span class="pm-slider__value" aria-hidden="true">{text()}</span></Show>
+        </div>
+      </Show>
+      <div
+        class="pm-slider__control"
+        style={vertical() ? `height: ${props.length || 160}px` : props.length ? `width: ${props.length}px` : undefined}
+        onPointerDown={(e) => {
+          if (props.disabled || e.button !== 0) return;
+          e.preventDefault();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          setDragging(true);
+          set(fromPointer(e));
+          thumb.focus();
+        }}
+        onPointerMove={(e) => dragging() && set(fromPointer(e))}
+        onPointerUp={() => {
+          if (!dragging()) return;
+          setDragging(false);
+          props.onRelease?.(value());
+        }}
+      >
+        <Show when={before()}>{ticks("before")}</Show>
+        <div class="pm-slider__track" ref={track}>
+          <div class="pm-slider__fill" style={vertical() ? `height: ${pct()}%` : `width: ${pct()}%`} />
+          <div
+            ref={thumb}
+            class="pm-slider__thumb"
+            role="slider"
+            tabindex={props.disabled ? -1 : 0}
+            aria-valuemin={min()}
+            aria-valuemax={max()}
+            aria-valuenow={value()}
+            aria-valuetext={props.valueText || props.suffix ? text() : undefined}
+            aria-orientation={vertical() ? "vertical" : "horizontal"}
+            aria-disabled={props.disabled ? "true" : undefined}
+            aria-labelledby={props.label ? `pm-slider-${id}-label` : undefined}
+            aria-label={props.label ? undefined : props.ariaLabel || undefined}
+            style={vertical() ? `bottom: ${pct()}%` : `left: ${pct()}%`}
+            onKeyDown={onKeyDown}
+          />
+        </div>
+        <Show when={after()}>{ticks("after")}</Show>
+      </div>
+    </div>
+  );
+}

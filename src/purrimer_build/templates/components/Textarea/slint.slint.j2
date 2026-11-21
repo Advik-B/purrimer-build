@@ -1,0 +1,75 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export component Textarea inherits VerticalLayout {
+    in property <string> label;
+    in-out property <string> text;
+    in property <string> placeholder;
+    in property <string> caption;
+    in property <string> error;
+    in property <int> rows: {{ c.spec.props.rows.default }};
+    in property <bool> enabled: true;
+    callback edited(string);
+
+    spacing: 4px;
+
+    if root.label != "": Text {
+        text: root.label;
+        color: {{ "fgColor-default" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 14px;
+        font-weight: 600;
+    }
+
+    Rectangle {
+        min-height: max(80px, root.rows * 20px + 12px);
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: root.enabled ? {{ "control-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
+        border-width: input.has-focus ? {{ "borderWidth-thick" | tok }} : {{ "borderWidth-thin" | tok }};
+        border-color: !root.enabled ? {{ "borderColor-default" | tok }} : input.has-focus ? {{ "focus-outlineColor" | tok }} : root.error != "" ? {{ "borderColor-danger-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
+
+        input := TextInput {
+            x: 8px;
+            y: 5px;
+            width: parent.width - 16px;
+            height: parent.height - 10px;
+            text <=> root.text;
+            enabled: root.enabled;
+            single-line: false;
+            wrap: word-wrap;
+            color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
+            selection-background-color: {{ "bgColor-accent-muted" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            accessible-label: root.label;
+            edited => { root.edited(self.text); }
+        }
+        if root.text == "" && !input.has-focus: Text {
+            x: 8px;
+            y: 5px;
+            width: parent.width - 16px;
+            text: root.placeholder;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            wrap: word-wrap;
+        }
+    }
+
+    if root.error != "" || root.caption != "": HorizontalLayout {
+        spacing: 4px;
+        alignment: start;
+        if root.error != "": Icon { path: PurrimerIcons.alert-fill-16; size: 12px; color: {{ "fgColor-danger" | tok }}; y: 2px; }
+        Text {
+            text: root.error != "" ? root.error : root.caption;
+            color: root.error != "" ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-caption" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: root.error != "" ? 600 : 400;
+            wrap: word-wrap;
+        }
+    }
+}

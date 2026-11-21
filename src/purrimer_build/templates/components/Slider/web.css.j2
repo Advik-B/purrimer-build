@@ -1,0 +1,55 @@
+.pm-slider { display: flex; flex-direction: column; gap: 4px; }
+.pm-slider__head { display: flex; justify-content: space-between; gap: 8px; }
+.pm-slider__label { font: 600 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; }
+.pm-slider__value { font: 400 14px/20px var(--font-sans); color: {{ "fgColor-muted" | tok }}; font-variant-numeric: tabular-nums; }
+.pm-slider__control {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 120px;
+  min-height: 28px;
+  padding: 0 8px;
+  touch-action: none;
+  cursor: pointer;
+  user-select: none;
+}
+.pm-slider__track { position: relative; height: 4px; border-radius: {{ "borderRadius-full" | tok }}; background: {{ "controlTrack-bgColor-rest" | tok }}; }
+.pm-slider__fill { position: absolute; left: 0; top: 0; bottom: 0; border-radius: inherit; background: {{ "bgColor-accent-emphasis" | tok }}; }
+.pm-slider__thumb {
+  position: absolute;
+  top: 50%;
+  box-sizing: border-box;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  /* A squircle: a true superellipse where corner-shape is supported, borderRadius-small elsewhere. */
+  border-radius: {{ "borderRadius-small" | tok }};
+  background: {{ "controlKnob-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-resting-small" | tok }};
+  transition: border-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, box-shadow {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+@supports (corner-shape: squircle) {
+  .pm-slider__thumb { border-radius: 50%; corner-shape: squircle; }
+}
+.pm-slider__thumb:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+.pm-slider__control:hover .pm-slider__thumb,
+.pm-slider--dragging .pm-slider__thumb { border-color: {{ "borderColor-accent-emphasis" | tok }}; box-shadow: {{ "shadow-resting-medium" | tok }}; }
+.pm-slider__ticks { position: relative; height: 6px; }
+.pm-slider__ticks--before { margin-bottom: 4px; }
+.pm-slider__ticks--after { margin-top: 4px; }
+.pm-slider__tick { position: absolute; top: 0; width: 1px; height: 6px; margin-left: -0.5px; background: {{ "borderColor-emphasis" | tok }}; }
+.pm-slider--vertical { width: max-content; }
+.pm-slider--vertical .pm-slider__control { flex-direction: row; justify-content: center; min-width: 28px; min-height: 0; width: max-content; padding: 8px 0; }
+.pm-slider--vertical .pm-slider__track { width: 4px; height: 100%; }
+.pm-slider--vertical .pm-slider__fill { top: auto; right: 0; bottom: 0; width: 100%; }
+.pm-slider--vertical .pm-slider__thumb { top: auto; left: 50%; margin: 0 0 -8px -8px; }
+.pm-slider--vertical .pm-slider__ticks { width: 6px; height: auto; }
+.pm-slider--vertical .pm-slider__ticks--before { margin: 0 4px 0 0; }
+.pm-slider--vertical .pm-slider__ticks--after { margin: 0 0 0 4px; }
+.pm-slider--vertical .pm-slider__tick { top: auto; left: 0; width: 6px; height: 1px; margin: 0 0 -0.5px; }
+.pm-slider--disabled .pm-slider__control { cursor: not-allowed; }
+.pm-slider--disabled .pm-slider__fill { background: {{ "fgColor-disabled" | tok }}; }
+.pm-slider--disabled .pm-slider__thumb { border-color: {{ "borderColor-default" | tok }}; background: {{ "bgColor-disabled" | tok }}; box-shadow: none; }

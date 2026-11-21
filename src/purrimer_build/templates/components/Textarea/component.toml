@@ -1,0 +1,39 @@
+name = "Textarea"
+group = "Forms"
+order = 25
+summary = "A multi-line input with the same label, caption and validation rules as TextField."
+
+[props.label]
+type = "string"
+default = ""
+doc = "Label above the field."
+
+[props.value]
+type = "string"
+default = ""
+doc = "Current text."
+
+[props.placeholder]
+type = "string"
+default = ""
+doc = "Hint shown while empty."
+
+[props.caption]
+type = "string"
+default = ""
+doc = "Helper text under the field."
+
+[props.error]
+type = "string"
+default = ""
+doc = "Validation message; marks the field invalid."
+
+[props.rows]
+type = "int"
+default = 3
+doc = "Visible lines; the field is never shorter than 80px."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Read-only and greyed."

@@ -1,0 +1,233 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPen
+from PySide6.QtWidgets import QAbstractSlider, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+
+from ..theme import theme
+
+THUMB = 16
+TRACK = 4
+TICK = 6
+TICK_GAP = 4
+PAD = 8
+
+
+class _Bar(QAbstractSlider):
+    """The track, fill, ticks and thumb, painted by Purrimer; QAbstractSlider keeps the value and the keyboard."""
+
+    def __init__(self, orientation: Qt.Orientation, ticks: str, interval: int, length: int,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setOrientation(orientation)
+        self._ticks = ticks
+        self._interval = interval
+        self._length = length
+        self._hover = False
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        vertical = orientation == Qt.Orientation.Vertical
+        if vertical:
+            self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed if length else
+                               QSizePolicy.Policy.Expanding)
+        else:
+            self.setSizePolicy(QSizePolicy.Policy.Fixed if length else QSizePolicy.Policy.Expanding,
+                               QSizePolicy.Policy.Fixed)
+        self.valueChanged.connect(self.update)
+        theme.changed.connect(self.update)
+
+    def _before(self) -> bool:
+        return self._ticks in ("both", "left" if self.orientation() == Qt.Orientation.Vertical else "above")
+
+    def _after(self) -> bool:
+        return self._ticks in ("both", "right" if self.orientation() == Qt.Orientation.Vertical else "below")
+
+    def _depth(self) -> int:
+        """Size across the track; tick rows sit inside it, 4px from the track."""
+        return 28
+
+    def sizeHint(self) -> QSize:
+        if self.orientation() == Qt.Orientation.Vertical:
+            return QSize(self._depth(), self._length or 160)
+        return QSize(self._length or 240, self._depth())
+
+    def minimumSizeHint(self) -> QSize:
+        if self.orientation() == Qt.Orientation.Vertical:
+            return QSize(self._depth(), self._length or 80)
+        return QSize(self._length or 120, self._depth())
+
+    def _span(self) -> tuple[float, float]:
+        """Start and length of the track along its axis, inside the 8px padding."""
+        size = self.height() if self.orientation() == Qt.Orientation.Vertical else self.width()
+        return PAD, max(1.0, size - PAD * 2)
+
+    def _fraction(self) -> float:
+        span = self.maximum() - self.minimum()
+        return (self.value() - self.minimum()) / span if span else 0.0
+
+    def _centre(self) -> float:
+        """Position of the track's centre line across the widget: the track and its tick rows are centred together."""
+        before, after = int(self._before()), int(self._after())
+        group = TRACK + (TICK + TICK_GAP) * (before + after)
+        return (self._depth() - group) / 2 + (TICK + TICK_GAP) * before + TRACK / 2
+
+    def _value_at(self, pos: QPointF) -> int:
+        start, length = self._span()
+        if self.orientation() == Qt.Orientation.Vertical:
+            f = 1 - (pos.y() - start) / length
+        else:
+            f = (pos.x() - start) / length
+        f = min(max(f, 0.0), 1.0)
+        raw = self.minimum() + f * (self.maximum() - self.minimum())
+        step = max(1, self.singleStep())
+        return min(self.maximum(), self.minimum() + round((raw - self.minimum()) / step) * step)
+
+    def event(self, event: QEvent) -> bool:
+        if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.HoverLeave):
+            self._hover = event.type() == QEvent.Type.HoverEnter
+            self.update()
+        return super().event(event)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return super().mousePressEvent(event)
+        self.setSliderDown(True)
+        self.setValue(self._value_at(event.position()))
+        self.update()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self.isSliderDown():
+            self.setValue(self._value_at(event.position()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self.isSliderDown():
+            self.setSliderDown(False)
+            self.update()
+
+    def _paint_ticks(self, painter: QPainter, across: float) -> None:
+        interval = self._interval or self.pageStep() or 1
+        start, length = self._span()
+        span = self.maximum() - self.minimum()
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "borderColor-emphasis" | tok }}))
+        value = self.minimum()
+        while value <= self.maximum() and span > 0:
+            along = start + (value - self.minimum()) / span * length
+            if self.orientation() == Qt.Orientation.Vertical:
+                painter.drawRect(QRectF(across, start + length - (along - start) - 0.5, TICK, 1))
+            else:
+                painter.drawRect(QRectF(along - 0.5, across, 1, TICK))
+            value += interval
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        vertical = self.orientation() == Qt.Orientation.Vertical
+        enabled = self.isEnabled()
+        start, length = self._span()
+        centre = self._centre()
+        if self._before():
+            self._paint_ticks(painter, centre - TRACK / 2 - TICK_GAP - TICK)
+        if self._after():
+            self._paint_ticks(painter, centre + TRACK / 2 + TICK_GAP)
+        along = start + self._fraction() * length
+        if vertical:
+            track = QRectF(centre - TRACK / 2, start, TRACK, length)
+            fill = QRectF(centre - TRACK / 2, start + length - (along - start), TRACK, along - start)
+            thumb_centre = QPointF(centre, start + length - (along - start))
+        else:
+            track = QRectF(start, centre - TRACK / 2, length, TRACK)
+            fill = QRectF(start, centre - TRACK / 2, along - start, TRACK)
+            thumb_centre = QPointF(along, centre)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "controlTrack-bgColor-rest" | tok }}))
+        painter.drawRoundedRect(track, TRACK / 2, TRACK / 2)
+        painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }} if enabled else {{ "fgColor-disabled" | tok }}))
+        painter.drawRoundedRect(fill, TRACK / 2, TRACK / 2)
+        thumb = QRectF(thumb_centre.x() - THUMB / 2, thumb_centre.y() - THUMB / 2, THUMB, THUMB)
+        radius = {{ px("borderRadius-small") | num }}
+        active = enabled and (self._hover or self.isSliderDown())
+        if enabled:
+            shadow = {{ "shadow-resting-medium" | tok }} if active else {{ "shadow-resting-small" | tok }}
+            for layer in theme.shadow_layers(shadow):
+                if layer["inset"]:
+                    continue
+                color = QColor(layer["color"])
+                if layer["blur"]:
+                    color.setAlphaF(color.alphaF() * 0.6)
+                painter.setBrush(color)
+                grow = layer["spread"] + min(layer["blur"], 2) / 2
+                painter.drawRoundedRect(thumb.translated(layer["x"], layer["y"]).adjusted(-grow, -grow, grow, grow),
+                                        radius + grow, radius + grow)
+        if not enabled:
+            border, knob = {{ "borderColor-default" | tok }}, {{ "bgColor-disabled" | tok }}
+        elif active:
+            border, knob = {{ "borderColor-accent-emphasis" | tok }}, {{ "controlKnob-bgColor-rest" | tok }}
+        else:
+            border, knob = {{ "control-borderColor-rest" | tok }}, {{ "controlKnob-bgColor-rest" | tok }}
+        painter.setPen(QPen(theme.color(border), 1))
+        painter.setBrush(theme.color(knob))
+        painter.drawRoundedRect(thumb.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+        if self.hasFocus() and enabled:
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(thumb.adjusted(-3, -3, 3, 3), radius + 3, radius + 3)
+
+
+class Slider(QWidget):
+    """A labelled slider with an optional value read-out."""
+
+    valueChanged = Signal(int)
+    sliderReleased = Signal()
+
+    def __init__(self, label: str = "", value: int = {{ c.spec.props.value.default }}, minimum: int = {{ c.spec.props.min.default }},
+                 maximum: int = {{ c.spec.props.max.default }}, step: int = {{ c.spec.props.step.default }}, page_step: int = {{ c.spec.props.pageStep.default }},
+                 orientation: str = "horizontal", tick_position: str = "none", tick_interval: int = 0, length: int = 0,
+                 show_value: bool = False, suffix: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._suffix = suffix
+        vertical = orientation == "vertical"
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(4)
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        self.label = QLabel(label)
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setBold(True)
+        self.label.setFont(font)
+        self.value_label = QLabel()
+        self.value_label.setProperty("role", "muted")
+        head.addWidget(self.label)
+        head.addStretch()
+        head.addWidget(self.value_label)
+        self.bar = _Bar(Qt.Orientation.Vertical if vertical else Qt.Orientation.Horizontal, tick_position,
+                        tick_interval, length)
+        self.bar.setRange(minimum, maximum)
+        self.bar.setSingleStep(step)
+        self.bar.setPageStep(page_step)
+        self.bar.setValue(value)
+        self.bar.setAccessibleName(label)
+        self.label.setVisible(bool(label))
+        self.value_label.setVisible(show_value)
+        if label or show_value:
+            layout.addLayout(head)
+        layout.addWidget(self.bar)
+        self.bar.valueChanged.connect(self._changed)
+        self.bar.sliderReleased.connect(self.sliderReleased)
+        self._changed(self.bar.value())
+
+    def _changed(self, value: int) -> None:
+        self.value_label.setText(f"{value}{self._suffix}")
+        self.valueChanged.emit(value)
+
+    def value(self) -> int:
+        return self.bar.value()
+
+    def set_value(self, value: int) -> None:
+        self.bar.setValue(value)

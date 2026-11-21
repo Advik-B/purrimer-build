@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="16">
+    <pm:Textarea Label="Bio" PlaceholderText="Tell us a little about yourself" Caption="Shown on your public profile." />
+    <pm:Textarea Label="Why are you closing this?" Rows="2" Error="Add a short reason." />
+  </StackPanel>
+</UserControl>
