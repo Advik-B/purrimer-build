@@ -11,12 +11,12 @@ def example() -> QWidget:
     layout.addStretch()
 
     # The sheet draws over its parent, so give it the screen widget.
-    sheet = BottomSheet(screen, "Share", sheet_height=200)
+    sheet = BottomSheet(screen, "Share", "Photo.jpg, 2.4 MB")
     note = QLabel("Anyone with the link can view this photo.")
     note.setWordWrap(True)
     sheet.body.addWidget(note)
     copy = Button("Copy link", "primary", block=True)
     copy.clicked.connect(sheet.close_sheet)
-    sheet.body.addWidget(copy)
+    sheet.add_action(copy)
     QTimer.singleShot(0, sheet.open)  # open once the screen is shown and has its size
     return screen

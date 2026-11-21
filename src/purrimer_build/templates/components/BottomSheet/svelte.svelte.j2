@@ -2,58 +2,182 @@
 <!-- {{ c.summary }} -->
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { Spring, VelocityTracker, buzz, motionKind, reducedMotion, rubberBand, springs } from "../motion";
 
-  let { open = $bindable(false), title = "", onclose, children }: { open?: boolean; title?: string; onclose?: () => void; children?: Snippet } = $props();
+  let {
+    open = $bindable(false),
+    title = "",
+    description = "",
+    size = "auto",
+    dismissible = true,
+    grabber = true,
+    inline = false,
+    ariaLabel = "",
+    onclose,
+    children,
+    actions,
+  }: {
+    open?: boolean;
+    title?: string;
+    description?: string;
+    size?: "auto" | "half" | "full";
+    dismissible?: boolean;
+    grabber?: boolean;
+    inline?: boolean;
+    ariaLabel?: string;
+    onclose?: () => void;
+    children?: Snippet;
+    actions?: Snippet;
+  } = $props();
 
   const DISMISS = 96;
+  const FLICK = 600;
+  const titleId = `pm-sheet-${Math.random().toString(36).slice(2)}`;
+
+  let phase: "closed" | "open" | "closing" = $state("closed");
   let offset = $state(0);
-  let startY = 0;
+  let sprung = $state(false);
   let dragging = $state(false);
+  let sheet: HTMLElement | undefined = $state();
+  let lastFocus: HTMLElement | null = null;
+  let grab: { y: number; base: number; id: number; armed: boolean } | null = null;
+  let release = 0;
+  let timer = 0;
+  const tracker = new VelocityTracker();
+  const spring = new Spring(0, (v) => (offset = v), springs.sleepy, 0.5);
+
+  const height = () => sheet?.offsetHeight || 400;
+
+  function finish() {
+    phase = "closed";
+    sprung = false;
+    spring.set(0);
+    lastFocus?.focus({ preventScroll: true });
+    lastFocus = null;
+  }
+
+  $effect(() => {
+    if (inline) return;
+    if (open && phase !== "open") {
+      clearTimeout(timer);
+      spring.stop();
+      lastFocus = document.activeElement as HTMLElement | null;
+      sprung = false;
+      offset = 0;
+      phase = "open";
+    } else if (!open && phase === "open") {
+      phase = "closing";
+      if (sprung) {
+        spring.config = springs[motionKind(sheet ?? null)];
+        spring.to(height(), release);
+        spring.onSettleOnce(finish);
+      } else {
+        timer = window.setTimeout(finish, reducedMotion() ? {{ ms("duration-reduced") }} : {{ ms("duration-sleepy-exit") }});
+      }
+    }
+  });
+
+  $effect(() => {
+    if (phase === "open" && sheet) sheet.focus({ preventScroll: true });
+  });
 
   function close() {
+    if (!dismissible || !open) return;
     open = false;
-    offset = 0;
     onclose?.();
   }
 
   function down(e: PointerEvent) {
-    dragging = true;
-    startY = e.clientY;
+    if (!dismissible || e.button > 0) return;
+    spring.stop();
+    grab = { y: e.clientY, base: sprung ? offset : 0, id: e.pointerId, armed: false };
+    tracker.reset();
+    tracker.add(0, e.clientY);
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   }
 
   function move(e: PointerEvent) {
-    if (dragging) offset = Math.max(0, e.clientY - startY);
+    if (!grab || grab.id !== e.pointerId) return;
+    tracker.add(0, e.clientY);
+    let next = grab.base + e.clientY - grab.y;
+    if (!dragging && Math.abs(next - grab.base) < 2) return;
+    dragging = true;
+    sprung = true;
+    if (next < 0) next = rubberBand(next, height());
+    if (next > DISMISS !== grab.armed) {
+      grab.armed = next > DISMISS;
+      if (grab.armed) buzz();
+    }
+    spring.set(next);
   }
 
-  function up() {
+  function up(e: PointerEvent) {
+    if (!grab || grab.id !== e.pointerId) return;
+    grab = null;
+    const velocity = tracker.velocity().y;
+    const wasDragging = dragging;
     dragging = false;
-    if (offset > DISMISS) close();
-    else offset = 0;
+    if (!wasDragging) return;
+    spring.config = springs[motionKind(sheet ?? null)];
+    if (offset > DISMISS || (offset > 24 && velocity > FLICK)) {
+      release = velocity;
+      close();
+      if (open) spring.to(0, velocity);
+    } else {
+      spring.to(0, velocity);
+    }
   }
 
   function onkeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") close();
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      close();
+    }
   }
 </script>
 
-<svelte:window onkeydown={open ? onkeydown : undefined} />
+{#snippet content()}
+  <!-- The drag handle is a pointer-only affordance; Escape and the scrim close the sheet from the keyboard. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class={["pm-sheet__handle", dismissible && !inline && "pm-sheet__handle--drag"]}
+    onpointerdown={inline ? undefined : down}
+    onpointermove={inline ? undefined : move}
+    onpointerup={inline ? undefined : up}
+    onpointercancel={inline ? undefined : up}
+  >
+    {#if grabber}<span class="pm-sheet__grabber" aria-hidden="true"></span>{/if}
+    {#if title}
+      <div class="pm-sheet__head">
+        <h2 class="pm-sheet__title" id={titleId}>{title}</h2>
+        {#if description}<p class="pm-sheet__desc">{description}</p>{/if}
+      </div>
+    {/if}
+  </div>
+  <div class="pm-sheet__body">{@render children?.()}</div>
+  {#if actions}<div class="pm-sheet__actions">{@render actions()}</div>{/if}
+{/snippet}
 
-{#if open}
-  <div class="pm-sheet-scrim" role="presentation" style:opacity={1 - Math.min(offset / 300, 0.6)} onclick={(e) => e.target === e.currentTarget && close()}>
+{#if inline}
+  <div class={["pm-sheet", "pm-sheet--inline", size !== "auto" && `pm-sheet--${size}`]} role="dialog" aria-labelledby={title ? titleId : undefined} aria-label={title ? undefined : ariaLabel || undefined}>
+    {@render content()}
+  </div>
+{:else if phase !== "closed"}
+  <div class={["pm-sheet-layer", phase === "closing" && "pm-sheet-layer--closing"]}>
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="pm-sheet-scrim" aria-hidden="true" style:opacity={sprung ? Math.max(0, 1 - offset / height()) : undefined} onclick={close}></div>
     <div
-      class="pm-sheet"
+      bind:this={sheet}
+      class={["pm-sheet", size !== "auto" && `pm-sheet--${size}`, sprung && "pm-sheet--sprung", dragging && "pm-sheet--dragging"]}
       role="dialog"
       aria-modal="true"
-      aria-label={title || undefined}
-      style:translate="0 {offset}px"
-      style:transition={dragging ? "none" : "translate {{ 'duration-slow' | tok }} {{ 'easing-sleepy-move' | tok }}"}
+      aria-labelledby={title ? titleId : undefined}
+      aria-label={title ? undefined : ariaLabel || undefined}
+      tabindex="-1"
+      style:translate={sprung ? `0 ${offset}px` : undefined}
+      {onkeydown}
     >
-      <div class="pm-sheet__handle" role="button" tabindex="0" aria-label="Close" onpointerdown={down} onpointermove={move} onpointerup={up} onpointercancel={up} onkeydown={(e) => (e.key === "Enter" || e.key === " ") && close()}>
-        <span class="pm-sheet__grabber"></span>
-      </div>
-      {#if title}<h2 class="pm-sheet__title">{title}</h2>{/if}
-      <div class="pm-sheet__body">{@render children?.()}</div>
+      {@render content()}
     </div>
   </div>
 {/if}

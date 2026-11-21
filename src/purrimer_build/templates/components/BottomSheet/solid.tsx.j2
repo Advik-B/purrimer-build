@@ -2,72 +2,181 @@
 // {{ c.summary }}
 import { Show, createEffect, createSignal } from "solid-js";
 import { Portal, type JSX } from "@solidjs/web";
+import { Spring, VelocityTracker, buzz, motionKind, reducedMotion, rubberBand, springs } from "../motion";
 
 const DISMISS = 96;
+const FLICK = 600;
 
-export type BottomSheetProps = { open: boolean; title?: string; onClose: () => void; children?: JSX.Element };
+export type BottomSheetProps = {
+  open: boolean;
+  title?: string;
+  description?: string;
+  size?: "auto" | "half" | "full";
+  dismissible?: boolean;
+  grabber?: boolean;
+  inline?: boolean;
+  ariaLabel?: string;
+  onClose?: () => void;
+  children?: JSX.Element;
+  actions?: JSX.Element;
+};
 
 export function BottomSheet(props: BottomSheetProps): JSX.Element {
+  const titleId = `pm-sheet-${Math.random().toString(36).slice(2)}`;
+  const [phase, setPhase] = createSignal<"closed" | "open" | "closing">("closed");
   const [offset, setOffset] = createSignal(0);
+  const [sprung, setSprung] = createSignal(false);
   const [dragging, setDragging] = createSignal(false);
-  let startY = 0;
+  let sheet: HTMLDivElement | undefined;
+  let lastFocus: HTMLElement | null = null;
+  let grab: { y: number; base: number; id: number; armed: boolean } | null = null;
+  let release = 0;
+  let timer = 0;
+  const tracker = new VelocityTracker();
+  const spring = new Spring(0, (v) => setOffset(v), springs.sleepy, 0.5);
+  const dismissible = () => props.dismissible !== false;
+  const height = () => sheet?.offsetHeight || 400;
+  const sizeClass = () => (props.size && props.size !== "auto" ? ` pm-sheet--${props.size}` : "");
 
-  const close = () => {
-    setOffset(0);
-    props.onClose();
-  };
-  const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+  function finish() {
+    setPhase("closed");
+    setSprung(false);
+    spring.set(0);
+    lastFocus?.focus({ preventScroll: true });
+    lastFocus = null;
+  }
 
   createEffect(
-    () => props.open,
+    () => !props.inline && props.open,
     (open) => {
-      if (!open) return;
+      if (open && phase() !== "open") {
+        clearTimeout(timer);
+        spring.stop();
+        lastFocus = document.activeElement as HTMLElement | null;
+        setSprung(false);
+        setOffset(0);
+        setPhase("open");
+        queueMicrotask(() => sheet?.focus({ preventScroll: true }));
+      } else if (!open && phase() === "open") {
+        setPhase("closing");
+        if (sprung()) {
+          spring.config = springs[motionKind(sheet ?? null)];
+          spring.to(height(), release);
+          spring.onSettleOnce(finish);
+        } else {
+          timer = window.setTimeout(finish, reducedMotion() ? {{ ms("duration-reduced") }} : {{ ms("duration-sleepy-exit") }});
+        }
+      }
+    },
+  );
+
+  createEffect(
+    () => phase() === "open",
+    (active) => {
+      if (!active) return;
+      const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
       window.addEventListener("keydown", onKey);
       return () => window.removeEventListener("keydown", onKey);
+    },
+  );
+
+  function close() {
+    if (!dismissible() || !props.open) return;
+    props.onClose?.();
+  }
+
+  function down(e: PointerEvent) {
+    if (!dismissible() || e.button > 0) return;
+    spring.stop();
+    grab = { y: e.clientY, base: sprung() ? offset() : 0, id: e.pointerId, armed: false };
+    tracker.reset();
+    tracker.add(0, e.clientY);
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+
+  function move(e: PointerEvent) {
+    if (!grab || grab.id !== e.pointerId) return;
+    tracker.add(0, e.clientY);
+    let next = grab.base + e.clientY - grab.y;
+    if (!dragging() && Math.abs(next - grab.base) < 2) return;
+    setDragging(true);
+    setSprung(true);
+    if (next < 0) next = rubberBand(next, height());
+    if (next > DISMISS !== grab.armed) {
+      grab.armed = next > DISMISS;
+      if (grab.armed) buzz();
     }
+    spring.set(next);
+  }
+
+  function up(e: PointerEvent) {
+    if (!grab || grab.id !== e.pointerId) return;
+    grab = null;
+    const velocity = tracker.velocity().y;
+    const wasDragging = dragging();
+    setDragging(false);
+    if (!wasDragging) return;
+    spring.config = springs[motionKind(sheet ?? null)];
+    if (offset() > DISMISS || (offset() > 24 && velocity > FLICK)) {
+      release = velocity;
+      close();
+      // A parent that keeps the sheet open gets it back.
+      queueMicrotask(() => props.open && spring.to(0, velocity));
+    } else {
+      spring.to(0, velocity);
+    }
+  }
+
+  const content = () => (
+    <>
+      <div
+        class={dismissible() && !props.inline ? "pm-sheet__handle pm-sheet__handle--drag" : "pm-sheet__handle"}
+        onPointerDown={props.inline ? undefined : down}
+        onPointerMove={props.inline ? undefined : move}
+        onPointerUp={props.inline ? undefined : up}
+        onPointerCancel={props.inline ? undefined : up}
+      >
+        <Show when={props.grabber !== false}><span class="pm-sheet__grabber" aria-hidden="true" /></Show>
+        <Show when={props.title}>
+          <div class="pm-sheet__head">
+            <h2 class="pm-sheet__title" id={titleId}>{props.title}</h2>
+            <Show when={props.description}><p class="pm-sheet__desc">{props.description}</p></Show>
+          </div>
+        </Show>
+      </div>
+      <div class="pm-sheet__body">{props.children}</div>
+      <Show when={props.actions}><div class="pm-sheet__actions">{props.actions}</div></Show>
+    </>
   );
 
   return (
-    <Show when={props.open}>
-      <Portal>
-        <div
-          class="pm-sheet-scrim"
-          role="presentation"
-          style={ { opacity: 1 - Math.min(offset() / 300, 0.6) } }
-          onClick={(e) => e.target === e.currentTarget && close()}
-        >
-          <div
-            class="pm-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-label={props.title || undefined}
-            style={ { translate: `0 ${offset()}px`, transition: dragging() ? "none" : "translate {{ 'duration-slow' | tok }} {{ 'easing-sleepy-move' | tok }}" } }
-          >
-            <div
-              class="pm-sheet__handle"
-              role="button"
-              tabindex="0"
-              aria-label="Close"
-              onPointerDown={(e) => {
-                setDragging(true);
-                startY = e.clientY;
-                e.currentTarget.setPointerCapture(e.pointerId);
-              }}
-              onPointerMove={(e) => dragging() && setOffset(Math.max(0, e.clientY - startY))}
-              onPointerUp={() => {
-                setDragging(false);
-                if (offset() > DISMISS) close();
-                else setOffset(0);
-              }}
-              onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && close()}
-            >
-              <span class="pm-sheet__grabber" />
-            </div>
-            <Show when={props.title}><h2 class="pm-sheet__title">{props.title}</h2></Show>
-            <div class="pm-sheet__body">{props.children}</div>
-          </div>
+    <Show
+      when={!props.inline}
+      fallback={
+        <div class={`pm-sheet pm-sheet--inline${sizeClass()}`} role="dialog" aria-labelledby={props.title ? titleId : undefined} aria-label={props.title ? undefined : props.ariaLabel || undefined}>
+          {content()}
         </div>
-      </Portal>
+      }
+    >
+      <Show when={phase() !== "closed"}>
+        <Portal>
+          <div class={phase() === "closing" ? "pm-sheet-layer pm-sheet-layer--closing" : "pm-sheet-layer"}>
+            <div class="pm-sheet-scrim" aria-hidden="true" style={ { opacity: sprung() ? Math.max(0, 1 - offset() / height()) : undefined } } onClick={close} />
+            <div
+              ref={sheet}
+              class={`pm-sheet${sizeClass()}${sprung() ? " pm-sheet--sprung" : ""}${dragging() ? " pm-sheet--dragging" : ""}`}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby={props.title ? titleId : undefined}
+              aria-label={props.title ? undefined : props.ariaLabel || undefined}
+              tabindex="-1"
+              style={ { translate: sprung() ? `0 ${offset()}px` : undefined } }
+            >
+              {content()}
+            </div>
+          </div>
+        </Portal>
+      </Show>
     </Show>
   );
 }

@@ -1,7 +1,8 @@
 name = "BottomSheet"
 group = "Mobile"
 order = 52
-summary = "A sheet that rises from the bottom over a scrim; drag it down or tap the scrim to close."
+summary = "A sheet that rises from the bottom over a scrim; drag it down, tap the scrim or press Escape to close."
+slint_exports = ["BottomSheet", "BottomSheetAction"]
 
 [props.open]
 type = "bool"
@@ -12,3 +13,29 @@ doc = "Whether the sheet is shown."
 type = "string"
 default = ""
 doc = "Sheet title."
+
+[props.description]
+type = "string"
+default = ""
+doc = "A line under the title in fgColor-muted."
+
+[props.size]
+type = "enum"
+default = "auto"
+doc = "auto fits the content; half and full set the height."
+values = ["auto", "half", "full"]
+
+[props.dismissible]
+type = "bool"
+default = true
+doc = "Dragging, the scrim and Escape close the sheet. Off, only an action closes it."
+
+[props.grabber]
+type = "bool"
+default = true
+doc = "Shows the drag handle."
+
+[props.inline]
+type = "bool"
+default = false
+doc = "Draws the sheet in place with no scrim, for docs and previews."

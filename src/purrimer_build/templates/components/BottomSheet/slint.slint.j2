@@ -1,81 +1,199 @@
 // {{ note }}
 // {{ c.summary }}
-import { Purrimer, PurrimerMotion } from "../purrimer.slint";
-import { PurrimerIcons } from "../icons.slint";
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { Button } from "button.slint";
 
-// Place it last in the window so it covers the screen; it shows while open is true.
+// A full-width button under the body. variant is "default", "primary" or "danger"; put the accepting one last.
+export struct BottomSheetAction {
+    label: string,
+    variant: string,
+}
+
+// Place it last in the window so it covers the screen; it shows while open is true. With inline it is drawn in place
+// with no scrim, for docs and previews.
 export component BottomSheet inherits Rectangle {
     in-out property <bool> open;
     in property <string> title;
-    in property <length> sheet-height: 320px;
+    in property <string> description;
+    in property <[BottomSheetAction]> actions;
+    // "auto" fits the content; "half" and "full" set the height.
+    in property <string> size: "auto";
+    in property <bool> dismissible: true;
+    in property <bool> grabber: true;
+    in property <bool> inline;
     callback closed();
-    property <length> drag-offset;
-    property <bool> dragging: handle.pressed;
+    callback action(int);
+    property <bool> sprung;
+    property <length> limit: root.height - 48px;
+    property <length> natural: min(column.preferred-height, root.limit);
+    property <length> grab-base;
+    property <length> last-y;
+    property <duration> last-t;
+    property <float> velocity;
 
-    visible: open || sheet.y < root.height;
-    background: open ? {{ "overlay-backdrop-bgColor" | tok }} : transparent;
-    animate background { duration: {{ "duration-slow" | tok }}; }
+    visible: root.inline || root.open || root.sprung || sheet.y < root.height;
+    preferred-height: root.inline ? column.preferred-height : 0px;
+    min-height: root.inline ? column.preferred-height : 0px;
 
-    function close() {
-        root.open = false;
-        root.drag-offset = 0px;
-        root.closed();
+    public function close() {
+        if root.open {
+            root.open = false;
+            root.closed();
+        }
     }
 
-    TouchArea { enabled: root.open; clicked => { root.close(); } }
+    function dismiss(velocity: float) {
+        if root.dismissible {
+            root.sprung = true;
+            drag.to(sheet.height / 1px + 32, velocity);
+            root.close();
+        }
+    }
+
+    drag := PmSpring {
+        precision: 0.5;
+        settled => {
+            if !root.open {
+                root.sprung = false;
+                self.set(0);
+            }
+        }
+    }
+
+    if !root.inline: Rectangle {
+        background: {{ "overlay-backdrop-bgColor" | tok }};
+        opacity: root.sprung ? Math.max(0, 1 - Math.max(drag.value, 0) / Math.max(sheet.height / 1px, 1)) : root.open ? 1 : 0;
+        animate opacity { duration: root.sprung ? 0ms : {{ "duration-slow" | tok }}; }
+    }
+
+    if !root.inline && root.open: TouchArea {
+        clicked => {
+            if root.dismissible {
+                root.close();
+            }
+        }
+    }
 
     sheet := Rectangle {
-        width: min(parent.width, {{ "mobile-sheet-maxWidth" | tok }});
-        height: root.sheet-height;
+        width: root.inline ? parent.width : min(parent.width, {{ "mobile-sheet-maxWidth" | tok }});
+        height: root.inline ? column.preferred-height : root.size == "half" ? root.height / 2 : root.size == "full" ? root.limit : root.natural;
         x: (parent.width - self.width) / 2;
-        y: root.open ? parent.height - self.height + root.drag-offset : parent.height;
+        y: root.inline ? 0px
+            : root.sprung ? parent.height - self.height + Math.max(drag.value, -48) * 1px
+            : root.open ? parent.height - self.height
+            : parent.height + 32px;
         animate y {
-            duration: root.dragging ? 0ms : {{ "duration-slow" | tok }};
-            easing: {{ "easing-sleepy-enter" | tok }};
+            duration: root.sprung || root.inline ? 0ms : root.open ? {{ "duration-slow" | tok }} : {{ "duration-sleepy-exit" | tok }};
+            easing: root.open ? {{ "easing-sleepy-enter" | tok }} : {{ "easing-sleepy-exit" | tok }};
         }
         background: {{ "overlay-bgColor" | tok }};
         border-top-left-radius: {{ "borderRadius-xlarge" | tok }};
         border-top-right-radius: {{ "borderRadius-xlarge" | tok }};
+        border-bottom-left-radius: root.inline ? {{ "borderRadius-xlarge" | tok }} : 0px;
+        border-bottom-right-radius: root.inline ? {{ "borderRadius-xlarge" | tok }} : 0px;
         border-width: {{ "borderWidth-thin" | tok }};
         border-color: {{ "borderColor-default" | tok }};
-        drop-shadow-offset-y: {{ "shadow-floating-large" | tok }}.offset-y;
-        drop-shadow-blur: {{ "shadow-floating-large" | tok }}.blur;
-        drop-shadow-color: {{ "shadow-floating-large" | tok }}.color;
+        drop-shadow-offset-y: root.inline ? {{ "shadow-floating-small" | tok }}.offset-y : {{ "shadow-floating-large" | tok }}.offset-y;
+        drop-shadow-blur: root.inline ? {{ "shadow-floating-small" | tok }}.blur : {{ "shadow-floating-large" | tok }}.blur;
+        drop-shadow-color: root.inline ? {{ "shadow-floating-small" | tok }}.color : {{ "shadow-floating-large" | tok }}.color;
+        clip: root.size != "auto";
         accessible-role: groupbox;
         accessible-label: root.title;
 
         TouchArea { }
 
-        VerticalLayout {
-            handle-box := Rectangle {
-                height: 24px;
-                Rectangle { width: 36px; height: 4px; border-radius: 2px; background: {{ "borderColor-emphasis" | tok }}; }
-                handle := TouchArea {
-                    mouse-cursor: grab;
-                    moved => { root.drag-offset = max(0px, self.mouse-y - self.pressed-y); }
-                    pointer-event(event) => {
-                        if (event.kind == PointerEventKind.up) {
-                            if (root.drag-offset > 96px) { root.close(); } else { root.drag-offset = 0px; }
-                        }
+        column := VerticalLayout {
+            alignment: start;
+            handle-box := VerticalLayout {
+                padding-top: 8px;
+                if root.grabber: HorizontalLayout {
+                    alignment: center;
+                    padding-bottom: 8px;
+                    Rectangle { width: 36px; height: 5px; border-radius: 2.5px; background: {{ "borderColor-emphasis" | tok }}; }
+                }
+                if root.title != "": VerticalLayout {
+                    padding-left: {{ "mobile-gutter" | tok }};
+                    padding-right: {{ "mobile-gutter" | tok }};
+                    padding-top: 4px;
+                    padding-bottom: 12px;
+                    spacing: 4px;
+                    Text {
+                        text: root.title;
+                        wrap: word-wrap;
+                        color: {{ "fgColor-default" | tok }};
+                        font-family: {{ "text-mobile-title" | tok }}.font-family;
+                        font-size: {{ "text-mobile-title" | tok }}.font-size;
+                        font-weight: {{ "text-mobile-title" | tok }}.font-weight;
+                        accessible-role: text;
+                    }
+                    if root.description != "": Text {
+                        text: root.description;
+                        wrap: word-wrap;
+                        color: {{ "fgColor-muted" | tok }};
+                        font-family: {{ "text-body-medium" | tok }}.font-family;
+                        font-size: 14px;
                     }
                 }
             }
-            if root.title != "": HorizontalLayout {
-                padding-left: {{ "mobile-gutter" | tok }};
-                Text {
-                    text: root.title;
-                    color: {{ "fgColor-default" | tok }};
-                    font-family: {{ "text-mobile-title" | tok }}.font-family;
-                    font-size: {{ "text-mobile-title" | tok }}.font-size;
-                    font-weight: {{ "text-mobile-title" | tok }}.font-weight;
-                }
-            }
             VerticalLayout {
+                vertical-stretch: 1;
                 padding-left: {{ "mobile-gutter" | tok }};
                 padding-right: {{ "mobile-gutter" | tok }};
-                padding-top: 8px;
-                padding-bottom: {{ "mobile-gutter" | tok }};
+                padding-bottom: 16px;
                 @children
+            }
+            if root.actions.length > 0: Rectangle {
+                Rectangle { y: 0; height: {{ "borderWidth-thin" | tok }}; background: {{ "borderColor-muted" | tok }}; }
+                VerticalLayout {
+                    padding-left: {{ "mobile-gutter" | tok }};
+                    padding-right: {{ "mobile-gutter" | tok }};
+                    padding-top: 12px;
+                    padding-bottom: 16px;
+                    spacing: 8px;
+                    for item[i] in root.actions: Button {
+                        text: item.label;
+                        variant: item.variant == "" ? "default" : item.variant;
+                        clicked => { root.action(i); }
+                    }
+                }
+            }
+        }
+
+        // The grabber and the heading are the drag handle.
+        TouchArea {
+            y: 0;
+            height: handle-box.height;
+            enabled: root.dismissible && !root.inline && root.open;
+            mouse-cursor: self.pressed ? grabbing : grab;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    drag.stop();
+                    root.grab-base = root.sprung ? drag.value * 1px : 0px;
+                    root.sprung = true;
+                    root.velocity = 0;
+                    root.last-y = root.grab-base;
+                    root.last-t = animation-tick();
+                    drag.set(root.grab-base / 1px);
+                } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    let offset = drag.value;
+                    if offset > 96 || (offset > 24 && root.velocity > 600) {
+                        root.dismiss(root.velocity);
+                    } else {
+                        drag.to(0, root.velocity);
+                    }
+                }
+            }
+            moved => {
+                let next = root.grab-base + self.mouse-y - self.pressed-y;
+                // Slint reports no pointer velocity, so it is measured between moves.
+                let now = animation-tick();
+                let dt = (now - root.last-t) / 1s;
+                if dt > 0 {
+                    root.velocity = (next - root.last-y) / 1px / dt;
+                }
+                root.last-y = next;
+                root.last-t = now;
+                drag.set((next < 0px ? PurrimerMotion.rubber-band(next, sheet.height) : next) / 1px);
             }
         }
     }

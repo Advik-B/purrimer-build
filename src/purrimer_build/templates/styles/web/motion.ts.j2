@@ -31,13 +31,13 @@ export class Spring {
   target: number;
   private frame = 0;
   private last = 0;
+  private pending: (() => void)[] = [];
 
   constructor(
     value: number,
     private onFrame: (value: number) => void,
     public config: SpringConfig = springs.sleepy,
     private precision = 0.01,
-    private onSettle?: () => void,
   ) {
     this.value = value;
     this.target = value;
@@ -45,6 +45,12 @@ export class Spring {
 
   get moving(): boolean {
     return this.frame !== 0;
+  }
+
+  // Runs once, when the current motion comes to rest. stop() and set() drop it.
+  onSettleOnce(fn: () => void): void {
+    this.pending.push(fn);
+    if (!this.frame && this.value === this.target && this.velocity === 0) this.settle();
   }
 
   set(value: number): void {
@@ -59,8 +65,10 @@ export class Spring {
     this.target = target;
     if (velocity !== undefined) this.velocity = velocity;
     if (reducedMotion() || typeof requestAnimationFrame !== "function") {
+      const pending = this.pending;
       this.set(target);
-      this.onSettle?.();
+      this.pending = pending;
+      this.settle();
       return;
     }
     if (!this.frame) {
@@ -72,6 +80,13 @@ export class Spring {
   stop(): void {
     if (this.frame) cancelAnimationFrame(this.frame);
     this.frame = 0;
+    this.pending = [];
+  }
+
+  private settle(): void {
+    const pending = this.pending;
+    this.pending = [];
+    for (const fn of pending) fn();
   }
 
   private step = (now: number): void => {
@@ -90,7 +105,7 @@ export class Spring {
       this.value = this.target;
       this.velocity = 0;
       this.onFrame(this.value);
-      this.onSettle?.();
+      this.settle();
       return;
     }
     this.onFrame(this.value);

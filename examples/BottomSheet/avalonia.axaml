@@ -3,11 +3,13 @@
   <!-- The sheet draws over its parent: put it last in a panel that covers the screen. -->
   <Panel>
     <TextBlock Margin="16" Text="Photo.jpg" />
-    <pm:BottomSheet IsOpen="True" Title="Share" SheetHeight="200">
-      <StackPanel Spacing="16">
-        <TextBlock Text="Anyone with the link can view this photo." TextWrapping="Wrap" />
-        <Button Classes="primary block" Content="Copy link" />
-      </StackPanel>
+    <pm:BottomSheet IsOpen="True" Title="Share" Description="Photo.jpg, 2.4 MB">
+      <TextBlock Text="Anyone with the link can view this photo." TextWrapping="Wrap" />
+      <pm:BottomSheet.Actions>
+        <StackPanel Spacing="8">
+          <Button Classes="primary block" Content="Copy link" />
+        </StackPanel>
+      </pm:BottomSheet.Actions>
     </pm:BottomSheet>
   </Panel>
 </UserControl>

@@ -12,19 +12,19 @@ Item {
     BottomSheet {
         id: sheet
         title: "Share"
+        description: "Photo.jpg, 2.4 MB"
         Component.onCompleted: open()
 
-        Column {
+        Text {
             width: parent.width
-            spacing: 16
-            Text {
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: "Anyone with the link can view this photo."
-                color: Purrimer.fgColorDefault
-                font: Purrimer.textBodyMedium
-            }
-            Button { width: parent.width; text: "Copy link"; variant: "primary"; onClicked: sheet.close() }
+            wrapMode: Text.Wrap
+            text: "Anyone with the link can view this photo."
+            color: Purrimer.fgColorDefault
+            font: Purrimer.textBodyMedium
         }
+
+        actions: [
+            Button { text: "Copy link"; variant: "primary"; onClicked: sheet.close() }
+        ]
     }
 }

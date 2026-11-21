@@ -1,11 +1,19 @@
 <div>
   <p class="text-body-medium" style="margin: 16px">Photo.jpg</p>
-  <div class="pm-sheet-scrim" role="presentation">
-    <div class="pm-sheet" role="dialog" aria-modal="true" aria-label="Share">
-      <div class="pm-sheet__handle" role="button" tabindex="0" aria-label="Close"><span class="pm-sheet__grabber"></span></div>
-      <h2 class="pm-sheet__title">Share</h2>
+  <div class="pm-sheet-layer">
+    <div class="pm-sheet-scrim" aria-hidden="true"></div>
+    <div class="pm-sheet" role="dialog" aria-modal="true" aria-labelledby="share-title" tabindex="-1">
+      <div class="pm-sheet__handle pm-sheet__handle--drag">
+        <span class="pm-sheet__grabber" aria-hidden="true"></span>
+        <div class="pm-sheet__head">
+          <h2 class="pm-sheet__title" id="share-title">Share</h2>
+          <p class="pm-sheet__desc">Photo.jpg, 2.4 MB</p>
+        </div>
+      </div>
       <div class="pm-sheet__body">
-        <p style="margin: 0 0 16px">Anyone with the link can view this photo.</p>
+        <p style="margin: 0">Anyone with the link can view this photo.</p>
+      </div>
+      <div class="pm-sheet__actions">
         <button type="button" class="pm-button pm-button--primary pm-button--block">Copy link</button>
       </div>
     </div>

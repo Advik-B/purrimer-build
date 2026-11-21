@@ -7,34 +7,70 @@ import QtQuick.Templates as T
 T.Popup {
     id: control
     property string title
+    property string description
+    // "auto" fits the content; "half" and "full" set the height.
+    property string size: "auto"
+    property bool dismissible: true
+    property bool grabber: true
+    // Draws the sheet in place with no scrim, for docs and previews. Fixed when the sheet is created.
+    property bool inline: false
     default property alias content: body.data
+    // Buttons, stacked full width with the accepting one last.
+    property alias actions: actionColumn.data
     readonly property real dismissDistance: 96
+    readonly property real flickVelocity: 600
+    readonly property real offset: drag.value
+    property bool springExit: false
 
-    parent: T.Overlay.overlay
-    modal: true
-    dim: true
-    width: parent ? Math.min(parent.width, {{ "mobile-sheet-maxWidth" | tok }}) : 360
-    x: parent ? (parent.width - width) / 2 : 0
-    y: parent ? parent.height - height + drag.offset : 0
-    implicitHeight: Math.min(column.implicitHeight, parent ? parent.height * 0.9 : 600)
+    readonly property real maxHeight: parent ? parent.height - 48 : 600
+
+    modal: !inline
+    dim: !inline
+    width: inline ? (parent ? parent.width : 360) : parent ? Math.min(parent.width, {{ "mobile-sheet-maxWidth" | tok }}) : 360
+    x: inline || !parent ? 0 : (parent.width - width) / 2
+    y: inline || !parent ? 0 : parent.height - height + Math.max(drag.value, 0)
+    implicitHeight: size === "half" && parent ? parent.height / 2 : size === "full" ? maxHeight : Math.min(column.implicitHeight, maxHeight)
     padding: 0
-    closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
+    closePolicy: inline || !dismissible ? T.Popup.NoAutoClose : T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
 
-    T.Overlay.modal: Rectangle { color: {{ "overlay-backdrop-bgColor" | tok }} }
+    T.Overlay.modal: Rectangle {
+        color: {{ "overlay-backdrop-bgColor" | tok }}
+        opacity: control.height > 0 ? Math.max(0, 1 - Math.max(control.offset, 0) / control.height) : 1
+    }
 
     enter: Transition {
+        enabled: !control.inline
         NumberAnimation { property: "y"; from: control.parent ? control.parent.height : 0; to: control.parent ? control.parent.height - control.height : 0; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
     }
     exit: Transition {
+        enabled: !control.springExit && !control.inline
         NumberAnimation { property: "y"; to: control.parent ? control.parent.height : 0; duration: {{ "duration-sleepy-exit" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-exit" | tok }} }
     }
-    onClosed: drag.offset = 0
+    onClosed: {
+        springExit = false
+        drag.set(0)
+    }
     // The enter transition assigns y, which drops the binding above; restore it so the sheet follows drags
     // and resizes.
-    onOpened: y = Qt.binding(() => parent ? parent.height - height + drag.offset : 0)
+    onOpened: y = Qt.binding(() => inline || !parent ? 0 : parent.height - height + Math.max(drag.value, 0))
+    // An inline sheet stays in the item that declares it; a modal one moves to the window's overlay. Set inline
+    // when the sheet is created; changing it later has no effect on where the sheet lives.
+    Component.onCompleted: {
+        if (inline)
+            open()
+        else
+            parent = Qt.binding(() => T.Overlay.overlay)
+    }
+
+    PmSpring {
+        id: drag
+        precision: 0.5
+        onSettled: if (control.springExit) control.close()
+    }
 
     background: Rectangle {
         color: {{ "overlay-bgColor" | tok }}
+        radius: control.inline ? {{ "borderRadius-xlarge" | tok }} : 0
         topLeftRadius: {{ "borderRadius-xlarge" | tok }}
         topRightRadius: {{ "borderRadius-xlarge" | tok }}
         border.width: {{ "borderWidth-thin" | tok }}
@@ -44,47 +80,101 @@ T.Popup {
     contentItem: Column {
         id: column
         Item {
-            id: drag
-            property real offset: 0
+            id: handle
             width: parent.width
-            height: 24
+            implicitHeight: head.y + head.implicitHeight
             Rectangle {
-                anchors.centerIn: parent
+                visible: control.grabber
+                y: 8
+                anchors.horizontalCenter: parent.horizontalCenter
                 width: 36
-                height: 4
-                radius: 2
+                height: 5
+                radius: 2.5
                 color: {{ "borderColor-emphasis" | tok }}
+            }
+            Column {
+                id: head
+                x: {{ "mobile-gutter" | tok }}
+                y: control.grabber ? 21 : 8
+                width: parent.width - 2 * {{ "mobile-gutter" | tok }}
+                topPadding: control.title !== "" ? 4 : 0
+                bottomPadding: control.title !== "" ? 12 : 0
+                spacing: 4
+                Text {
+                    visible: control.title !== ""
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: control.title
+                    font: {{ "text-mobile-title" | tok }}
+                    color: {{ "fgColor-default" | tok }}
+                    Accessible.role: Accessible.Heading
+                }
+                Text {
+                    visible: control.description !== ""
+                    width: parent.width
+                    wrapMode: Text.Wrap
+                    text: control.description
+                    font: {{ "text-body-medium" | tok }}
+                    color: {{ "fgColor-muted" | tok }}
+                }
             }
             DragHandler {
                 id: dragHandler
+                enabled: control.dismissible && !control.inline
                 target: null
-                yAxis.enabled: true
                 xAxis.enabled: false
-                onTranslationChanged: drag.offset = Math.max(0, translation.y)
+                cursorShape: active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                property real base: 0
                 onActiveChanged: {
-                    if (!active) {
-                        if (drag.offset > control.dismissDistance)
-                            control.close()
-                        else
-                            drag.offset = 0
+                    if (active) {
+                        base = drag.value
+                        drag.stop()
+                        return
+                    }
+                    const velocity = centroid.velocity.y
+                    if (drag.value > control.dismissDistance || (drag.value > 24 && velocity > control.flickVelocity)) {
+                        control.springExit = true
+                        drag.to(control.height, velocity)
+                    } else {
+                        drag.to(0, velocity)
                     }
                 }
+                onTranslationChanged: {
+                    const next = base + translation.y
+                    drag.set(next < 0 ? Purrimer.rubberBand(next, control.height) : next)
+                }
             }
-            Behavior on offset { enabled: !dragHandler.active; NumberAnimation { duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} } }
-        }
-        Text {
-            visible: control.title !== ""
-            x: {{ "mobile-gutter" | tok }}
-            bottomPadding: 8
-            text: control.title
-            font: {{ "text-mobile-title" | tok }}
-            color: {{ "fgColor-default" | tok }}
         }
         Item {
             id: body
             x: {{ "mobile-gutter" | tok }}
             width: parent.width - 2 * {{ "mobile-gutter" | tok }}
-            implicitHeight: childrenRect.height + {{ "mobile-gutter" | tok }}
+            implicitHeight: childrenRect.height + 16
+            height: control.size === "auto" ? implicitHeight : Math.max(0, control.height - handle.height - actionArea.height)
+            clip: control.size !== "auto"
+        }
+        Item {
+            id: actionArea
+            visible: actionColumn.children.length > 0
+            width: parent.width
+            implicitHeight: visible ? actionColumn.implicitHeight + 28 : 0
+            height: implicitHeight
+            Rectangle {
+                width: parent.width
+                height: {{ "borderWidth-thin" | tok }}
+                color: {{ "borderColor-muted" | tok }}
+            }
+            Column {
+                id: actionColumn
+                x: {{ "mobile-gutter" | tok }}
+                y: 12
+                width: parent.width - 2 * {{ "mobile-gutter" | tok }}
+                spacing: 8
+                onChildrenChanged: {
+                    for (let i = 0; i < children.length; i++)
+                        children[i].width = Qt.binding(() => actionColumn.width)
+                }
+            }
         }
     }
 }

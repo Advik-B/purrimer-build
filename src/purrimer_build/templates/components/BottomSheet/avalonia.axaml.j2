@@ -9,6 +9,7 @@
     <Setter Property="IsHitTestVisible" Value="False" />
     <Setter Property="Focusable" Value="True" />
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="FontSize" Value="14" />
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:BottomSheet">
         <Panel>
@@ -19,7 +20,7 @@
               </Transitions>
             </Border.Transitions>
           </Border>
-          <Border Name="PART_Sheet" VerticalAlignment="Bottom" Height="{TemplateBinding SheetHeight}"
+          <Border Name="PART_Sheet" VerticalAlignment="Bottom"
                   MaxWidth="{{ "mobile-sheet-maxWidth" | tok }}" Background="{{ "overlay-bgColor" | tok }}"
                   BorderBrush="{{ "borderColor-default" | tok }}" BorderThickness="1,1,1,0"
                   CornerRadius="{{ px("borderRadius-xlarge") | num }},{{ px("borderRadius-xlarge") | num }},0,0"
@@ -31,15 +32,28 @@
               </Transitions>
             </Border.Transitions>
             <DockPanel>
-              <Border Name="PART_Handle" DockPanel.Dock="Top" Height="24" Background="Transparent" Cursor="SizeNorthSouth">
-                <Border Width="36" Height="4" CornerRadius="2" Background="{{ "borderColor-emphasis" | tok }}" />
+              <StackPanel Name="PART_Handle" DockPanel.Dock="Top" Background="Transparent" Cursor="Hand">
+                <Border Width="36" Height="5" Margin="0,8,0,8" CornerRadius="2.5" Background="{{ "borderColor-emphasis" | tok }}"
+                        IsVisible="{TemplateBinding ShowGrabber}" />
+                <StackPanel Margin="{{ px("mobile-gutter") | num }},4,{{ px("mobile-gutter") | num }},12" Spacing="4"
+                            IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                  <TextBlock Text="{TemplateBinding Title}" TextWrapping="Wrap"
+                             FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}" />
+                  <TextBlock Text="{TemplateBinding Description}" TextWrapping="Wrap" FontSize="14" LineHeight="20"
+                             Foreground="{{ "fgColor-muted" | tok }}"
+                             IsVisible="{TemplateBinding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                </StackPanel>
+              </StackPanel>
+              <Border DockPanel.Dock="Bottom" BorderBrush="{{ "borderColor-muted" | tok }}" BorderThickness="0,1,0,0"
+                      Padding="{{ px("mobile-gutter") | num }},12,{{ px("mobile-gutter") | num }},16"
+                      IsVisible="{TemplateBinding Actions, Converter={x:Static ObjectConverters.IsNotNull}}">
+                <ContentPresenter Content="{TemplateBinding Actions}" HorizontalContentAlignment="Stretch" />
               </Border>
-              <TextBlock DockPanel.Dock="Top" Text="{TemplateBinding Title}" Margin="{{ px("mobile-gutter") | num }},0"
-                         FontFamily="{{ "heading" | font }}" FontSize="{{ "text-mobile-title" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-title" | tokx("FontWeight") }}"
-                         IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
-                                ContentTemplate="{TemplateBinding ContentTemplate}"
-                                Margin="{{ px("mobile-gutter") | num }},8,{{ px("mobile-gutter") | num }},{{ px("mobile-gutter") | num }}" />
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+                <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                  Margin="{{ px("mobile-gutter") | num }},0,{{ px("mobile-gutter") | num }},16" />
+              </ScrollViewer>
             </DockPanel>
           </Border>
         </Panel>
@@ -50,6 +64,23 @@
     </Style>
     <Style Selector="^:open /template/ Border#PART_Backdrop">
       <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="^:dragging /template/ StackPanel#PART_Handle">
+      <Setter Property="Cursor" Value="SizeNorthSouth" />
+    </Style>
+    <Style Selector="^:inline">
+      <Setter Property="ClipToBounds" Value="False" />
+      <Setter Property="VerticalAlignment" Value="Top" />
+    </Style>
+    <Style Selector="^:inline /template/ Border#PART_Backdrop">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^:inline /template/ Border#PART_Sheet">
+      <Setter Property="VerticalAlignment" Value="Top" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="{{ px("borderRadius-xlarge") | num }}" />
+      <Setter Property="BoxShadow" Value="{{ "shadow-floating-small" | tok }}" />
+      <Setter Property="Transitions" Value="{x:Null}" />
     </Style>
   </ControlTheme>
 </ResourceDictionary>

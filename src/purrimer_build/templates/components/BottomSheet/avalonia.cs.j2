@@ -1,18 +1,20 @@
 // {{ note }}
 // {{ c.summary }}
 using System;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
-using Avalonia.Media;
+using Avalonia.Media.Transformation;
 
 namespace {{ ns }};
 
-// A sheet that slides up from the bottom. Place it last in a Panel that covers the screen; drag the handle down to dismiss.
-[PseudoClasses(":open")]
+// A sheet that rises from the bottom. Place it last in a Panel that covers the screen. Drag the handle down, tap the
+// scrim or press Escape to dismiss; IsInline draws it in place as an ordinary control, for docs and previews.
+[PseudoClasses(":open", ":inline", ":dragging")]
 [TemplatePart("PART_Sheet", typeof(Border))]
 [TemplatePart("PART_Handle", typeof(Control))]
 [TemplatePart("PART_Backdrop", typeof(Control))]
@@ -24,20 +26,54 @@ public class BottomSheet : ContentControl
     public static readonly StyledProperty<string?> TitleProperty =
         AvaloniaProperty.Register<BottomSheet, string?>(nameof(Title));
 
+    public static readonly StyledProperty<string?> DescriptionProperty =
+        AvaloniaProperty.Register<BottomSheet, string?>(nameof(Description));
+
+    public static readonly StyledProperty<object?> ActionsProperty =
+        AvaloniaProperty.Register<BottomSheet, object?>(nameof(Actions));
+
+    public static readonly StyledProperty<string> SizeProperty =
+        AvaloniaProperty.Register<BottomSheet, string>(nameof(Size), "auto");
+
+    public static readonly StyledProperty<bool> IsDismissibleProperty =
+        AvaloniaProperty.Register<BottomSheet, bool>(nameof(IsDismissible), true);
+
+    public static readonly StyledProperty<bool> ShowGrabberProperty =
+        AvaloniaProperty.Register<BottomSheet, bool>(nameof(ShowGrabber), true);
+
+    public static readonly StyledProperty<bool> IsInlineProperty =
+        AvaloniaProperty.Register<BottomSheet, bool>(nameof(IsInline));
+
+    // A fixed sheet height in pixels; NaN lets Size decide.
     public static readonly StyledProperty<double> SheetHeightProperty =
-        AvaloniaProperty.Register<BottomSheet, double>(nameof(SheetHeight), 320);
+        AvaloniaProperty.Register<BottomSheet, double>(nameof(SheetHeight), double.NaN);
 
     public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
         RoutedEvent.Register<BottomSheet, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
 
     private const double DismissDistance = 96;
+    private const double FlickVelocity = 600;
 
+    private readonly PurrimerSpring _spring = new(0, 0.5);
+    private readonly PurrimerVelocityTracker _tracker = new();
     private Border? _sheet;
     private Control? _handle;
     private Control? _backdrop;
     private global::Avalonia.Animation.Transitions? _transitions;
-    private Point? _dragStart;
-    private double _dragOffset;
+    private Point? _grabOrigin;
+    private double _grabBase;
+    private double _offset;
+    private bool _sprung;
+
+    public BottomSheet()
+    {
+        _spring.Changed += v =>
+        {
+            _offset = v;
+            UpdatePosition();
+        };
+        _spring.Settled += OnSpringSettled;
+    }
 
     public bool IsOpen
     {
@@ -49,6 +85,44 @@ public class BottomSheet : ContentControl
     {
         get => GetValue(TitleProperty);
         set => SetValue(TitleProperty, value);
+    }
+
+    public string? Description
+    {
+        get => GetValue(DescriptionProperty);
+        set => SetValue(DescriptionProperty, value);
+    }
+
+    // Buttons under the body, stacked full width with the accepting one last.
+    public object? Actions
+    {
+        get => GetValue(ActionsProperty);
+        set => SetValue(ActionsProperty, value);
+    }
+
+    // "auto" fits the content; "half" and "full" set the height.
+    public string Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    public bool IsDismissible
+    {
+        get => GetValue(IsDismissibleProperty);
+        set => SetValue(IsDismissibleProperty, value);
+    }
+
+    public bool ShowGrabber
+    {
+        get => GetValue(ShowGrabberProperty);
+        set => SetValue(ShowGrabberProperty, value);
+    }
+
+    public bool IsInline
+    {
+        get => GetValue(IsInlineProperty);
+        set => SetValue(IsInlineProperty, value);
     }
 
     public double SheetHeight
@@ -63,12 +137,32 @@ public class BottomSheet : ContentControl
         remove => RemoveHandler(ClosedEvent, value);
     }
 
-    public void Close()
+    public void Close() => Close(null);
+
+    // A drag hands over its velocity so the sheet carries on under the spring.
+    private void Close(double? velocity)
     {
-        if (!IsOpen)
+        if (!IsOpen || IsInline)
             return;
-        IsOpen = false;
+        if (velocity is { } v && _sheet != null)
+        {
+            _sheet.Transitions = null;
+            _sprung = true;
+            _spring.Set(_offset);
+            SetCurrentValue(IsOpenProperty, false);
+            _spring.To(_sheet.Bounds.Height + 32, v);
+        }
+        else
+        {
+            SetCurrentValue(IsOpenProperty, false);
+        }
         RaiseEvent(new RoutedEventArgs(ClosedEvent, this));
+    }
+
+    private void Dismiss(double? velocity = null)
+    {
+        if (IsDismissible)
+            Close(velocity);
     }
 
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
@@ -78,6 +172,7 @@ public class BottomSheet : ContentControl
             _handle.PointerPressed -= OnHandlePressed;
             _handle.PointerMoved -= OnHandleMoved;
             _handle.PointerReleased -= OnHandleReleased;
+            _handle.PointerCaptureLost -= OnHandleCaptureLost;
         }
         if (_backdrop != null)
             _backdrop.PointerPressed -= OnBackdropPressed;
@@ -91,23 +186,35 @@ public class BottomSheet : ContentControl
             _handle.PointerPressed += OnHandlePressed;
             _handle.PointerMoved += OnHandleMoved;
             _handle.PointerReleased += OnHandleReleased;
+            _handle.PointerCaptureLost += OnHandleCaptureLost;
         }
         if (_backdrop != null)
             _backdrop.PointerPressed += OnBackdropPressed;
+        PseudoClasses.Set(":inline", IsInline);
+        PseudoClasses.Set(":open", IsOpen || IsInline);
+        ApplySize();
         UpdatePosition();
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == IsOpenProperty)
+        if (change.Property == IsOpenProperty || change.Property == IsInlineProperty)
         {
-            PseudoClasses.Set(":open", IsOpen);
-            _dragOffset = 0;
+            PseudoClasses.Set(":inline", IsInline);
+            PseudoClasses.Set(":open", IsOpen || IsInline);
+            if (IsOpen && change.Property == IsOpenProperty)
+            {
+                _spring.Stop();
+                RestoreTransitions();
+                _offset = 0;
+                Focus();
+            }
             UpdatePosition();
         }
-        else if (change.Property == SheetHeightProperty)
+        else if (change.Property == SizeProperty || change.Property == SheetHeightProperty || change.Property == BoundsProperty)
         {
+            ApplySize();
             UpdatePosition();
         }
     }
@@ -115,61 +222,124 @@ public class BottomSheet : ContentControl
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
-        if (IsOpen && e.Key == Key.Escape)
+        if (IsOpen && !IsInline && e.Key == Key.Escape)
         {
             e.Handled = true;
-            Close();
+            Dismiss();
         }
+    }
+
+    private void ApplySize()
+    {
+        if (_sheet == null)
+            return;
+        var limit = Math.Max(0, Bounds.Height - 48);
+        _sheet.MaxHeight = IsInline ? double.PositiveInfinity : limit;
+        _sheet.Height = !double.IsNaN(SheetHeight) ? SheetHeight
+            : IsInline ? double.NaN
+            : Size == "half" ? Bounds.Height / 2
+            : Size == "full" ? limit
+            : double.NaN;
     }
 
     private void UpdatePosition()
     {
         if (_sheet == null)
             return;
-        var y = IsOpen ? _dragOffset : SheetHeight + 32;
-        _sheet.RenderTransform = global::Avalonia.Media.Transformation.TransformOperations.Parse(
-            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"translateY({y}px)"));
+        var height = _sheet.Bounds.Height > 0 ? _sheet.Bounds.Height : 400;
+        var y = IsInline ? 0 : IsOpen || _sprung ? _offset : height + 32;
+        _sheet.RenderTransform = TransformOperations.Parse(
+            string.Create(CultureInfo.InvariantCulture, $"translateY({y}px)"));
+        if (_backdrop == null)
+            return;
+        if (_sprung)
+            _backdrop.Opacity = Math.Max(0, 1 - Math.Max(_offset, 0) / height);
+        else
+            _backdrop.ClearValue(OpacityProperty);
+    }
+
+    private void RestoreTransitions()
+    {
+        _sprung = false;
+        if (_sheet != null)
+            _sheet.Transitions = _transitions;
+        _backdrop?.ClearValue(OpacityProperty);
+    }
+
+    private void OnSpringSettled()
+    {
+        if (!IsOpen)
+            _offset = 0;
+        RestoreTransitions();
+        UpdatePosition();
     }
 
     private void OnBackdropPressed(object? sender, PointerPressedEventArgs e)
     {
         e.Handled = true;
-        Close();
+        Dismiss();
     }
 
     private void OnHandlePressed(object? sender, PointerPressedEventArgs e)
     {
-        _dragStart = e.GetPosition(this);
+        if (!IsDismissible || IsInline || !IsOpen)
+            return;
+        var p = e.GetPosition(this);
+        _spring.Stop();
+        _grabOrigin = p;
+        _grabBase = _offset;
+        _tracker.Reset();
+        _tracker.Add(p);
         e.Pointer.Capture(_handle);
-        if (_sheet != null)
-            _sheet.Transitions = null;
         e.Handled = true;
     }
 
     private void OnHandleMoved(object? sender, PointerEventArgs e)
     {
-        if (_dragStart is not { } start)
+        if (_grabOrigin is not { } origin || _sheet == null)
             return;
-        _dragOffset = Math.Max(0, e.GetPosition(this).Y - start.Y);
+        var p = e.GetPosition(this);
+        _tracker.Add(p);
+        var next = _grabBase + p.Y - origin.Y;
+        if (!_sprung)
+        {
+            _sprung = true;
+            _sheet.Transitions = null;
+            PseudoClasses.Set(":dragging", true);
+        }
+        if (next < 0)
+            next = PurrimerMotion.RubberBand(next, _sheet.Bounds.Height);
+        _offset = next;
         UpdatePosition();
     }
 
     private void OnHandleReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_dragStart == null)
+        if (_grabOrigin == null)
             return;
-        _dragStart = null;
         e.Pointer.Capture(null);
-        if (_sheet != null)
-            _sheet.Transitions = _transitions;
-        if (_dragOffset > DismissDistance)
+        EndGrab();
+    }
+
+    private void OnHandleCaptureLost(object? sender, PointerCaptureLostEventArgs e) => EndGrab();
+
+    private void EndGrab()
+    {
+        if (_grabOrigin == null)
+            return;
+        _grabOrigin = null;
+        PseudoClasses.Set(":dragging", false);
+        if (!_sprung)
+            return;
+        var velocity = _tracker.Velocity().Y;
+        if (_offset > DismissDistance || (_offset > 24 && velocity > FlickVelocity))
         {
-            Close();
+            Dismiss(velocity);
         }
         else
         {
-            _dragOffset = 0;
-            UpdatePosition();
+            _spring.Set(_offset);
+            _spring.To(0, velocity);
         }
     }
 }
