@@ -1,0 +1,64 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+component Bone inherits Rectangle {
+    in property <bool> sunbeam;
+    // Sweep progress, 0 to 1.
+    in property <float> sweep;
+    in property <color> base: {{ "bgColor-neutral-muted" | tok }};
+    in property <color> beam;
+    // A soft band of light, 30% of the bone wide with 14px edges, swept from -120% to 320% of its own width. It is
+    // drawn as the fill's gradient, so the bone's rounded shape clips it on every renderer.
+    property <float> w: max(self.width / 1px, 1);
+    property <float> band: root.w * 0.3;
+    property <float> centre: -1.2 * root.band + 4.4 * root.band * root.sweep + root.band / 2;
+    property <float> inner: max(0, root.band / 2 - 14);
+    property <float> outer: root.band / 2 + 14;
+    property <float> peak: 0.9 * min(1, root.band / 56);
+    property <color> lit: root.base.mix(root.beam, 1 - root.peak);
+
+    background: !root.sunbeam ? root.base : @linear-gradient(90deg,
+        root.base 0%,
+        root.base clamp((root.centre - root.outer) / root.w, 0, 1) * 100%,
+        root.lit clamp((root.centre - root.inner) / root.w, 0, 1) * 100%,
+        root.lit clamp((root.centre + root.inner) / root.w, 0, 1) * 100%,
+        root.base clamp((root.centre + root.outer) / root.w, 0, 1) * 100%,
+        root.base 100%);
+}
+
+export component Skeleton {
+    // text, block or circle
+    in property <string> variant: "text";
+    // sunbeam or snore
+    in property <string> effect: "sunbeam";
+    in property <int> lines: 1;
+    // sleepy or playful
+    in property <string> kind: "sleepy";
+
+    property <int> count: root.variant == "text" ? max(1, root.lines) : 1;
+    property <duration> loop: root.kind == "playful" ? {{ ms("duration-playful-loop") }}ms : {{ ms("duration-sleepy-loop") }}ms;
+    property <float> t: mod(PurrimerMotion.loop-tick / (root.loop * 0.55), 1);
+    // Paused, the band rests at the left edge as it does on the web.
+    property <float> sweep: PurrimerMotion.pause-loops ? 1.2 / 4.4 : root.t * root.t * root.t * (root.t * (root.t * 6 - 15) + 10);
+    property <float> breath-phase: mod(PurrimerMotion.loop-tick / root.loop, 1);
+    property <float> breath-t: root.breath-phase < 0.5 ? root.breath-phase * 2 : 2 - root.breath-phase * 2;
+    property <color> beam: Purrimer.dark ? {{ "borderColor-default" | tok }} : {{ "bgColor-default" | tok }};
+
+    preferred-width: root.variant == "circle" ? 40px : 240px;
+    horizontal-stretch: root.variant == "circle" ? 0 : 1;
+    height: root.variant == "text" ? 20px * root.count : root.variant == "circle" ? self.width : 64px;
+    opacity: root.effect == "snore" ? 1 - 0.5 * root.breath-t * root.breath-t * (3 - 2 * root.breath-t) : 1;
+    accessible-role: none;
+
+    for i in root.count: Bone {
+        x: 0;
+        y: root.variant == "text" ? i * 20px + 4px : 0;
+        width: root.count > 1 && i == root.count - 1 ? root.width * 0.6 : root.width;
+        height: root.variant == "text" ? 12px : root.height;
+        border-radius: root.variant == "block" ? {{ "borderRadius-large" | tok }} : min(self.width, self.height) / 2;
+        sunbeam: root.effect == "sunbeam";
+        sweep: root.sweep;
+        beam: root.beam;
+    }
+}

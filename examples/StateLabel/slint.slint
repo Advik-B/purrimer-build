@@ -1,0 +1,10 @@
+import { StateLabel } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 8px;
+    alignment: start;
+    StateLabel { status: "open"; text: "Open"; }
+    StateLabel { status: "closed"; text: "Closed"; }
+    StateLabel { status: "merged"; text: "Merged"; }
+    StateLabel { status: "draft"; size: "small"; text: "Draft"; y: (parent.height - self.height) / 2; }
+}

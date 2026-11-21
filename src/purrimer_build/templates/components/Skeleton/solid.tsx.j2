@@ -1,0 +1,36 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+export type SkeletonProps = {
+  variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+  effect?: {{ c.spec.props.effect["values"] | map("tojson") | join(" | ") }};
+  lines?: number;
+  width?: number | string;
+  height?: number | string;
+  kind?: {{ c.spec.props.kind["values"] | map("tojson") | join(" | ") }};
+  class?: JSX.ClassValue;
+};
+
+const css = (v: number | string | undefined) => (typeof v === "number" ? `${v}px` : v);
+
+export function Skeleton(props: SkeletonProps): JSX.Element {
+  const variant = () => props.variant ?? "text";
+  const count = () => (variant() === "text" ? Math.max(1, props.lines ?? 1) : 1);
+  const bone = (width: number | string | undefined) => (
+    <span
+      class={["pm-skeleton", `pm-skeleton--${variant()}`, `pm-skeleton--${props.effect ?? "sunbeam"}`, props.class]}
+      data-motion={props.kind}
+      aria-hidden="true"
+      style={ { width: css(width), height: css(variant() === "circle" ? (props.height ?? width) : props.height) } }
+    />
+  );
+  return (
+    <Show when={count() > 1} fallback={bone(props.width)}>
+      <span class="pm-skeleton-lines" aria-hidden="true">
+        <For each={Array.from({ length: count() }, (_, i) => i)}>{(_, i) => bone(i() === count() - 1 ? "60%" : props.width)}</For>
+      </span>
+    </Show>
+  );
+}

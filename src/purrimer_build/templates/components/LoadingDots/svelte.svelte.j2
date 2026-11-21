@@ -1,0 +1,15 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { variant = "steps", label = "", kind, class: className = "" }: {
+    variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+    label?: string;
+    kind?: {{ c.spec.props.kind["values"] | map("tojson") | join(" | ") }};
+    class?: string;
+  } = $props();
+</script>
+
+<span class={["pm-dots", variant === "snooze" && "pm-dots--snooze", className]} role="status" data-motion={kind}>
+  <i aria-hidden="true"></i><i aria-hidden="true"></i><i aria-hidden="true"></i>
+  <span class="pm-sr-only">{label || (variant === "snooze" ? "Waiting" : "Loading")}</span>
+</span>

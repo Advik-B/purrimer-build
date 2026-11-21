@@ -1,0 +1,15 @@
+name = "CounterLabel"
+group = "Status"
+order = 34
+summary = "A small rounded count beside a label, tab or button."
+
+[props.text]
+type = "string"
+default = ""
+doc = "The count, formatted for reading (\"12\", \"1.2k\")."
+
+[props.variant]
+type = "enum"
+default = "secondary"
+doc = "secondary is a quiet grey; primary is solid, for counts that need attention."
+values = ["secondary", "primary"]

@@ -42,3 +42,55 @@
 {% endfor %}
   }
 }
+
+/* Motion kinds. Sleepy is the default; data-motion="playful" on any element switches its subtree. Values are written
+   out rather than read from the duration tokens, because reduced motion shortens those tokens. The pose values size
+   the resting snapshot a looping animation shows when animations are off, so reduced motion leaves them alone. */
+{% set kinds = {
+  "sleepy": {"loop": ms("duration-sleepy-loop"), "spin": ms("duration-sleepy-loop") * 0.4, "dots": ms("duration-sleepy-loop") * 0.45, "dist": 8, "peak": 1.03, "wave": "easing-sleepy-drift", "dash": "none"},
+  "playful": {"loop": ms("duration-playful-loop"), "spin": ms("duration-playful-loop") * 0.6, "dots": ms("duration-playful-loop") * 0.7, "dist": 18, "peak": 1.14, "wave": "easing-playful-snap", "dash": "pm-chase-dash"},
+} %}
+{% macro motion_vars(k, dist=None, pose=True) %}
+  --pm-m-loop: {{ k.loop | num }}ms;
+  --pm-m-spin-dur: {{ k.spin | num }}ms;
+  --pm-m-dots-dur: {{ k.dots | num }}ms;
+  --pm-m-dist: {{ (k.dist if dist is none else dist) | num }}px;
+  --pm-m-peak: {{ (k.peak if dist is none else 1) | num }};
+  --pm-m-wave: var(--{{ k.wave }});
+  --pm-m-dash: {{ k.dash }};
+{% if pose %}
+  --pm-m-pose-dist: {{ k.dist | num }}px;
+  --pm-m-pose-peak: {{ k.peak | num }};
+{% endif %}
+{% endmacro %}
+:root,
+[data-motion="sleepy"] {
+  {{ motion_vars(kinds.sleepy) | trim }}
+}
+
+[data-motion="playful"] {
+  {{ motion_vars(kinds.playful) | trim }}
+}
+
+/* Reduced motion: playful falls back to sleepy, and sleepy keeps its fades but drops movement. */
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  [data-motion="sleepy"] {
+    {{ motion_vars(kinds.sleepy, 0, False) | trim | indent(2) }}
+  }
+
+  [data-motion="playful"] {
+    {{ motion_vars(kinds.sleepy, None, False) | trim | indent(2) }}
+  }
+}
+
+@keyframes pm-chase {
+  from { rotate: 0deg; }
+  to { rotate: 360deg; }
+}
+
+@keyframes pm-chase-dash {
+  0% { stroke-dasharray: 8 100; stroke-dashoffset: 0; }
+  50% { stroke-dasharray: 60 100; stroke-dashoffset: -16; }
+  100% { stroke-dasharray: 8 100; stroke-dashoffset: -92; }
+}

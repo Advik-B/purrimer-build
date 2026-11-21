@@ -51,6 +51,7 @@ app.setFont(_font)
 
 from purrimer_qt import apply  # noqa: E402
 from purrimer_qt import tokens as T  # noqa: E402
+from purrimer_qt.theme import theme as purrimer_theme  # noqa: E402
 
 
 def load(path: str, name: str):
@@ -71,6 +72,8 @@ def settle() -> None:
         app.processEvents()
 
 
+# Spinners and other loops stop on their first frame, so screenshots do not change from run to run.
+purrimer_theme.pause_loops = True
 failures: list[str] = []
 out = Path(manifest["out"]) / "qtwidgets"
 out.mkdir(parents=True, exist_ok=True)

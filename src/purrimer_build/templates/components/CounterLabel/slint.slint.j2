@@ -1,0 +1,27 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+export component CounterLabel inherits Rectangle {
+    in property <string> text;
+    // secondary or primary
+    in property <string> variant: "secondary";
+
+    height: 18px;
+    min-width: 20px;
+    preferred-width: max(20px, label.preferred-width + 12px);
+    border-radius: 9px;
+    background: root.variant == "primary" ? {{ "bgColor-neutral-emphasis" | tok }} : {{ "bgColor-neutral-muted" | tok }};
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+
+    label := Text {
+        text: root.text;
+        color: root.variant == "primary" ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-default" | tok }};
+        font-family: {{ "text-caption" | tok }}.font-family;
+        font-size: 12px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}

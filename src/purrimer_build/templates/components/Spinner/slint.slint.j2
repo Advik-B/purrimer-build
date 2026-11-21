@@ -1,0 +1,61 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+export component Spinner {
+    // small, medium or large
+    in property <string> size: "medium";
+    in property <string> label: "{{ c.spec.props.label.default }}";
+    // sleepy or playful
+    in property <string> kind: "sleepy";
+
+    property <length> px: root.size == "small" ? {{ c.spec.sizes.small }}px : root.size == "large" ? {{ c.spec.sizes.large }}px : {{ c.spec.sizes.medium }}px;
+    property <float> box: root.px / 1px;
+    property <float> stroke: root.box / 8;
+    property <float> r: (root.box - root.stroke) / 2;
+    property <duration> turn: root.kind == "playful" ? {{ (ms("duration-playful-loop") * 0.6) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.4) | int }}ms;
+    property <float> spin: mod(PurrimerMotion.loop-tick / root.turn, 1) * 360;
+    // Playful stretches the arc between 8% and 60% of the circle and slides it forward, easing in and out.
+    property <float> stretch: mod(PurrimerMotion.loop-tick / (root.turn * 1.75), 1);
+    property <float> half: mod(root.stretch * 2, 1);
+    property <float> eased: root.half * root.half * (3 - 2 * root.half);
+    property <bool> stretching: root.kind == "playful" && !PurrimerMotion.pause-loops;
+    property <float> length: !root.stretching ? 26 : root.stretch < 0.5 ? 8 + 52 * root.eased : 60 - 52 * root.eased;
+    property <float> offset: !root.stretching ? 0 : root.stretch < 0.5 ? 16 * root.eased : 16 + 76 * root.eased;
+    property <angle> a0: (root.spin + root.offset * 3.6) * 1deg;
+    property <angle> a1: (root.spin + root.offset * 3.6 + root.length * 3.6) * 1deg;
+
+    width: root.px;
+    height: root.px;
+    accessible-role: progress-indicator;
+    accessible-label: root.label;
+
+    Rectangle {
+        border-radius: self.width / 2;
+        border-width: root.stroke * 1px;
+        border-color: {{ "borderColor-default" | tok }};
+    }
+
+    Path {
+        width: root.px;
+        height: root.px;
+        viewbox-width: root.box;
+        viewbox-height: root.box;
+        stroke: {{ "fgColor-accent" | tok }};
+        stroke-width: root.stroke * 1px;
+        stroke-line-cap: round;
+        fill: transparent;
+        MoveTo {
+            x: root.box / 2 + root.r * Math.cos(root.a0);
+            y: root.box / 2 + root.r * Math.sin(root.a0);
+        }
+        ArcTo {
+            x: root.box / 2 + root.r * Math.cos(root.a1);
+            y: root.box / 2 + root.r * Math.sin(root.a1);
+            radius-x: root.r;
+            radius-y: root.r;
+            large-arc: root.length > 50;
+            sweep: true;
+        }
+    }
+}

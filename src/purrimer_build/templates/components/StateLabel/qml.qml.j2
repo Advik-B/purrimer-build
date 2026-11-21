@@ -1,0 +1,42 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Rectangle {
+    id: root
+    property string text
+    property string status: "open"
+    property string size: "medium"
+    readonly property var icons: ({{ c.spec.icons | tojson }})
+    readonly property var tones: ({{ c.spec.tones | tojson }})
+    readonly property var fills: ({
+        "success": {{ "bgColor-success-emphasis" | tok }},
+        "danger": {{ "bgColor-danger-emphasis" | tok }},
+        "done": {{ "bgColor-done-emphasis" | tok }},
+        "neutral": {{ "bgColor-neutral-emphasis" | tok }}
+    })
+    readonly property int pad: size === "small" ? 8 : 12
+
+    implicitWidth: row.implicitWidth + pad * 2
+    implicitHeight: size === "small" ? 28 : 32
+    radius: height / 2
+    color: fills[tones[status] || "neutral"]
+    Accessible.role: Accessible.StaticText
+    Accessible.name: text
+
+    Row {
+        id: row
+        anchors.centerIn: parent
+        spacing: 4
+        Icon { name: root.icons[root.status] || "issue-opened"; color: {{ "fgColor-onEmphasis" | tok }}; anchors.verticalCenter: parent.verticalCenter }
+        Text {
+            text: root.text
+            anchors.verticalCenter: parent.verticalCenter
+            font.family: {{ "text-body-medium" | tok }}.family
+            font.pixelSize: 14
+            font.weight: Font.DemiBold
+            color: {{ "fgColor-onEmphasis" | tok }}
+        }
+    }
+}

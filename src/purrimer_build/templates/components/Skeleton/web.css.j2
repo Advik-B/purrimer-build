@@ -1,0 +1,37 @@
+.pm-skeleton {
+  --pm-skeleton-beam: {{ "bgColor-default" | tok }};
+  position: relative;
+  display: block;
+  overflow: hidden;
+  background: {{ "bgColor-neutral-muted" | tok }};
+  border-radius: {{ "borderRadius-small" | tok }};
+}
+{% for theme in tokens.dark_themes %}
+[data-theme="{{ theme }}"] .pm-skeleton{{ "," if not loop.last }}
+{% endfor %}
+{ --pm-skeleton-beam: {{ "borderColor-default" | tok }}; }
+.pm-skeleton--text { height: 12px; margin: 4px 0; border-radius: {{ "borderRadius-full" | tok }}; }
+.pm-skeleton--block { height: 64px; border-radius: {{ "borderRadius-large" | tok }}; }
+.pm-skeleton--circle { width: 40px; height: 40px; border-radius: {{ "borderRadius-full" | tok }}; }
+.pm-skeleton--sunbeam::after {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 30%;
+  background: var(--pm-skeleton-beam);
+  filter: blur(14px);
+  opacity: 0.9;
+  animation: pm-skeleton-sunbeam calc(var(--pm-m-loop) * 0.55) {{ "easing-sleepy-move" | tok }} infinite;
+}
+.pm-skeleton--snore { animation: pm-skeleton-snore var(--pm-m-loop) {{ "easing-sleepy-drift" | tok }} infinite; }
+.pm-skeleton-lines { display: block; }
+@keyframes pm-skeleton-sunbeam {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(320%); }
+}
+@keyframes pm-skeleton-snore {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

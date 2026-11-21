@@ -1,0 +1,37 @@
+name = "Skeleton"
+group = "Status"
+order = 39
+summary = "Placeholder shapes that hold the layout while content loads, with a slow sunbeam or a sleepy breath."
+
+[props.variant]
+type = "enum"
+default = "text"
+doc = "text is a 12px pill per line; block uses borderRadius-large; circle is round, for avatars."
+values = ["text", "block", "circle"]
+
+[props.effect]
+type = "enum"
+default = "sunbeam"
+doc = "sunbeam: a soft band of light sweeps across. snore: the placeholder breathes."
+values = ["sunbeam", "snore"]
+
+[props.lines]
+type = "int"
+default = 1
+doc = "Text only: the number of lines; the last of several is 60% wide."
+
+[props.width]
+type = "length"
+default = ""
+doc = "Width; text and block fill their container when unset, circles default to 40px."
+
+[props.height]
+type = "length"
+default = ""
+doc = "Height; block defaults to 64px and circle to its width."
+
+[props.kind]
+type = "enum"
+default = "sleepy"
+doc = "Motion kind: playful sweeps faster."
+values = ["sleepy", "playful"]

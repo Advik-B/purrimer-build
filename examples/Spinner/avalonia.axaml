@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="24">
+    <pm:Spinner Size="small" VerticalAlignment="Center" />
+    <pm:Spinner VerticalAlignment="Center" />
+    <pm:Spinner Size="large" Label="Loading the report" />
+    <pm:Spinner Kind="playful" VerticalAlignment="Center" />
+  </StackPanel>
+</UserControl>

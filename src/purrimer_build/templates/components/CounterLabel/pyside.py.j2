@@ -1,0 +1,65 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+VARIANTS = {
+    "secondary": ({{ "bgColor-neutral-muted" | tok }}, {{ "fgColor-default" | tok }}),
+    "primary": ({{ "bgColor-neutral-emphasis" | tok }}, {{ "fgColor-onEmphasis" | tok }}),
+}
+
+
+class CounterLabel(QWidget):
+    """A rounded count, 18px tall."""
+
+    def __init__(self, text: str | int = "", variant: str = "secondary", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        if variant not in VARIANTS:
+            raise ValueError(f"variant must be one of {tuple(VARIANTS)}")
+        self._text = str(text)
+        self._variant = variant
+        font = theme.font({{ "text-caption" | tok }})
+        font.setWeight(QFont.Weight.DemiBold)
+        self._font = font
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(self._text)
+        theme.changed.connect(self.update)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str | int) -> None:
+        self._text = str(text)
+        self.setAccessibleName(self._text)
+        self.updateGeometry()
+        self.update()
+
+    def set_variant(self, variant: str) -> None:
+        if variant not in VARIANTS:
+            raise ValueError(f"variant must be one of {tuple(VARIANTS)}")
+        self._variant = variant
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(max(20, QFontMetrics(self._font).horizontalAdvance(self._text) + 12), 18)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, event) -> None:
+        bg, fg = VARIANTS[self._variant]
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setFont(self._font)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(bg))
+        painter.drawRoundedRect(QRectF(self.rect()), 9, 9)
+        painter.setPen(theme.color(fg))
+        painter.drawText(self.rect(), Qt.AlignmentFlag.AlignCenter, self._text)

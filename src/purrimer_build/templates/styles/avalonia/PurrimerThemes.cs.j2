@@ -21,6 +21,13 @@ public static class PurrimerThemes
     public static IReadOnlyList<ThemeVariant> All { get; } = new[] { {% for t in themes %}{{ labels[t] }}{{ ", " if not loop.last }}{% endfor %} };
 }
 
+// Motion switches shared by every control.
+public static class PurrimerMotion
+{
+    // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
+    public static bool PauseLoops { get; set; }
+}
+
 // Piecewise linear easing, the same curve as CSS linear(). Points are "progress,value" pairs.
 public sealed class PurrimerLinearEasing : Easing
 {

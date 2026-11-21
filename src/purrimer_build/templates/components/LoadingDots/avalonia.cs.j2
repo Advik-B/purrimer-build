@@ -1,0 +1,140 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Three dots stepping in turn, or three bubbles drifting up. They animate while in the visual tree.
+public class LoadingDots : Control
+{
+    private static readonly double[] Bubbles = { 7, 5, 4 };
+
+    public static readonly StyledProperty<string> VariantProperty =
+        AvaloniaProperty.Register<LoadingDots, string>(nameof(Variant), "steps");
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<LoadingDots, string>(nameof(Kind), "sleepy");
+
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<LoadingDots, string?>(nameof(Label));
+
+    public static readonly StyledProperty<IBrush?> DotBrushProperty =
+        AvaloniaProperty.Register<LoadingDots, IBrush?>(nameof(DotBrush));
+
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private DispatcherTimer? _timer;
+    private Easing? _drift;
+    private Easing? _snap;
+
+    static LoadingDots()
+    {
+        AffectsRender<LoadingDots>(DotBrushProperty, KindProperty);
+        AffectsMeasure<LoadingDots>(VariantProperty);
+    }
+
+    // steps or snooze
+    public string Variant
+    {
+        get => GetValue(VariantProperty);
+        set => SetValue(VariantProperty, value);
+    }
+
+    // sleepy or playful
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    // Announced to screen readers; "Loading" or "Waiting" when empty.
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public IBrush? DotBrush
+    {
+        get => GetValue(DotBrushProperty);
+        set => SetValue(DotBrushProperty, value);
+    }
+
+    private bool Snooze => Variant == "snooze";
+    private bool Playful => Kind == "playful";
+    private double StepCycle => Playful ? {{ ms("duration-playful-loop") * 0.7 }} : {{ ms("duration-sleepy-loop") * 0.45 }};
+    private double SnoozeCycle => Playful ? {{ ms("duration-playful-loop") * 0.75 }} : {{ ms("duration-sleepy-loop") * 0.75 }};
+    private double Dist => Playful ? 18 : 8;
+    private double Peak => Playful ? 1.14 : 1.03;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == LabelProperty || change.Property == VariantProperty)
+            AutomationProperties.SetName(this, string.IsNullOrEmpty(Label) ? (Snooze ? "Waiting" : "Loading") : Label);
+    }
+
+    protected override Size MeasureOverride(Size availableSize) => Snooze ? new Size(28, 24) : new Size(26, 20);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        AutomationProperties.SetName(this, string.IsNullOrEmpty(Label) ? (Snooze ? "Waiting" : "Loading") : Label);
+        _drift = this.TryFindResource("PmEasingSleepyDrift", out var drift) ? drift as Easing : null;
+        _snap = this.TryFindResource("PmEasingPlayfulSnap", out var snap) ? snap as Easing : null;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => InvalidateVisual());
+        if (!PurrimerMotion.PauseLoops)
+            _timer.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _timer?.Stop();
+        _timer = null;
+    }
+
+    private static double Ease(Easing? easing, double x) => easing?.Ease(x) ?? x;
+
+    // Paused, the dots rest on the same snapshot as the web's resting style.
+    private double Now => PurrimerMotion.PauseLoops
+        ? (Snooze ? SnoozeCycle * 0.5 : StepCycle * 0.45)
+        : _clock.Elapsed.TotalMilliseconds;
+
+    private static double Wrap(double x) => (x % 1 + 1) % 1;
+
+    public override void Render(DrawingContext context)
+    {
+        var now = Now;
+        var wave = Playful ? _snap : _drift;
+        if (!Snooze)
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                var phase = Wrap(now / StepCycle - 0.15 * i);
+                var p = phase < 0.3 ? Ease(wave, phase / 0.3) : phase < 0.6 ? 1 - Ease(wave, (phase - 0.3) / 0.3) : 0;
+                var radius = 3 * (1 + (Peak - 1) * p);
+                using (context.PushOpacity(0.35 + 0.65 * p))
+                    context.DrawEllipse(DotBrush, null, new Point(3 + i * 10, 10 - 0.4 * Dist * p), radius, radius);
+            }
+            return;
+        }
+        for (var i = 0; i < Bubbles.Length; i++)
+        {
+            var size = Bubbles[i];
+            var phase = Wrap(now / SnoozeCycle - i / 3.0);
+            var opacity = phase < 0.3 ? 0.9 * Ease(_drift, phase / 0.3) : 0.9 * (1 - Ease(_drift, (phase - 0.3) / 0.7));
+            var q = Ease(_drift, phase);
+            var centre = new Point(4 + size / 2 + q * (Dist * 0.8 + 4), 22 - size / 2 - q * (Dist * 2 + 8));
+            var radius = size / 2 * (0.6 + 0.5 * q);
+            using (context.PushOpacity(opacity))
+                context.DrawEllipse(DotBrush, null, centre, radius, radius);
+        }
+    }
+}

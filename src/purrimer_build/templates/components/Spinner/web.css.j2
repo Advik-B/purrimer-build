@@ -1,0 +1,9 @@
+.pm-spinner { display: inline-flex; color: {{ "fgColor-accent" | tok }}; vertical-align: middle; }
+.pm-spinner svg { display: block; animation: pm-chase var(--pm-m-spin-dur) linear infinite; }
+.pm-spinner__track { stroke: {{ "borderColor-default" | tok }}; }
+.pm-spinner__arc {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-dasharray: 26 100;
+  animation: var(--pm-m-dash) calc(var(--pm-m-spin-dur) * 1.75) {{ "easing-sleepy-move" | tok }} infinite;
+}

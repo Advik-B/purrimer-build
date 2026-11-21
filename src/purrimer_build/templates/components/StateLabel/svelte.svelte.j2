@@ -1,0 +1,16 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import Icon from "./Icon.svelte";
+
+  type Status = {{ c.spec.props.status["values"] | map("tojson") | join(" | ") }};
+  const ICONS: Record<Status, string> = {{ c.spec.icons | tojson }};
+  const TONES: Record<Status, string> = {{ c.spec.tones | tojson }};
+
+  let { status = "open", text = "", size = "medium", children }: { status?: Status; text?: string; size?: "medium" | "small"; children?: Snippet } = $props();
+</script>
+
+<span class={["pm-state", TONES[status] !== "neutral" && `pm-state--${TONES[status]}`, size === "small" && "pm-state--small"]}>
+  <Icon name={ICONS[status]} />{#if children}{@render children()}{:else}{text}{/if}
+</span>

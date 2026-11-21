@@ -1,0 +1,74 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+ICONS = {{ c.spec.icons | py }}
+FILLS = {
+    "success": {{ "bgColor-success-emphasis" | tok }},
+    "danger": {{ "bgColor-danger-emphasis" | tok }},
+    "done": {{ "bgColor-done-emphasis" | tok }},
+    "neutral": {{ "bgColor-neutral-emphasis" | tok }},
+}
+TONES = {{ c.spec.tones | py }}
+
+
+class StateLabel(QWidget):
+    """A solid pill with an Octicon and a word: Open, Closed, Merged, Draft."""
+
+    def __init__(self, text: str, status: str = "open", size: str = "medium", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        if status not in ICONS:
+            raise ValueError(f"status must be one of {tuple(ICONS)}")
+        self._text = text
+        self._status = status
+        self._small = size == "small"
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setWeight(QFont.Weight.DemiBold)
+        self._font = font
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(text)
+        theme.changed.connect(self.update)
+
+    def set_status(self, status: str, text: str | None = None) -> None:
+        if status not in ICONS:
+            raise ValueError(f"status must be one of {tuple(ICONS)}")
+        self._status = status
+        if text is not None:
+            self._text = text
+            self.setAccessibleName(text)
+        self.updateGeometry()
+        self.update()
+
+    def _pad(self) -> int:
+        return 8 if self._small else 12
+
+    def sizeHint(self) -> QSize:
+        width = self._pad() * 2 + 16 + 4 + QFontMetrics(self._font).horizontalAdvance(self._text)
+        return QSize(width, 28 if self._small else 32)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(FILLS[TONES[self._status]]))
+        rect = QRectF(self.rect())
+        painter.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
+        fg = theme.color({{ "fgColor-onEmphasis" | tok }})
+        x = self._pad()
+        paint_icon(painter, QRectF(x, (rect.height() - 16) / 2, 16, 16), ICONS[self._status], fg)
+        painter.setFont(self._font)
+        painter.setPen(fg)
+        painter.drawText(QRectF(x + 20, 0, rect.width() - x - 20, rect.height()), Qt.AlignmentFlag.AlignVCenter,
+                         self._text)

@@ -28,7 +28,7 @@ if viewer is None:
     sys.exit("slint-viewer is not on PATH (cargo install slint-viewer, or download it from the Slint releases)")
 
 ENUM = {"blanc": "blanc", "noir": "noir", "light": "latte", "dark": "mocha"}
-FRAME = """import { Purrimer, PurrimerTheme } from "purrimer-components.slint";
+FRAME = """import { Purrimer, PurrimerMotion, PurrimerTheme } from "purrimer-components.slint";
 import { Example } from "%(example)s";
 
 export component Frame inherits Window {
@@ -37,7 +37,11 @@ export component Frame inherits Window {
     background: Purrimer.bg-color-default;
     default-font-family: Purrimer.text-body-medium.font-family;
     default-font-size: Purrimer.text-body-medium.font-size;
-    init => { Purrimer.theme = PurrimerTheme.%(theme)s; }
+    // Spinners and other loops stop on their first frame, so screenshots do not change from run to run.
+    init => {
+        Purrimer.theme = PurrimerTheme.%(theme)s;
+        PurrimerMotion.pause-loops = true;
+    }
     %(body)s
 }
 """

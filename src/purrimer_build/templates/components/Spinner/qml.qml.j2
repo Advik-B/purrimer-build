@@ -1,0 +1,72 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Shapes
+
+Item {
+    id: root
+    property string size: "medium"
+    property int pixelSize: size === "small" ? {{ c.spec.sizes.small }} : size === "large" ? {{ c.spec.sizes.large }} : {{ c.spec.sizes.medium }}
+    property string label: "{{ c.spec.props.label.default }}"
+    property string kind: "sleepy"
+    readonly property real stroke: pixelSize / 8
+    readonly property int turn: kind === "playful" ? {{ (ms("duration-playful-loop") * 0.6) | int }} : {{ (ms("duration-sleepy-loop") * 0.4) | int }}
+    // Arc length and offset, in degrees. Playful stretches them; sleepy keeps a steady quarter.
+    property real arcLength: 26 * 3.6
+    property real arcOffset: 0
+
+    implicitWidth: pixelSize
+    implicitHeight: pixelSize
+    Accessible.role: Accessible.Indicator
+    Accessible.name: label
+
+    Rectangle {
+        anchors.fill: parent
+        radius: width / 2
+        color: "transparent"
+        border.width: root.stroke
+        border.color: {{ "borderColor-default" | tok }}
+    }
+
+    Shape {
+        id: arc
+        anchors.fill: parent
+        preferredRendererType: Shape.CurveRenderer
+        ShapePath {
+            strokeColor: {{ "fgColor-accent" | tok }}
+            strokeWidth: root.stroke
+            fillColor: "transparent"
+            capStyle: ShapePath.RoundCap
+            PathAngleArc {
+                centerX: root.pixelSize / 2
+                centerY: root.pixelSize / 2
+                radiusX: (root.pixelSize - root.stroke) / 2
+                radiusY: radiusX
+                startAngle: root.arcOffset
+                sweepAngle: root.arcLength
+            }
+        }
+        RotationAnimator on rotation {
+            from: 0
+            to: 360
+            duration: root.turn
+            loops: Animation.Infinite
+            running: root.visible && !Purrimer.pauseLoops
+        }
+    }
+
+    SequentialAnimation {
+        running: root.visible && root.kind === "playful" && !Purrimer.pauseLoops
+        loops: Animation.Infinite
+        onRunningChanged: if (!running) { root.arcLength = 26 * 3.6; root.arcOffset = 0 }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "arcLength"; from: 8 * 3.6; to: 60 * 3.6; duration: root.turn * 0.875; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} }
+            NumberAnimation { target: root; property: "arcOffset"; from: 0; to: 16 * 3.6; duration: root.turn * 0.875; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} }
+        }
+        ParallelAnimation {
+            NumberAnimation { target: root; property: "arcLength"; from: 60 * 3.6; to: 8 * 3.6; duration: root.turn * 0.875; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} }
+            NumberAnimation { target: root; property: "arcOffset"; from: 16 * 3.6; to: 92 * 3.6; duration: root.turn * 0.875; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} }
+        }
+    }
+}

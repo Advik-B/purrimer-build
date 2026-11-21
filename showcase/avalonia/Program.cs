@@ -30,6 +30,8 @@ var themes = new Dictionary<string, ThemeVariant>
 
 // Longer than the slowest enter transition (duration-sleepy-long, 900ms) with room for slow CI runners.
 const int SettleMs = 1500;
+// Spinners and other loops stop on their first frame, so screenshots do not change from run to run.
+PurrimerMotion.PauseLoops = true;
 var sink = new CollectingSink();
 Logger.Sink = sink;
 AppBuilder.Configure<App>()

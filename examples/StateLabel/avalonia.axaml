@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <pm:StateLabel Status="open" Text="Open" />
+    <pm:StateLabel Status="closed" Text="Closed" />
+    <pm:StateLabel Status="merged" Text="Merged" />
+    <pm:StateLabel Status="draft" Size="small" Text="Draft" />
+  </StackPanel>
+</UserControl>

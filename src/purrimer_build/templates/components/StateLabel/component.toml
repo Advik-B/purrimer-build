@@ -1,0 +1,37 @@
+name = "StateLabel"
+group = "Status"
+order = 35
+summary = "A solid pill that states where an issue or pull request stands, with an Octicon and a word."
+
+[props.status]
+type = "enum"
+default = "open"
+doc = "Lifecycle state; picks the colour and the icon."
+values = ["open", "closed", "merged", "draft", "pullOpen", "pullClosed"]
+
+[props.text]
+type = "string"
+default = ""
+doc = "The visible word, such as \"Open\" or \"Merged\"."
+
+[props.size]
+type = "enum"
+default = "medium"
+doc = "medium is 32px tall; small is 28px."
+values = ["medium", "small"]
+
+[icons]
+open = "issue-opened"
+closed = "issue-closed"
+merged = "git-merge"
+draft = "git-pull-request-draft"
+pullOpen = "git-pull-request"
+pullClosed = "git-pull-request-closed"
+
+[tones]
+open = "success"
+closed = "danger"
+merged = "done"
+draft = "neutral"
+pullOpen = "success"
+pullClosed = "danger"

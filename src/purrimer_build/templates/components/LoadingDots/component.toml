@@ -1,0 +1,21 @@
+name = "LoadingDots"
+group = "Status"
+order = 38
+summary = "Three dots for short inline waits, or three drifting bubbles while waiting on a person."
+
+[props.variant]
+type = "enum"
+default = "steps"
+doc = "steps: three dots stepping in turn. snooze: three bubbles drifting up, for someone else's turn."
+values = ["steps", "snooze"]
+
+[props.label]
+type = "string"
+default = ""
+doc = "Announced to screen readers; \"Loading\" for steps and \"Waiting\" for snooze when empty."
+
+[props.kind]
+type = "enum"
+default = "sleepy"
+doc = "Motion kind: sleepy drifts, playful hops higher and faster."
+values = ["sleepy", "playful"]

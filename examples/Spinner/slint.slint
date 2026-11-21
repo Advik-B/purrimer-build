@@ -1,0 +1,10 @@
+import { Spinner } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 24px;
+    alignment: start;
+    Spinner { size: "small"; y: (parent.height - self.height) / 2; }
+    Spinner { y: (parent.height - self.height) / 2; }
+    Spinner { size: "large"; label: "Loading the report"; }
+    Spinner { kind: "playful"; y: (parent.height - self.height) / 2; }
+}

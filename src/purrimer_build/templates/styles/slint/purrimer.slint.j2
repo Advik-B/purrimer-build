@@ -72,6 +72,11 @@ export global Purrimer {
 // Motion lives in its own global: Slint cannot expose easing properties to native code, so keeping
 // them apart lets an app re-export Purrimer (to set the theme from code) without warnings.
 export global PurrimerMotion {
+    // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
+    in-out property <bool> pause-loops: false;
+    // The clock looping animations read: animation-tick(), or zero while loops are paused.
+    out property <duration> loop-tick: self.pause-loops ? 0ms : animation-tick();
+
     // Durations
 {% for n, v in tokens.durations %}
     out property <duration> {{ n | kebab }}: {{ v }}ms;

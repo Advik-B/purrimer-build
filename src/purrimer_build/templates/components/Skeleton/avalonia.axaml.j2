@@ -1,0 +1,10 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Skeleton}" TargetType="pm:Skeleton">
+    <Setter Property="BoneBrush" Value="{{ "bgColor-neutral-muted" | tok }}" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+  </ControlTheme>
+</ResourceDictionary>

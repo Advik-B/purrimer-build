@@ -1,0 +1,9 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+
+export type CounterLabelProps = { text?: string | number; variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }}; children?: JSX.Element };
+
+export function CounterLabel(props: CounterLabelProps): JSX.Element {
+  return <span class={["pm-counter", props.variant === "primary" && "pm-counter--primary"]}>{props.children ?? props.text}</span>;
+}

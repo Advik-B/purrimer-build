@@ -1,0 +1,26 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:CounterLabel}" TargetType="pm:CounterLabel">
+    <Setter Property="Background" Value="{{ "bgColor-neutral-muted" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:CounterLabel">
+        <Border Height="18" MinWidth="20" Padding="6,0" CornerRadius="9" Background="{TemplateBinding Background}">
+          <TextBlock Text="{TemplateBinding Text}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[Variant=primary]">
+      <Setter Property="Background" Value="{{ "bgColor-neutral-emphasis" | tok }}" />
+      <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>
