@@ -25,16 +25,23 @@ T.Button {
     font.pixelSize: size === "small" ? 12 : 14
     font.weight: Font.DemiBold
 
-    contentItem: Row {
-        spacing: control.spacing
-        Icon { name: control.leadingIcon; color: control.ink; visible: control.leadingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
-        Text {
-            text: control.text
-            font: control.font
-            color: control.ink
-            anchors.verticalCenter: parent.verticalCenter
+    // The row is centred, so a button wider than its content (a block button) keeps its label in the middle.
+    contentItem: Item {
+        implicitWidth: row.implicitWidth
+        implicitHeight: row.implicitHeight
+        Row {
+            id: row
+            anchors.centerIn: parent
+            spacing: control.spacing
+            Icon { name: control.leadingIcon; color: control.ink; visible: control.leadingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
+            Text {
+                text: control.text
+                font: control.font
+                color: control.ink
+                anchors.verticalCenter: parent.verticalCenter
+            }
+            Icon { name: control.trailingIcon; color: control.ink; visible: control.trailingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
         }
-        Icon { name: control.trailingIcon; color: control.ink; visible: control.trailingIcon !== ""; anchors.verticalCenter: parent.verticalCenter }
     }
 
     background: Rectangle {

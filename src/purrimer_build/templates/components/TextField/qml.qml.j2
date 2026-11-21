@@ -44,6 +44,20 @@ Column {
         Accessible.name: root.label
         onAccepted: root.accepted()
 
+        // T.TextField leaves drawing placeholderText to the style.
+        Text {
+            x: field.leftPadding
+            y: field.topPadding
+            width: field.width - field.leftPadding - field.rightPadding
+            height: field.height - field.topPadding - field.bottomPadding
+            text: field.placeholderText
+            font: field.font
+            color: field.placeholderTextColor
+            verticalAlignment: field.verticalAlignment
+            elide: Text.ElideRight
+            visible: !field.length && !field.preeditText
+        }
+
         background: Rectangle {
             radius: {{ "borderRadius-medium" | tok }}
             color: field.enabled ? {{ "control-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }}

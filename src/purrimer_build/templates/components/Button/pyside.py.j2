@@ -46,7 +46,8 @@ class Button(QPushButton):
     def set_size(self, size: str) -> None:
         if size not in SIZES:
             raise ValueError(f"size must be one of {SIZES}")
-        self.setProperty("size", size)
+        # "size" would shadow QWidget.size, so the stylesheet reads pmSize.
+        self.setProperty("pmSize", size)
         _repolish(self)
 
     def set_icons(self, leading: str | None = None, trailing: str | None = None) -> None:

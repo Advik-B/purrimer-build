@@ -1,6 +1,7 @@
 // {{ note }}
 // {{ c.summary }}
 using System;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
@@ -76,14 +77,9 @@ public class Avatar : TemplatedControl
         base.OnPropertyChanged(change);
         if (change.Property == DisplayNameProperty)
         {
-            var parts = (DisplayName ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var text = parts.Length switch
-            {
-                0 => "",
-                1 => parts[0].Substring(0, Math.Min(2, parts[0].Length)),
-                _ => parts[0].Substring(0, 1) + parts[^1].Substring(0, 1),
-            };
-            Initials = text.ToUpperInvariant();
+            // The first letters of the first two words, as on every other target.
+            var parts = (DisplayName ?? "").Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            Initials = string.Concat(parts.Take(2).Select(p => p[0])).ToUpperInvariant();
             global::Avalonia.Automation.AutomationProperties.SetName(this, DisplayName);
         }
         else if (change.Property == SizeProperty || change.Property == IsSquareProperty)

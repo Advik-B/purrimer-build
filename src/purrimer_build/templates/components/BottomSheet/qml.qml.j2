@@ -3,7 +3,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
-import QtQuick.Effects
 
 T.Popup {
     id: control
@@ -30,6 +29,9 @@ T.Popup {
         NumberAnimation { property: "y"; to: control.parent ? control.parent.height : 0; duration: {{ "duration-sleepy-exit" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-exit" | tok }} }
     }
     onClosed: drag.offset = 0
+    // The enter transition assigns y, which drops the binding above; restore it so the sheet follows drags
+    // and resizes.
+    onOpened: y = Qt.binding(() => parent ? parent.height - height + drag.offset : 0)
 
     background: Rectangle {
         color: {{ "overlay-bgColor" | tok }}
@@ -54,6 +56,7 @@ T.Popup {
                 color: {{ "borderColor-emphasis" | tok }}
             }
             DragHandler {
+                id: dragHandler
                 target: null
                 yAxis.enabled: true
                 xAxis.enabled: false
@@ -67,7 +70,7 @@ T.Popup {
                     }
                 }
             }
-            Behavior on offset { enabled: !drag.children[1].active; NumberAnimation { duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} } }
+            Behavior on offset { enabled: !dragHandler.active; NumberAnimation { duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-move" | tok }} } }
         }
         Text {
             visible: control.title !== ""

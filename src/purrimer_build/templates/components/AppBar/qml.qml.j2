@@ -2,7 +2,6 @@
 // {{ c.summary }}
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 
 Rectangle {
     id: root
@@ -35,6 +34,7 @@ Rectangle {
                 label: "Back"
                 variant: "invisible"
                 size: "large"
+                iconSize: 24
                 onClicked: root.backClicked()
             }
             Text {
@@ -64,6 +64,7 @@ Rectangle {
                     label: actionButton.modelData.label
                     variant: "invisible"
                     size: "large"
+                    iconSize: 24
                     onClicked: root.actionClicked(actionButton.index)
                 }
             }

@@ -27,6 +27,9 @@
     <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
     <Setter Property="CornerRadius" Value="{{ "borderRadius-large" | tok }}" />
     <Setter Property="VerticalAlignment" Value="Bottom" />
+    <!-- Inset by the gutter and lifted above the bottom bar, as on the other targets. -->
+    <Setter Property="Margin" Value="{{ px("mobile-gutter") | num }},0,{{ px("mobile-gutter") | num }},{{ (px("mobile-bottomNav-height") + px("base-size-16")) | num }}" />
+    <Setter Property="MaxWidth" Value="560" />
     <Setter Property="FontSize" Value="14" />
     <Setter Property="Opacity" Value="0" />
     <Setter Property="IsHitTestVisible" Value="False" />

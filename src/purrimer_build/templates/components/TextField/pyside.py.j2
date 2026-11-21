@@ -77,6 +77,10 @@ class TextField(QWidget):
             self.edit.removeAction(self._leading_action)
         self._leading_action = self.edit.addAction(icon(self._leading, 16, theme.color({{ "fgColor-muted" | tok }})),
                                                    QLineEdit.ActionPosition.LeadingPosition)
+        # The action sits inside the padding; trim it so the icon lands where the other targets draw it.
+        self.edit.setProperty("leadingIcon", "true")
+        self.edit.style().unpolish(self.edit)
+        self.edit.style().polish(self.edit)
 
     def _refresh_message(self) -> None:
         invalid = bool(self._error)

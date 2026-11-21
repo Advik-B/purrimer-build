@@ -10,6 +10,7 @@ T.Button {
     property string label
     property string variant: "default"
     property string size: "medium"
+    property int iconSize: 16
 
     readonly property color fillRest: variant === "primary" ? {{ "button-primary-bgColor-rest" | tok }} : variant === "invisible" ? "transparent" : {{ "button-default-bgColor-rest" | tok }}
     readonly property color fillHover: variant === "primary" ? {{ "button-primary-bgColor-hover" | tok }} : variant === "danger" ? {{ "bgColor-danger-emphasis" | tok }} : variant === "invisible" ? {{ "control-transparent-bgColor-hover" | tok }} : {{ "button-default-bgColor-hover" | tok }}
@@ -25,7 +26,8 @@ T.Button {
         Icon {
             anchors.centerIn: parent
             name: control.iconName
-            color: control.variant === "default" && !control.hovered && control.enabled ? {{ "fgColor-muted" | tok }} : control.ink
+            size: control.iconSize
+            color: (control.variant === "default" || control.variant === "invisible") && !control.hovered && control.enabled ? {{ "fgColor-muted" | tok }} : control.ink
         }
     }
 

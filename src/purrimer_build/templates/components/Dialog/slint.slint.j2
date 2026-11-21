@@ -32,6 +32,7 @@ export component Dialog inherits Rectangle {
 
         Rectangle {
             width: min(root.dialog-width, root.width - 2 * {{ "mobile-gutter" | tok }});
+            height: card.preferred-height;
             x: (root.width - self.width) / 2;
             y: (root.height - self.height) / 2;
             border-radius: {{ "borderRadius-large" | tok }};
@@ -46,7 +47,7 @@ export component Dialog inherits Rectangle {
 
             TouchArea { }
 
-            VerticalLayout {
+            card := VerticalLayout {
                 HorizontalLayout {
                     height: 48px;
                     padding-left: 16px;
