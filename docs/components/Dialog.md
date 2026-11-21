@@ -42,6 +42,23 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Dialog-blanc.png" width="360" alt="Dialog, CSS, classless, Blanc"> <img src="../screenshots/classless/Dialog-noir.png" width="360" alt="Dialog, CSS, classless, Noir">
+
+```html
+<!-- Open it with dialog.showModal() to get the scrim; the open attribute shows it in place. -->
+<p style="margin: 16px">Repository settings</p>
+<dialog open aria-labelledby="delete-title">
+  <header><h2 id="delete-title">Delete repository?</h2></header>
+  <p>This deletes purrimer-build and its history for good.</p>
+  <footer>
+    <button>Cancel</button>
+    <button type="submit">Delete</button>
+  </footer>
+</dialog>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Dialog-blanc.png" width="360" alt="Dialog, Svelte, Blanc"> <img src="../screenshots/svelte/Dialog-noir.png" width="360" alt="Dialog, Svelte, Noir">

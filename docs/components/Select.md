@@ -36,6 +36,21 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Select-blanc.png" width="360" alt="Select, CSS, classless, Blanc"> <img src="../screenshots/classless/Select-noir.png" width="360" alt="Select, CSS, classless, Noir">
+
+```html
+<label>
+  T-shirt size
+  <select>
+    <option>Small</option>
+    <option selected>Medium</option>
+    <option>Large</option>
+  </select>
+</label>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Select-blanc.png" width="360" alt="Select, Svelte, Blanc"> <img src="../screenshots/svelte/Select-noir.png" width="360" alt="Select, Svelte, Noir">

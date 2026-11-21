@@ -37,8 +37,10 @@ SCREENSHOTS = ROOT / "docs" / "screenshots"
 DOCS = ROOT / "docs" / "components"
 README = ROOT / "README.md"
 
-TARGETS = ("css", "svelte", "solid", "qtwidgets", "qtquick", "avalonia", "slint")
-WEB_TARGETS = ("css", "svelte", "solid")
+TARGETS = ("css", "classless", "svelte", "solid", "qtwidgets", "qtquick", "avalonia", "slint")
+WEB_TARGETS = ("css", "classless", "svelte", "solid")
+# Only components that map onto plain HTML elements have a classless example.
+OPTIONAL_TARGETS = ("classless",)
 THEMES = ("blanc", "noir")
 THEME_LABELS = {"blanc": "Blanc", "noir": "Noir", "light": "Latte", "dark": "Mocha"}
 SCALE = 2
@@ -47,6 +49,7 @@ PADDING = 16
 # Example file, code-fence language and heading for each target.
 FILES = {
     "css": ("css.html", "html", "CSS"),
+    "classless": ("classless.html", "html", "CSS, classless"),
     "svelte": ("svelte.svelte", "svelte", "Svelte"),
     "solid": ("solid.tsx", "tsx", "Solid"),
     "qtwidgets": ("qtwidgets.py", "python", "Qt Widgets (PySide6)"),
@@ -71,6 +74,9 @@ class Example:
 
     def file(self, target: str) -> Path:
         return self.folder / FILES[target][0]
+
+    def has(self, target: str) -> bool:
+        return self.file(target).is_file()
 
 
 def load_examples(only: set[str] | None = None) -> tuple[list[Example], list[str]]:
@@ -111,7 +117,7 @@ def manifest(examples: list[Example], targets: list[str], themes: list[str], nam
                 "width": e.width,
                 "height": e.height,
                 "bleed": e.bleed,
-                "files": {t: str(e.file(t)) for t in targets},
+                "files": {t: str(e.file(t)) for t in targets if e.has(t)},
             }
             for e in examples
         ],
@@ -134,7 +140,8 @@ def stage_web(examples: list[Example]) -> None:
         dest = stage / "examples" / e.name
         dest.mkdir(parents=True)
         for target in WEB_TARGETS:
-            shutil.copyfile(e.file(target), dest / FILES[target][0])
+            if e.has(target):
+                shutil.copyfile(e.file(target), dest / FILES[target][0])
 
 
 def run_web(examples: list[Example], targets: list[str], themes: list[str]) -> bool:
@@ -193,7 +200,7 @@ def blank_shots(examples: list[Example], targets: list[str], themes: list[str]) 
 
     problems = []
     for target in targets:
-        for e in examples:
+        for e in (e for e in examples if e.has(target)):
             for theme in themes:
                 path = OUT / target / f"{e.name}-{theme}.png"
                 if not path.is_file():
@@ -237,9 +244,9 @@ def cmd_run(args: argparse.Namespace) -> int:
     examples, problems = load_examples(only)
     for e in examples:
         for t in targets:
-            if not e.file(t).is_file():
+            if t not in OPTIONAL_TARGETS and not e.has(t):
                 problems.append(f"{e.name}: no {t} example ({e.file(t).relative_to(ROOT).as_posix()})")
-    examples = [e for e in examples if all(e.file(t).is_file() for t in targets)]
+    examples = [e for e in examples if all(e.has(t) for t in targets if t not in OPTIONAL_TARGETS)]
     for t in targets:
         if (OUT / t).exists():
             shutil.rmtree(OUT / t)
@@ -369,7 +376,7 @@ def component_page(e: Example) -> str:
         f"(left {THEME_LABELS[THEMES[0]]}, right {THEME_LABELS[THEMES[1]]}).",
         "",
     ]
-    for target in TARGETS:
+    for target in (t for t in TARGETS if e.has(t)):
         filename, lang, title = FILES[target]
         code = e.file(target).read_text(encoding="utf-8").rstrip()
         lines += [f"### {title}", "", images(e, target, "../screenshots", width), "", f"```{lang}", code, "```", ""]
@@ -424,7 +431,11 @@ def cmd_docs(args: argparse.Namespace) -> int:
     updated = readme[:start] + gallery(examples) + readme[end + len(GALLERY_END) :]
     README.write_bytes(updated.encode())
     missing = sum(
-        not (SCREENSHOTS / t / f"{e.name}-{th}.png").is_file() for e in examples for t in TARGETS for th in THEMES
+        not (SCREENSHOTS / t / f"{e.name}-{th}.png").is_file()
+        for e in examples
+        for t in TARGETS
+        if e.has(t)
+        for th in THEMES
     )
     print(f"Wrote {len(examples)} component pages and the README gallery.")
     if missing:

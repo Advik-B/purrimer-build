@@ -33,6 +33,16 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Checkbox-blanc.png" width="360" alt="Checkbox, CSS, classless, Blanc"> <img src="../screenshots/classless/Checkbox-noir.png" width="360" alt="Checkbox, CSS, classless, Noir">
+
+```html
+<label><input type="checkbox" checked /> Email me about replies</label>
+<label><input type="checkbox" /> Weekly digest</label>
+<label><input type="checkbox" disabled /> Beta features (coming soon)</label>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Checkbox-blanc.png" width="360" alt="Checkbox, Svelte, Blanc"> <img src="../screenshots/svelte/Checkbox-noir.png" width="360" alt="Checkbox, Svelte, Noir">

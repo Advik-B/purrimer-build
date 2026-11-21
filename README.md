@@ -5,7 +5,7 @@ templates.
 
 | Target | Output | What you get |
 | --- | --- | --- |
-| `css` | `css/` | `purrimer.css` (custom properties, fonts, base styles) and `purrimer-components.css` (`pm-*` classes) |
+| `css` | `css/` | Two flavours: `purrimer.css` (custom properties, fonts, `.text-*` styles) with `purrimer-components.css` (`pm-*` classes), or `purrimer-classless.css`, which styles plain HTML |
 | `svelte` | `svelte/` | Svelte 5 components (runes, snippets), theme store, tokens and icons as TypeScript |
 | `solid` | `solid/` | Solid 2 components (`@solidjs/web`), theme helpers, tokens and icons as TypeScript |
 | `qtwidgets` | `qtwidgets/purrimer_qt/` | A PySide6 package: one QSS file per theme, `theme`, `icons`, `tokens` and widget classes |
@@ -107,8 +107,27 @@ system; copy its `tokens.json` and fonts into `tokens/` when they change.
 
 ## Using the output
 
-**CSS.** Link `css/purrimer.css` and `css/purrimer-components.css`, copy `fonts/woff2/`, and set `data-theme` on
-`<html>` to `noir`, `light` (Latte) or `dark` (Mocha). Without the attribute you get Blanc.
+**CSS.** Copy `fonts/woff2/` next to `css/` and set `data-theme` on `<html>` to `noir`, `light` (Latte) or `dark`
+(Mocha); without it you get Blanc. Then pick one of the two flavours:
+
+- **Classes.** Link `css/purrimer.css` and `css/purrimer-components.css`. They only style the `pm-*` and `.text-*`
+  classes and never touch plain elements, so they sit alongside your own CSS or a framework. The Svelte and Solid
+  targets use this flavour.
+- **Classless.** Link `css/purrimer-classless.css` on its own. Like Pico's classless build, it styles semantic HTML
+  directly: the page, headings and text, tables, and the elements below. Components with no HTML element, such as
+  Chip or Tabs, need the class flavour.
+
+| Element | Looks like |
+| --- | --- |
+| `<button>`, `<input type="button\|reset">`, `role="button"` | Button; `type="submit"` is the primary one |
+| `<label>Name <input></label>`, `<textarea>`, `<small>` under the input | TextField; `aria-invalid="true"` shows an error |
+| `<input type="checkbox">`, `<input type="radio">` inside a `<label>` | Checkbox and Radio |
+| `<input type="checkbox" role="switch">` | Toggle |
+| `<select>` | Select |
+| `<input type="search">` | SearchBar |
+| `<progress>` | ProgressBar; without `value` it sweeps |
+| `<article>` with an optional `<header>` and `<footer>` | Card |
+| `<dialog>` with `<header>`, content and a `<footer>` of buttons | Dialog; open it with `showModal()` for the scrim |
 
 **Svelte and Solid.** Copy the folder into your source tree, import `purrimer.css` and `purrimer-components.css` once
 at the app root, and import components from its `index.ts`. Solid targets 2.x (`jsxImportSource: "@solidjs/web"`).
@@ -193,8 +212,9 @@ turned up.
 ## Examples and screenshots
 
 `examples/<Name>/` holds one small example per target: `css.html`, `svelte.svelte`, `solid.tsx`, `qtwidgets.py`,
-`qtquick.qml`, `avalonia.axaml` and `slint.slint`, plus `example.toml` with the frame size. `scripts/showcase.py`
-builds every target, runs each example on its real toolkit and screenshots it in Blanc and Noir:
+`qtquick.qml`, `avalonia.axaml` and `slint.slint`, plus `classless.html` where a plain HTML element fits and
+`example.toml` with the frame size. `scripts/showcase.py` builds every target, runs each example on its real toolkit
+and screenshots it in Blanc and Noir:
 
 ```sh
 uv sync --group showcase
@@ -205,7 +225,7 @@ uv run scripts/showcase.py docs                     # docs/components/*.md and t
 
 | Target | Checked with | Fails on |
 | --- | --- | --- |
-| css, svelte, solid | `svelte-check`, `tsc` with Solid 2.0.3, Vite, Playwright and Chromium | console errors or warnings, failed requests, `pm-*` classes with no CSS rule |
+| css, classless, svelte, solid | `svelte-check`, `tsc` with Solid 2.0.3, Vite, Playwright and Chromium | console errors or warnings, failed requests, `pm-*` classes with no CSS rule, any class in a classless example |
 | qtwidgets | PySide6 6.12, offscreen | any Qt warning |
 | qtquick | `pyside6-qmllint`, PySide6 6.12 in a window | any QML warning, the software renderer (it drops shadows) |
 | avalonia | `dotnet build -warnaserror`, Avalonia 12.1.5 headless with Skia | XAML errors, Avalonia warnings such as binding errors |

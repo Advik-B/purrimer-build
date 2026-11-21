@@ -38,6 +38,17 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/ProgressBar-blanc.png" width="360" alt="ProgressBar, CSS, classless, Blanc"> <img src="../screenshots/classless/ProgressBar-noir.png" width="360" alt="ProgressBar, CSS, classless, Noir">
+
+```html
+<!-- Leave out value to sweep while the amount is unknown. -->
+<progress value="40" max="100" aria-label="Upload"></progress>
+<progress value="75" max="100" aria-label="Storage"></progress>
+<progress value="95" max="100" aria-label="Quota"></progress>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/ProgressBar-blanc.png" width="360" alt="ProgressBar, Svelte, Blanc"> <img src="../screenshots/svelte/ProgressBar-noir.png" width="360" alt="ProgressBar, Svelte, Noir">

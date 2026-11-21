@@ -30,6 +30,17 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </section>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Card-blanc.png" width="360" alt="Card, CSS, classless, Blanc"> <img src="../screenshots/classless/Card-noir.png" width="360" alt="Card, CSS, classless, Noir">
+
+```html
+<article>
+  <header><h3>Weekly digest</h3></header>
+  <p>Three new comments and one review are waiting for you.</p>
+</article>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Card-blanc.png" width="360" alt="Card, Svelte, Blanc"> <img src="../screenshots/svelte/Card-noir.png" width="360" alt="Card, Svelte, Noir">

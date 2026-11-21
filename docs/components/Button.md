@@ -44,6 +44,19 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Button-blanc.png" width="400" alt="Button, CSS, classless, Blanc"> <img src="../screenshots/classless/Button-noir.png" width="400" alt="Button, CSS, classless, Noir">
+
+```html
+<!-- type="submit" is the primary action. -->
+<div style="display: flex; gap: 8px">
+  <button type="submit">Save</button>
+  <button>Cancel</button>
+  <button disabled>Disabled</button>
+</div>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Button-blanc.png" width="400" alt="Button, Svelte, Blanc"> <img src="../screenshots/svelte/Button-noir.png" width="400" alt="Button, Svelte, Noir">

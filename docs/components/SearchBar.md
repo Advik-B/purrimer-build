@@ -37,6 +37,17 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/SearchBar-blanc.png" width="360" alt="SearchBar, CSS, classless, Blanc"> <img src="../screenshots/classless/SearchBar-noir.png" width="360" alt="SearchBar, CSS, classless, Noir">
+
+```html
+<div style="display: grid; gap: 16px">
+  <input type="search" placeholder="Search messages" aria-label="Search messages" />
+  <input type="search" value="kittens" aria-label="Search" />
+</div>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/SearchBar-blanc.png" width="360" alt="SearchBar, Svelte, Blanc"> <img src="../screenshots/svelte/SearchBar-noir.png" width="360" alt="SearchBar, Svelte, Noir">

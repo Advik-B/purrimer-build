@@ -41,6 +41,17 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </div>
 ```
 
+### CSS, classless
+
+<img src="../screenshots/classless/Toggle-blanc.png" width="360" alt="Toggle, CSS, classless, Blanc"> <img src="../screenshots/classless/Toggle-noir.png" width="360" alt="Toggle, CSS, classless, Noir">
+
+```html
+<!-- role="switch" turns a checkbox into a toggle. -->
+<label><input type="checkbox" role="switch" checked /> Wi-Fi</label>
+<label><input type="checkbox" role="switch" /> Bluetooth</label>
+<label><input type="checkbox" role="switch" disabled /> Airplane mode</label>
+```
+
 ### Svelte
 
 <img src="../screenshots/svelte/Toggle-blanc.png" width="360" alt="Toggle, Svelte, Blanc"> <img src="../screenshots/svelte/Toggle-noir.png" width="360" alt="Toggle, Svelte, Noir">

@@ -14,6 +14,7 @@ interface ManifestComponent {
   width: number;
   height: number;
   bleed: boolean;
+  files: Record<string, string>;
 }
 
 interface Manifest {
@@ -55,7 +56,7 @@ function undefinedPmClasses(): string[] {
 }
 
 for (const target of manifest.targets) {
-  for (const comp of manifest.components) {
+  for (const comp of manifest.components.filter((c) => target in c.files)) {
     for (const theme of manifest.themes) {
       const label = `${target}/${comp.name}/${theme}`;
       const problems: string[] = [];
@@ -84,6 +85,10 @@ for (const target of manifest.targets) {
       if (error) problems.push(error);
       const missing = await page.evaluate(undefinedPmClasses);
       if (missing.length) problems.push(`classes with no CSS rule: ${missing.join(", ")}`);
+      if (target === "classless") {
+        const classed = await page.evaluate(() => document.querySelectorAll("#frame [class]").length);
+        if (classed) problems.push(`classless example uses classes on ${classed} element(s)`);
+      }
       const empty = await page.evaluate(() => document.getElementById("frame")?.children.length === 0);
       if (empty) problems.push("rendered nothing");
       const file = join(manifest.out, target, `${comp.name}-${theme}.png`);
