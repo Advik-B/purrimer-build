@@ -1,0 +1,145 @@
+// {{ note }}
+// Springs and gesture helpers for the touch layer. Direct manipulation follows the pointer with no easing;
+// releases hand the pointer's velocity to a spring that settles on the current motion kind.
+
+export type MotionKind = "sleepy" | "playful";
+
+export interface SpringConfig {
+  stiffness: number;
+  damping: number;
+}
+
+// Sleepy is critically damped (no overshoot); playful overshoots by about a tenth and settles.
+export const springs: Record<MotionKind, SpringConfig> = {
+  sleepy: { stiffness: 180, damping: 26.8 },
+  playful: { stiffness: 380, damping: 23.4 },
+};
+
+export function motionKind(el: Element | null): MotionKind {
+  const scope = el?.closest("[data-motion]");
+  return scope?.getAttribute("data-motion") === "playful" ? "playful" : "sleepy";
+}
+
+export function reducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// A one-dimensional spring. onFrame receives every value, including the final one.
+export class Spring {
+  value: number;
+  velocity = 0;
+  target: number;
+  private frame = 0;
+  private last = 0;
+
+  constructor(
+    value: number,
+    private onFrame: (value: number) => void,
+    public config: SpringConfig = springs.sleepy,
+    private precision = 0.01,
+    private onSettle?: () => void,
+  ) {
+    this.value = value;
+    this.target = value;
+  }
+
+  get moving(): boolean {
+    return this.frame !== 0;
+  }
+
+  set(value: number): void {
+    this.stop();
+    this.value = value;
+    this.target = value;
+    this.velocity = 0;
+    this.onFrame(value);
+  }
+
+  to(target: number, velocity?: number): void {
+    this.target = target;
+    if (velocity !== undefined) this.velocity = velocity;
+    if (reducedMotion() || typeof requestAnimationFrame !== "function") {
+      this.set(target);
+      this.onSettle?.();
+      return;
+    }
+    if (!this.frame) {
+      this.last = performance.now();
+      this.frame = requestAnimationFrame(this.step);
+    }
+  }
+
+  stop(): void {
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+  }
+
+  private step = (now: number): void => {
+    let dt = Math.min((now - this.last) / 1000, 0.064);
+    this.last = now;
+    const { stiffness, damping } = this.config;
+    while (dt > 0) {
+      const h = Math.min(dt, 1 / 240);
+      const accel = -stiffness * (this.value - this.target) - damping * this.velocity;
+      this.velocity += accel * h;
+      this.value += this.velocity * h;
+      dt -= h;
+    }
+    if (Math.abs(this.value - this.target) < this.precision && Math.abs(this.velocity) < this.precision * 10) {
+      this.frame = 0;
+      this.value = this.target;
+      this.velocity = 0;
+      this.onFrame(this.value);
+      this.onSettle?.();
+      return;
+    }
+    this.onFrame(this.value);
+    this.frame = requestAnimationFrame(this.step);
+  };
+}
+
+// Resistance past an edge: the further the drag, the less the content moves.
+export function rubberBand(overshoot: number, dimension: number, constant = 0.55): number {
+  if (dimension <= 0) return 0;
+  const sign = Math.sign(overshoot);
+  const d = Math.abs(overshoot);
+  return sign * (1 - 1 / ((d * constant) / dimension + 1)) * dimension;
+}
+
+// Where a flick would come to rest, given its velocity in px/s.
+export function project(velocity: number, deceleration = 0.998): number {
+  return ((velocity / 1000) * deceleration) / (1 - deceleration);
+}
+
+// Pointer velocity over the last 100ms, in px/s.
+export class VelocityTracker {
+  private samples: { t: number; x: number; y: number }[] = [];
+
+  add(x: number, y: number, t = performance.now()): void {
+    this.samples.push({ t, x, y });
+    while (this.samples.length > 2 && t - this.samples[0].t > 100) this.samples.shift();
+  }
+
+  reset(): void {
+    this.samples = [];
+  }
+
+  velocity(): { x: number; y: number } {
+    if (this.samples.length < 2) return { x: 0, y: 0 };
+    const a = this.samples[0];
+    const b = this.samples[this.samples.length - 1];
+    const dt = (b.t - a.t) / 1000;
+    return dt > 0 ? { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt } : { x: 0, y: 0 };
+  }
+}
+
+// Light haptic tick on devices that support it.
+export function buzz(ms = 8): void {
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    try {
+      navigator.vibrate(ms);
+    } catch {
+      // Some browsers refuse vibration outside a user gesture.
+    }
+  }
+}

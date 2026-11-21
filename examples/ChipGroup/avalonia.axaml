@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:ChipGroup Value="unread" AutomationProperties.Name="Filter inbox">
+    <pm:ChipGroupOption Value="all" Label="All" />
+    <pm:ChipGroupOption Value="unread" Label="Unread" Count="12" />
+    <pm:ChipGroupOption Value="mentions" Label="Mentions" IconName="mention" />
+    <pm:ChipGroupOption Value="snoozed" Label="Snoozed" IsDisabled="True" />
+  </pm:ChipGroup>
+</UserControl>

@@ -1,6 +1,6 @@
 name = "SegmentedControl"
 group = "Navigation"
-order = 60
+order = 80
 summary = "Two to five segments that switch a view; the selected one lifts."
 
 [props.items]

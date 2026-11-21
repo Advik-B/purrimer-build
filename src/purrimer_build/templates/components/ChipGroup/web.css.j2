@@ -1,0 +1,56 @@
+/* Filter chips: squircle-cornered so they read as controls next to the pill-shaped static Chip. */
+.pm-chip-group {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-padding-inline: 16px;
+}
+.pm-chip-group::-webkit-scrollbar { display: none; }
+.pm-chip-group--wrap { flex-wrap: wrap; overflow: visible; }
+.pm-chip-group__chip {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  font: 600 14px/20px var(--font-sans);
+  white-space: nowrap;
+  color: {{ "fgColor-default" | tok }};
+  background: {{ "bgColor-default" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-emphasis" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }},
+    border-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }},
+    color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }},
+    scale var(--pm-release-dur) var(--pm-release-ease);
+}
+/* Grows the hit area to 44px without changing the chip's size. */
+.pm-chip-group__chip::after { content: ""; position: absolute; inset: -4px 0; }
+.pm-chip-group__chip .pm-icon { width: 16px; height: 16px; fill: {{ "fgColor-muted" | tok }}; }
+.pm-chip-group__chip:active:not(:disabled) {
+  scale: var(--pm-press-scale);
+  background: {{ "control-transparent-bgColor-selected" | tok }};
+  transition-duration: {{ "duration-fast" | tok }};
+}
+.pm-chip-group__chip[aria-pressed="true"] {
+  color: {{ "fgColor-accent" | tok }};
+  background: {{ "bgColor-accent-muted" | tok }};
+  border-color: {{ "borderColor-accent-emphasis" | tok }};
+}
+.pm-chip-group__chip[aria-pressed="true"] .pm-icon { fill: {{ "fgColor-accent" | tok }}; }
+.pm-chip-group__chip[aria-pressed="true"] .pm-chip-group__count { color: {{ "fgColor-accent" | tok }}; }
+.pm-chip-group__count { font-weight: 400; font-variant-numeric: tabular-nums; color: {{ "fgColor-muted" | tok }}; }
+.pm-chip-group__chip:disabled { color: {{ "fgColor-disabled" | tok }}; border-color: {{ "borderColor-default" | tok }}; cursor: not-allowed; }
+.pm-chip-group__chip:disabled .pm-icon { fill: {{ "fgColor-disabled" | tok }}; }
+.pm-chip-group__chip:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+@supports (corner-shape: squircle) {
+  .pm-chip-group__chip { border-radius: calc({{ "borderRadius-medium" | tok }} * 1.4); corner-shape: squircle; }
+}

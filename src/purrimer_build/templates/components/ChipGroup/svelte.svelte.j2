@@ -1,0 +1,52 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+  import { buzz } from "../motion";
+
+  type Option = { value: string; label: string; icon?: string; count?: number | string; disabled?: boolean };
+  type Value = string | string[] | null;
+
+  let { options = [], value = $bindable(), multiple = false, allowEmpty = false, wrap = false, ariaLabel = "", onchange }: {
+    options?: Option[];
+    value?: Value;
+    multiple?: boolean;
+    allowEmpty?: boolean;
+    wrap?: boolean;
+    ariaLabel?: string;
+    onchange?: (value: Value) => void;
+  } = $props();
+
+  const current: Value = $derived(value !== undefined ? value : multiple ? [] : (options[0]?.value ?? null));
+
+  function isOn(v: string): boolean {
+    return multiple ? ((current as string[] | null) ?? []).includes(v) : current === v;
+  }
+
+  function toggle(v: string) {
+    let next: Value;
+    if (multiple) {
+      const list = (current as string[] | null) ?? [];
+      next = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+    } else if (current === v) {
+      if (!allowEmpty) return;
+      next = null;
+    } else {
+      next = v;
+    }
+    buzz();
+    value = next;
+    onchange?.(next);
+  }
+</script>
+
+<div class={["pm-chip-group", wrap && "pm-chip-group--wrap"]} role="group" aria-label={ariaLabel || undefined}>
+  {#each options as option (option.value)}
+    {@const on = isOn(option.value)}
+    <button type="button" class="pm-chip-group__chip" aria-pressed={on} disabled={option.disabled} onclick={() => toggle(option.value)}>
+      {#if on}<Icon name="check" />{:else if option.icon}<Icon name={option.icon} />{/if}
+      <span>{option.label}</span>
+      {#if option.count != null}<span class="pm-chip-group__count">{option.count}</span>{/if}
+    </button>
+  {/each}
+</div>

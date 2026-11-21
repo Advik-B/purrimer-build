@@ -1,6 +1,6 @@
 name = "AvatarStack"
 group = "People"
-order = 71
+order = 91
 summary = "Overlapping avatars for the people on an item; the stack spreads out on hover and focus."
 
 [props.people]

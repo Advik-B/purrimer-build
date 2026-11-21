@@ -1,0 +1,172 @@
+"""{{ note }}
+Springs and gesture helpers for the touch layer. Direct manipulation follows the pointer with no easing; releases
+hand the pointer's velocity to a spring that settles on the current motion kind. Touch input reaches widgets as
+synthesized mouse events, so every gesture works the same with a finger or a mouse.
+"""
+
+from __future__ import annotations
+
+import math
+
+from PySide6.QtCore import QElapsedTimer, QObject, QPointF, Qt, QTimer, Signal
+from PySide6.QtWidgets import QWidget
+
+from .theme import theme
+
+# Stiffness and damping per motion kind. Sleepy is critically damped; playful overshoots by about a tenth.
+SPRINGS = {"sleepy": (180.0, 26.8), "playful": (380.0, 23.4)}
+PRESS_SCALE = 0.96
+LONG_PRESS_MS = 450
+SLOP = 8.0
+
+
+class Spring(QObject):
+    """A one-dimensional spring. `changed` fires with every value, including the final one."""
+
+    changed = Signal(float)
+    settled = Signal()
+
+    def __init__(self, value: float = 0.0, precision: float = 0.01, kind: str | None = None,
+                 parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.value = value
+        self.target = value
+        self.velocity = 0.0
+        self.kind = kind
+        self._precision = precision
+        self._clock = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.setInterval(8)
+        self._timer.timeout.connect(self._step)
+
+    @property
+    def moving(self) -> bool:
+        return self._timer.isActive()
+
+    def set(self, value: float) -> None:
+        self._timer.stop()
+        self.value = value
+        self.target = value
+        self.velocity = 0.0
+        self.changed.emit(value)
+
+    def to(self, target: float, velocity: float | None = None) -> None:
+        self.target = target
+        if velocity is not None:
+            self.velocity = velocity
+        if theme.pause_loops:
+            self.set(target)
+            self.settled.emit()
+            return
+        if not self._timer.isActive():
+            self._clock.start()
+            self._timer.start()
+
+    def stop(self) -> None:
+        self._timer.stop()
+
+    def _step(self) -> None:
+        dt = min(self._clock.restart() / 1000.0, 0.064)
+        stiffness, damping = SPRINGS.get(self.kind or theme.motion_kind, SPRINGS["sleepy"])
+        while dt > 0:
+            h = min(dt, 1 / 240)
+            accel = -stiffness * (self.value - self.target) - damping * self.velocity
+            self.velocity += accel * h
+            self.value += self.velocity * h
+            dt -= h
+        if abs(self.value - self.target) < self._precision and abs(self.velocity) < self._precision * 10:
+            self._timer.stop()
+            self.value = self.target
+            self.velocity = 0.0
+            self.changed.emit(self.value)
+            self.settled.emit()
+            return
+        self.changed.emit(self.value)
+
+
+def rubber_band(overshoot: float, dimension: float, constant: float = 0.55) -> float:
+    """Resistance past an edge: the further the drag, the less the content moves."""
+    if dimension <= 0:
+        return 0.0
+    distance = abs(overshoot)
+    return math.copysign((1 - 1 / (distance * constant / dimension + 1)) * dimension, overshoot)
+
+
+def project(velocity: float, deceleration: float = 0.998) -> float:
+    """Where a flick would come to rest, given its velocity in px/s."""
+    return velocity / 1000.0 * deceleration / (1 - deceleration)
+
+
+class VelocityTracker:
+    """Pointer velocity over the last 100ms, in px/s."""
+
+    def __init__(self) -> None:
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._samples: list[tuple[int, float, float]] = []
+
+    def add(self, point: QPointF) -> None:
+        t = self._clock.elapsed()
+        self._samples.append((t, point.x(), point.y()))
+        while len(self._samples) > 2 and t - self._samples[0][0] > 100:
+            self._samples.pop(0)
+
+    def reset(self) -> None:
+        self._samples.clear()
+
+    def velocity(self) -> QPointF:
+        if len(self._samples) < 2:
+            return QPointF()
+        (t0, x0, y0), (t1, x1, y1) = self._samples[0], self._samples[-1]
+        dt = (t1 - t0) / 1000.0
+        return QPointF((x1 - x0) / dt, (y1 - y0) / dt) if dt > 0 else QPointF()
+
+
+class PressFeedback(QObject):
+    """Compresses a widget while it is held and springs it back on release. Read `scale` in paintEvent."""
+
+    def __init__(self, widget: QWidget) -> None:
+        super().__init__(widget)
+        self._widget = widget
+        self._spring = Spring(1.0, precision=0.0005, parent=self)
+        self._spring.changed.connect(lambda _v: widget.update())
+
+    @property
+    def scale(self) -> float:
+        return self._spring.value
+
+    def press(self) -> None:
+        self._spring.to(PRESS_SCALE)
+
+    def release(self) -> None:
+        self._spring.to(1.0)
+
+
+class LongPress(QObject):
+    """Fires `triggered` when a press is held still for LONG_PRESS_MS."""
+
+    triggered = Signal(QPointF)
+
+    def __init__(self, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._origin = QPointF()
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(LONG_PRESS_MS)
+        self._timer.timeout.connect(lambda: self.triggered.emit(self._origin))
+
+    @property
+    def pending(self) -> bool:
+        return self._timer.isActive()
+
+    def press(self, point: QPointF) -> None:
+        self._origin = QPointF(point)
+        self._timer.start()
+
+    def move(self, point: QPointF) -> None:
+        if self._timer.isActive() and (point - self._origin).manhattanLength() > SLOP:
+            self._timer.stop()
+
+    def cancel(self) -> None:
+        self._timer.stop()

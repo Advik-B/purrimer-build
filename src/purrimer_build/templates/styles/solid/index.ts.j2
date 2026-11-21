@@ -3,6 +3,7 @@
 export * from "./tokens";
 export * from "./theme";
 export { octicons, iconPath } from "./icons";
+export * from "./motion";
 {% for c in done %}
 export { {{ c.name }} } from "./components/{{ c.name }}";
 {% endfor %}

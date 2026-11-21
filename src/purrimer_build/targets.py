@@ -92,6 +92,7 @@ def _web_framework(build: Build, name: str, ext: str, layer: str, theme_template
     build.write(f"{base}/purrimer-components.css", components_css(build, env))
     build.render(env, "t/styles/web/tokens.ts.j2", f"{base}/tokens.ts")
     build.render(env, "t/styles/web/icons.ts.j2", f"{base}/icons.ts", icons=build.icons)
+    build.render(env, "t/styles/web/motion.ts.j2", f"{base}/motion.ts")
     build.render(env, theme_template, f"{base}/{theme_file}")
     done = []
     for comp in build.components:
@@ -154,6 +155,7 @@ def build_qtwidgets(build: Build) -> None:
     build.render(env, "t/styles/qtwidgets/tokens.py.j2", f"{pkg}/tokens.py", qt=_qt_tokens(build))
     build.render(env, "t/styles/qtwidgets/theme.py.j2", f"{pkg}/theme.py", fonts=build.static_fonts)
     build.render(env, "t/styles/qtwidgets/icons.py.j2", f"{pkg}/icons.py", icons=build.icons)
+    build.render(env, "t/styles/qtwidgets/motion.py.j2", f"{pkg}/motion.py")
     done = []
     for comp in build.components:
         if comp.has("pyside"):
@@ -226,6 +228,7 @@ def build_qtquick(build: Build) -> None:
     _copy_ttf(build, f"{mod}/fonts")
     build.render(env, "t/styles/qtquick/Purrimer.qml.j2", f"{mod}/Purrimer.qml", fonts=build.static_fonts)
     build.render(env, "t/styles/qtquick/Octicons.qml.j2", f"{mod}/Octicons.qml", icons=build.icons)
+    build.render(env, "t/styles/qtquick/PmSpring.qml.j2", f"{mod}/PmSpring.qml")
     done = []
     for comp in build.components:
         if comp.has("qml"):

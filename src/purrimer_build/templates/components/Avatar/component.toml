@@ -1,6 +1,6 @@
 name = "Avatar"
 group = "People"
-order = 70
+order = 90
 summary = "A person's picture, or their initials on a tinted circle."
 
 [props.name]
