@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from purrimer_build.cli import component_roots, main
-from purrimer_build.components import discover
+from purrimer_build.components import discover, with_dependencies
 from purrimer_build.targets import ALL_TARGETS
 
 CORE_AND_MOBILE = {
@@ -55,3 +55,17 @@ def test_new_scaffolds_and_extra_roots_override(tmp_path: Path, capsys) -> None:
 
 def test_new_rejects_bad_names(tmp_path: Path) -> None:
     assert main(["--components-dir", str(tmp_path), "new", "date-picker"]) == 2
+
+
+def test_subset_builds_include_what_components_use() -> None:
+    comps = discover(component_roots([]))
+    by_name = {c.name: c for c in comps}
+    names = [c.name for c in with_dependencies([by_name["ActionMenu"], by_name["Banner"]], comps)]
+    assert {"ActionMenu", "ActionList", "Icon", "Banner", "IconButton"} <= set(names)
+    assert "Dialog" not in names
+    assert names == [c.name for c in comps if c.name in names]
+
+
+def test_subset_build_rejects_unknown_components(tmp_path: Path, capsys) -> None:
+    assert main(["build", "--targets", "css", "--only", "Nope", "--out", str(tmp_path)]) == 2
+    assert "Nope" in capsys.readouterr().err
