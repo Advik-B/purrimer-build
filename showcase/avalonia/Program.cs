@@ -86,11 +86,21 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Thread.Sleep(16);
             }
-            // Popups (ActionMenu, ToolTip) are hosted outside the layout transform above: placed at the scaled position but
-            // drawn at scale 1. Scale each popup host about its own corner to match.
-            foreach (var host in window.GetVisualDescendants().OfType<OverlayPopupHost>())
+            // Popups (ActionMenu, ToolTip) are hosted outside the layout transform above: placed against the scaled
+            // target but drawn at scale 1. Scale each one about the point its placement anchors it by.
+            foreach (var popup in window.GetVisualDescendants().OfType<Popup>().Where(p => p.IsOpen))
             {
-                host.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Absolute);
+                if (popup.Child?.GetVisualAncestors().OfType<OverlayPopupHost>().FirstOrDefault() is not { } host)
+                    continue;
+                var origin = popup.Placement switch
+                {
+                    PlacementMode.Top => new RelativePoint(0.5, 1, RelativeUnit.Relative),
+                    PlacementMode.Bottom => new RelativePoint(0.5, 0, RelativeUnit.Relative),
+                    PlacementMode.Left => new RelativePoint(1, 0.5, RelativeUnit.Relative),
+                    PlacementMode.Right => new RelativePoint(0, 0.5, RelativeUnit.Relative),
+                    _ => new RelativePoint(0, 0, RelativeUnit.Relative),
+                };
+                host.RenderTransformOrigin = origin;
                 host.RenderTransform = new ScaleTransform(scale, scale);
             }
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();

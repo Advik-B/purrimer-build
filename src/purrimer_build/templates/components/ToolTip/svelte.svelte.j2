@@ -1,0 +1,76 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { text, placement = "top", delay = {{ c.spec.props.delay.default }}, whatsThis = false, disabled = false, open = $bindable(false), children }: {
+    text: string;
+    placement?: {{ c.spec.props.placement["values"] | map("tojson") | join(" | ") }};
+    delay?: number;
+    whatsThis?: boolean;
+    disabled?: boolean;
+    open?: boolean;
+    children: Snippet;
+  } = $props();
+
+  const uid = $props.id();
+  const tipId = `pm-tooltip-${uid}`;
+  let root: HTMLSpanElement;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  function show(now: boolean) {
+    if (disabled) return;
+    clearTimeout(timer);
+    if (now) open = true;
+    else timer = setTimeout(() => (open = true), delay);
+  }
+
+  function hide() {
+    clearTimeout(timer);
+    open = false;
+  }
+
+  // The trigger is the first focusable element inside; it gets the description and, for whatsThis, the expanded state.
+  $effect(() => {
+    const trigger = root.querySelector<HTMLElement>("button, a, input, select, textarea, [tabindex]");
+    if (!trigger) return;
+    if (whatsThis) {
+      trigger.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) trigger.setAttribute("aria-controls", tipId);
+      else trigger.removeAttribute("aria-controls");
+    } else if (open) trigger.setAttribute("aria-describedby", tipId);
+    else trigger.removeAttribute("aria-describedby");
+  });
+
+  $effect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hide();
+    };
+    const onDown = (e: PointerEvent) => {
+      if (whatsThis && !root.contains(e.target as Node)) hide();
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  });
+</script>
+
+<!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events (the wrapper only listens; its child is the focusable trigger and handles keys) -->
+<span
+  class="pm-tooltip"
+  bind:this={root}
+  onmouseenter={() => !whatsThis && show(false)}
+  onmouseleave={() => !whatsThis && hide()}
+  onfocusin={() => !whatsThis && show(true)}
+  onfocusout={() => !whatsThis && hide()}
+  onclick={() => whatsThis && (open ? hide() : show(true))}
+>
+  {@render children()}
+  {#if open}
+    <span id={tipId} role={whatsThis ? "note" : "tooltip"} class={[whatsThis ? "pm-tooltip__note" : "pm-tooltip__bubble", `pm-tooltip--${placement}`]}>{text}</span>
+  {/if}
+</span>

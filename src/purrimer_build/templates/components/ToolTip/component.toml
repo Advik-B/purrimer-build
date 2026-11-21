@@ -1,0 +1,35 @@
+name = "ToolTip"
+group = "Overlays"
+order = 45
+summary = "A short label on hover and focus; with whatsThis, a click-to-open explanation."
+
+[props.text]
+type = "string"
+default = ""
+doc = "What the tip says."
+
+[props.placement]
+type = "enum"
+default = "top"
+doc = "Side of the trigger the tip appears on."
+values = ["top", "bottom", "left", "right"]
+
+[props.delay]
+type = "int"
+default = 500
+doc = "Hover delay in ms; keyboard focus shows it at once."
+
+[props.whatsThis]
+type = "bool"
+default = false
+doc = "A click on the trigger opens an explanation bubble instead (QWhatsThis)."
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Never shows."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Shows the tip from the start, for documentation."

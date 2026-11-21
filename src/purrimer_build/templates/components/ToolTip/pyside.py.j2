@@ -1,0 +1,155 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QObject, QPoint, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QApplication, QWidget
+
+from ..theme import theme
+
+GAP = 6
+
+
+class _Bubble(QWidget):
+    """The tip, drawn inside the trigger's window so it is part of the window's own picture."""
+
+    def __init__(self, window: QWidget, text: str, note: bool) -> None:
+        super().__init__(window)
+        self._text = text
+        self._note = note
+        self._font = theme.font({{ "text-body-medium" | tok }} if note else {{ "text-caption" | tok }})
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, not note)
+        if note:
+            theme.apply_shadow(self, {{ "shadow-floating-small" | tok }})
+        self.resize(self._measure())
+        theme.changed.connect(self.update)
+
+    def _pad(self) -> tuple[int, int]:
+        return (14, 12) if self._note else (8, 4)
+
+    def _measure(self) -> QSize:
+        px, py = self._pad()
+        limit = (280 if self._note else 240) - 2 * px
+        metrics = QFontMetrics(self._font)
+        rect = metrics.boundingRect(0, 0, limit, 10000, Qt.TextFlag.TextWordWrap, self._text)
+        line = 20 if self._note else 16
+        lines = max(1, round(rect.height() / metrics.lineSpacing()))
+        return QSize(rect.width() + 2 * px + 1, lines * line + 2 * py)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect())
+        if self._note:
+            painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+            painter.setBrush(theme.color({{ "overlay-bgColor" | tok }}))
+            radius = {{ px("borderRadius-large") | num }}
+            painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+            ink = {{ "fgColor-default" | tok }}
+        else:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "bgColor-emphasis" | tok }}))
+            radius = {{ px("borderRadius-small") | num }}
+            painter.drawRoundedRect(rect, radius, radius)
+            ink = {{ "fgColor-onEmphasis" | tok }}
+        px, py = self._pad()
+        painter.setFont(self._font)
+        painter.setPen(theme.color(ink))
+        painter.drawText(rect.adjusted(px, py, -px, -py), Qt.TextFlag.TextWordWrap, self._text)
+
+
+class ToolTip(QObject):
+    """Attaches a tip to a widget: hover shows it after `delay` ms, keyboard focus at once, and Escape hides it.
+
+    With whats_this, a click on the widget opens an explanation bubble instead, and a click elsewhere closes it.
+    """
+
+    def __init__(self, target: QWidget, text: str, placement: str = "top", delay: int = {{ c.spec.props.delay.default }},
+                 whats_this: bool = False, open: bool = False) -> None:
+        super().__init__(target)
+        self._target = target
+        self._text = text
+        self._placement = placement
+        self._whats_this = whats_this
+        self._bubble: _Bubble | None = None
+        self._want_open = open
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(delay)
+        self._timer.timeout.connect(self.show)
+        self.disabled = False
+        if not target.accessibleDescription():
+            target.setAccessibleDescription(text)
+        target.installEventFilter(self)
+
+    def is_open(self) -> bool:
+        return self._bubble is not None
+
+    def show(self) -> None:
+        if self._bubble is not None or self.disabled or not self._target.isVisible():
+            return
+        window = self._target.window()
+        self._bubble = _Bubble(window, self._text, self._whats_this)
+        self._place()
+        self._bubble.show()
+        self._bubble.raise_()
+        if self._whats_this:
+            QApplication.instance().installEventFilter(self)
+
+    def hide(self) -> None:
+        self._timer.stop()
+        if self._bubble is None:
+            return
+        QApplication.instance().removeEventFilter(self)
+        self._bubble.deleteLater()
+        self._bubble = None
+
+    def _place(self) -> None:
+        bubble = self._bubble
+        if bubble is None:
+            return
+        origin = self._target.mapTo(self._target.window(), QPoint(0, 0))
+        tw, th = self._target.width(), self._target.height()
+        bw, bh = bubble.width(), bubble.height()
+        if self._placement == "bottom":
+            pos = QPoint(origin.x() + (tw - bw) // 2, origin.y() + th + GAP)
+        elif self._placement == "left":
+            pos = QPoint(origin.x() - bw - GAP, origin.y() + (th - bh) // 2)
+        elif self._placement == "right":
+            pos = QPoint(origin.x() + tw + GAP, origin.y() + (th - bh) // 2)
+        else:
+            pos = QPoint(origin.x() + (tw - bw) // 2, origin.y() - bh - GAP)
+        bubble.move(pos)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        kind = event.type()
+        if watched is self._target:
+            if kind == QEvent.Type.Show and self._want_open:
+                self._want_open = False
+                QTimer.singleShot(0, self.show)
+            elif self._whats_this:
+                if kind == QEvent.Type.MouseButtonRelease:
+                    self.hide() if self._bubble else self.show()
+            elif kind == QEvent.Type.Enter:
+                self._timer.start()
+            elif kind in (QEvent.Type.Leave, QEvent.Type.FocusOut, QEvent.Type.Hide):
+                self.hide()
+            elif kind == QEvent.Type.FocusIn and event.reason() in (Qt.FocusReason.TabFocusReason,
+                                                                     Qt.FocusReason.BacktabFocusReason):
+                self.show()
+            if kind == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape and self._bubble is not None:
+                self.hide()
+                return True
+            if kind in (QEvent.Type.Move, QEvent.Type.Resize):
+                self._place()
+        elif kind == QEvent.Type.MouseButtonPress and self._bubble is not None:
+            # whatsThis: a click anywhere else closes the bubble.
+            point = event.globalPosition().toPoint()
+            inside = self._bubble.rect().contains(self._bubble.mapFromGlobal(point))
+            on_target = self._target.rect().contains(self._target.mapFromGlobal(point))
+            if not inside and not on_target:
+                self.hide()
+        return super().eventFilter(watched, event)

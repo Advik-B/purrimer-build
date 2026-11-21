@@ -1,0 +1,88 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+// Wraps one trigger, its child. Hover shows the tip after `delay`; call show() and hide() for keyboard focus, or set
+// open-on-start. With whats-this, the bubble is an explanation, opened by show() from the trigger's click.
+export component ToolTip {
+    in property <string> text;
+    // top, bottom, left or right
+    in property <string> placement: "top";
+    in property <duration> delay: {{ c.spec.props.delay.default }}ms;
+    in property <bool> whats-this;
+    in property <bool> enabled: true;
+    in property <bool> open-on-start;
+
+    property <length> gap: 6px;
+    property <length> pad-x: root.whats-this ? 14px : 8px;
+    property <length> pad-y: root.whats-this ? 12px : 4px;
+    property <length> bubble-width: min(root.whats-this ? 280px : 240px, measure.preferred-width + 2 * root.pad-x);
+
+    public function show() {
+        if (root.enabled) {
+            bubble.show();
+        }
+    }
+    public function hide() {
+        bubble.close();
+    }
+
+    min-width: content.min-width;
+    min-height: content.min-height;
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+    init => {
+        if (root.open-on-start) {
+            root.show();
+        }
+    }
+
+    // Behind the trigger, so the trigger still gets its clicks; it only watches the pointer.
+    hover := TouchArea { }
+    Timer {
+        interval: root.delay;
+        running: hover.has-hover && !root.whats-this;
+        triggered => { root.show(); }
+    }
+
+    content := VerticalLayout {
+        @children
+    }
+
+    measure := Text {
+        visible: false;
+        text: root.text;
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: root.whats-this ? 14px : 12px;
+    }
+
+    bubble := PopupWindow {
+        width: root.bubble-width;
+        height: label.preferred-height + 2 * root.pad-y;
+        x: root.placement == "left" ? -self.width - root.gap : root.placement == "right" ? root.width + root.gap : (root.width - self.width) / 2;
+        y: root.placement == "top" ? -self.height - root.gap : root.placement == "bottom" ? root.height + root.gap : (root.height - self.height) / 2;
+        close-policy: close-on-click-outside;
+
+        Rectangle {
+            border-radius: root.whats-this ? {{ "borderRadius-large" | tok }} : {{ "borderRadius-small" | tok }};
+            background: root.whats-this ? {{ "overlay-bgColor" | tok }} : {{ "bgColor-emphasis" | tok }};
+            border-width: root.whats-this ? {{ "borderWidth-thin" | tok }} : 0px;
+            border-color: {{ "borderColor-default" | tok }};
+            drop-shadow-offset-y: root.whats-this ? {{ "shadow-floating-small" | tok }}.offset-y : 0px;
+            drop-shadow-blur: root.whats-this ? {{ "shadow-floating-small" | tok }}.blur : 0px;
+            drop-shadow-color: root.whats-this ? {{ "shadow-floating-small" | tok }}.color : transparent;
+            accessible-role: AccessibleRole.text;
+            accessible-label: root.text;
+            label := Text {
+                x: root.pad-x;
+                y: root.pad-y;
+                width: parent.width - 2 * root.pad-x;
+                text: root.text;
+                wrap: word-wrap;
+                color: root.whats-this ? {{ "fgColor-default" | tok }} : {{ "fgColor-onEmphasis" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: root.whats-this ? 14px : 12px;
+            }
+        }
+    }
+}
