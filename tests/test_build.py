@@ -1,5 +1,6 @@
 import compileall
 import json
+import re
 from pathlib import Path
 
 import jinja2
@@ -17,6 +18,7 @@ def test_targets_write_their_entry_files(built: Path) -> None:
     for rel in [
         "css/purrimer.css",
         "css/purrimer-components.css",
+        "css/purrimer-classless.css",
         "svelte/index.ts",
         "solid/index.ts",
         "qtwidgets/purrimer_qt/__init__.py",
@@ -81,3 +83,30 @@ def test_unknown_token_fails_the_render() -> None:
     assert env.from_string('{{ "bgColor-default" | tok }}').render() == "bgColor-default"
     with pytest.raises(KeyError):
         env.from_string('{{ "bgColor-missing" | tok }}').render()
+
+
+def _selectors(css: str) -> list[str]:
+    """Selectors of every style rule, with comments, at-rule preludes and declarations dropped."""
+    css = re.sub(r"/\*.*?\*/", "", css, flags=re.S)
+    css = re.sub(r'url\("[^"]*"\)', "", css)
+    selectors = []
+    for prelude in re.findall(r"([^{}]+)\{", css):
+        prelude = prelude.strip()
+        if prelude.startswith("@") or re.fullmatch(r"(from|to|\d+%)(\s*,\s*(from|to|\d+%))*", prelude):
+            continue
+        selectors += [s.strip() for s in prelude.split(",") if s.strip()]
+    return selectors
+
+
+def test_classless_css_uses_no_classes(built: Path) -> None:
+    selectors = _selectors((built / "css" / "purrimer-classless.css").read_text(encoding="utf-8"))
+    assert selectors
+    assert not [s for s in selectors if re.search(r"\.[a-zA-Z_-]", s)]
+
+
+def test_class_based_css_leaves_plain_elements_alone(built: Path) -> None:
+    # purrimer.css and purrimer-components.css only style their own classes, the theme roots and @font-face.
+    for name in ("purrimer.css", "purrimer-components.css"):
+        for selector in _selectors((built / "css" / name).read_text(encoding="utf-8")):
+            allowed = selector.startswith((":root", "[data-theme")) or re.search(r"\.(pm-|text-)", selector)
+            assert allowed, f"{name}: {selector}"
