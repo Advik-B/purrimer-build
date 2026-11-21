@@ -1,0 +1,29 @@
+name = "InfoButton"
+group = "Mobile"
+order = 55
+summary = "An info button that opens a short explanation in a bottom sheet, where a desktop would use a tooltip."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Sheet title; the button is named \"About\" plus the title."
+
+[props.message]
+type = "string"
+default = ""
+doc = "The explanation, a sentence or two at 16px."
+
+[props.closeLabel]
+type = "string"
+default = "Got it"
+doc = "The button that closes the sheet."
+
+[props.icon]
+type = "icon"
+default = "info"
+doc = "The button's Octicon."
+
+[props.defaultOpen]
+type = "bool"
+default = false
+doc = "Starts with the sheet open."

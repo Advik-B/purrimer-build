@@ -1,0 +1,33 @@
+import { BottomSheet, InfoButton, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    HorizontalLayout {
+        y: 0;
+        height: 44px;
+        padding-left: 16px;
+        padding-right: 4px;
+        Text {
+            text: "Estimated delivery: Tue 14 Jan";
+            vertical-alignment: center;
+            color: Purrimer.fg-color-default;
+        }
+        InfoButton {
+            title: "Estimated delivery";
+            clicked => { sheet.open = true; }
+        }
+    }
+
+    // The sheet the button opens, last so it covers the screen.
+    sheet := BottomSheet {
+        open: true;
+        title: "Estimated delivery";
+        actions: [{ label: "Got it" }];
+        action(index) => { self.close(); }
+        Text {
+            text: "We work it out from the courier's last scan and their usual times for your area, so it can move by a day.";
+            wrap: word-wrap;
+            font-size: 16px;
+            color: Purrimer.fg-color-default;
+        }
+    }
+}

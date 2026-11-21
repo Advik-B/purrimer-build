@@ -1,0 +1,46 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import BottomSheet from "./BottomSheet.svelte";
+  import Button from "./Button.svelte";
+  import IconButton from "./IconButton.svelte";
+
+  let {
+    title = "",
+    message = "",
+    closeLabel = "Got it",
+    icon = "info",
+    defaultOpen = false,
+    ariaLabel = "",
+    children,
+  }: {
+    title?: string;
+    message?: string;
+    closeLabel?: string;
+    icon?: string;
+    defaultOpen?: boolean;
+    ariaLabel?: string;
+    children?: Snippet;
+  } = $props();
+
+  // svelte-ignore state_referenced_locally
+  let open = $state(defaultOpen);
+</script>
+
+{#snippet gotIt()}
+  <Button block label={closeLabel} onclick={() => (open = false)} />
+{/snippet}
+
+<IconButton
+  class="pm-info-button"
+  variant="invisible"
+  {icon}
+  label={ariaLabel || `About ${title ? title.toLowerCase() : "this"}`}
+  aria-haspopup="dialog"
+  onclick={() => (open = true)}
+/>
+<BottomSheet bind:open {title} actions={gotIt}>
+  {#if message}<p class="pm-info-button__text">{message}</p>{/if}
+  {@render children?.()}
+</BottomSheet>

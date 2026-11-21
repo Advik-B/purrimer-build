@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <DockPanel VerticalAlignment="Top" Margin="16,0,4,0">
+    <pm:InfoButton DockPanel.Dock="Right" IsDefaultOpen="True" Title="Estimated delivery"
+                   Message="We work it out from the courier's last scan and their usual times for your area, so it can move by a day." />
+    <TextBlock VerticalAlignment="Center" Text="Estimated delivery: Tue 14 Jan" />
+  </DockPanel>
+</UserControl>

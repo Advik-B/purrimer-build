@@ -1,0 +1,124 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A 44px info button. A tap opens a BottomSheet over the window, in its overlay layer, with the title, the message at
+// 16px and a button that closes it.
+public class InfoButton : IconButton
+{
+    public static readonly StyledProperty<string?> TitleProperty =
+        AvaloniaProperty.Register<InfoButton, string?>(nameof(Title));
+
+    public static readonly StyledProperty<string?> MessageProperty =
+        AvaloniaProperty.Register<InfoButton, string?>(nameof(Message));
+
+    public static readonly StyledProperty<string> CloseLabelProperty =
+        AvaloniaProperty.Register<InfoButton, string>(nameof(CloseLabel), "Got it");
+
+    public static readonly StyledProperty<bool> IsDefaultOpenProperty =
+        AvaloniaProperty.Register<InfoButton, bool>(nameof(IsDefaultOpen));
+
+    private BottomSheet? _sheet;
+
+    public InfoButton()
+    {
+        IconName = "info";
+        Label = "About this";
+        Classes.Add("invisible");
+        Width = 44;
+        Height = 44;
+        Click += (_, _) => OpenSheet();
+    }
+
+    protected override Type StyleKeyOverride => typeof(IconButton);
+
+    public string? Title
+    {
+        get => GetValue(TitleProperty);
+        set => SetValue(TitleProperty, value);
+    }
+
+    public string? Message
+    {
+        get => GetValue(MessageProperty);
+        set => SetValue(MessageProperty, value);
+    }
+
+    public string CloseLabel
+    {
+        get => GetValue(CloseLabelProperty);
+        set => SetValue(CloseLabelProperty, value);
+    }
+
+    public bool IsDefaultOpen
+    {
+        get => GetValue(IsDefaultOpenProperty);
+        set => SetValue(IsDefaultOpenProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == TitleProperty)
+            Label = string.IsNullOrEmpty(Title) ? "About this" : "About " + Title.ToLowerInvariant();
+    }
+
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        if (IsDefaultOpen)
+            OpenSheet();
+    }
+
+    protected override void OnUnloaded(RoutedEventArgs e)
+    {
+        base.OnUnloaded(e);
+        if (_sheet?.Parent is Panel panel)
+            panel.Children.Remove(_sheet);
+        _sheet = null;
+    }
+
+    public void OpenSheet()
+    {
+        if (OverlayLayer.GetOverlayLayer(this) is not { } layer)
+            return;
+        if (_sheet == null)
+        {
+            var close = new Button { Content = CloseLabel, HorizontalAlignment = HorizontalAlignment.Stretch };
+            close.Classes.Add("block");
+            _sheet = new BottomSheet
+            {
+                Title = Title,
+                Content = new TextBlock
+                {
+                    Text = Message,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 16,
+                    LineHeight = 24,
+                },
+                Actions = close,
+                Width = layer.Bounds.Width,
+                Height = layer.Bounds.Height,
+            };
+            close.Click += (_, _) => _sheet.Close();
+            layer.Children.Add(_sheet);
+            layer.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == BoundsProperty && _sheet != null)
+                {
+                    _sheet.Width = layer.Bounds.Width;
+                    _sheet.Height = layer.Bounds.Height;
+                }
+            };
+        }
+        _sheet.IsOpen = true;
+    }
+}
