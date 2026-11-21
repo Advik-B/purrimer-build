@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="16">
+    <pm:FAB Label="New note" />
+    <pm:FAB IconName="pencil" Label="Compose" IsExtended="True" />
+  </StackPanel>
+</UserControl>

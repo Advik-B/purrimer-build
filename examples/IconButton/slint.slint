@@ -1,0 +1,11 @@
+import { IconButton, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 8px;
+    alignment: start;
+    IconButton { icon: PurrimerIcons.pencil-16; label: "Edit"; }
+    IconButton { icon: PurrimerIcons.plus-16; label: "Add"; variant: "primary"; }
+    IconButton { icon: PurrimerIcons.trash-16; label: "Delete"; variant: "danger"; }
+    IconButton { icon: PurrimerIcons.kebab-horizontal-16; label: "More"; variant: "invisible"; }
+    IconButton { icon: PurrimerIcons.x-16; label: "Close"; size: "small"; y: 4px; }
+}

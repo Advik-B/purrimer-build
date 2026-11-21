@@ -1,0 +1,6 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Card Title="Weekly digest">
+    <TextBlock Text="Three new comments and one review are waiting for you." TextWrapping="Wrap" />
+  </pm:Card>
+</UserControl>

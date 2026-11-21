@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <WrapPanel ItemSpacing="8" LineSpacing="8">
+    <pm:Chip Text="Design" IconName="tag" />
+    <pm:Chip Text="Shipped" Tone="success" />
+    <pm:Chip Text="Archive" Tone="neutral" IsRemovable="True" />
+    <pm:Chip Text="Docs" Tone="info" />
+  </WrapPanel>
+</UserControl>

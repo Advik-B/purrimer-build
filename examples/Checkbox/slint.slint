@@ -1,0 +1,9 @@
+import { Checkbox } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 12px;
+    alignment: start;
+    Checkbox { text: "Email me about replies"; checked: true; toggled(on) => { debug("replies", on); } }
+    Checkbox { text: "Weekly digest"; }
+    Checkbox { text: "Beta features (coming soon)"; enabled: false; }
+}

@@ -1,0 +1,12 @@
+import { Label } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 8px;
+    alignment: start;
+    Label { text: "Draft"; }
+    Label { text: "New"; tone: "accent"; }
+    Label { text: "Merged"; tone: "success"; }
+    Label { text: "Pending"; tone: "attention"; }
+    Label { text: "Failed"; tone: "danger"; }
+    Label { text: "Closed"; tone: "done"; }
+}

@@ -1,0 +1,15 @@
+import { AppBar, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    AppBar {
+        title: "Inbox";
+        back: true;
+        large: true;
+        actions: [
+            { icon: PurrimerIcons.search-24, label: "Search" },
+            { icon: PurrimerIcons.kebab-horizontal-24, label: "More" },
+        ];
+        action-clicked(index) => { debug("action", index); }
+    }
+}

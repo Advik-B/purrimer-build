@@ -1,0 +1,10 @@
+import { SegmentedControl } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    alignment: start;
+    SegmentedControl {
+        items: ["Day", "Week", "Month"];
+        selected: 1;
+        activated(index) => { self.selected = index; }
+    }
+}

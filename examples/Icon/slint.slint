@@ -1,0 +1,11 @@
+import { Icon, Purrimer, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 16px;
+    alignment: start;
+    Icon { path: PurrimerIcons.heart-16; y: 4px; }
+    Icon { path: PurrimerIcons.star-16; y: 4px; }
+    Icon { path: PurrimerIcons.bell-16; y: 4px; }
+    Icon { path: PurrimerIcons.bell-24; size: 24px; box: 24; }
+    Icon { path: PurrimerIcons.heart-24; size: 24px; box: 24; color: Purrimer.fg-color-danger; }
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web",
+    "paths": { "~/purrimer": ["./stage/purrimer/solid/index.ts"] }
+  },
+  "include": ["stage/purrimer/solid/**/*.ts", "stage/purrimer/solid/**/*.tsx", "stage/examples/*/solid.tsx", "src/**/*.ts"]
+}

@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="16">
+    <pm:Icon IconName="heart" VerticalAlignment="Center" />
+    <pm:Icon IconName="star" VerticalAlignment="Center" />
+    <pm:Icon IconName="bell" VerticalAlignment="Center" />
+    <pm:Icon IconName="bell" Size="24" />
+    <pm:Icon IconName="heart" Size="24" Foreground="{DynamicResource PmFgColorDanger}" />
+  </StackPanel>
+</UserControl>

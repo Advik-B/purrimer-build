@@ -1,0 +1,21 @@
+import { Purrimer, Snackbar } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    Text {
+        x: 16px;
+        y: 16px;
+        text: "Inbox";
+        color: Purrimer.fg-color-default;
+    }
+
+    // Inset by the gutter, above the bottom bar.
+    Snackbar {
+        x: 16px;
+        width: parent.width - 32px;
+        y: parent.height - self.height - Purrimer.mobile-bottom-nav-height - 16px;
+        open: true;
+        message: "Message archived";
+        action: "Undo";
+        action-triggered => { debug("undo"); }
+    }
+}

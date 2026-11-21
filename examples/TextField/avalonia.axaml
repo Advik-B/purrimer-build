@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="16">
+    <pm:TextField Label="Email" PlaceholderText="you@example.com" Caption="We never share it." LeadingIcon="mail" />
+    <pm:TextField Label="Username" Text="purr" Error="That name is taken." />
+  </StackPanel>
+</UserControl>

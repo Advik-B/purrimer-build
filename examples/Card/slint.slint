@@ -1,0 +1,13 @@
+import { Card, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Card {
+        title: "Weekly digest";
+        Text {
+            text: "Three new comments and one review are waiting for you.";
+            wrap: word-wrap;
+            color: Purrimer.fg-color-default;
+        }
+    }
+}

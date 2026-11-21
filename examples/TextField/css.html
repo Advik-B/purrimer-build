@@ -1,0 +1,17 @@
+<div style="display: grid; gap: 16px">
+  <div class="pm-field">
+    <label class="pm-field__label" for="email">Email</label>
+    <div class="pm-field__control">
+      <svg class="pm-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442Zm13-8.181v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg>
+      <input id="email" class="pm-field__input" type="email" placeholder="you@example.com" aria-describedby="email-note" />
+    </div>
+    <span class="pm-field__caption" id="email-note">We never share it.</span>
+  </div>
+  <div class="pm-field pm-field--invalid">
+    <label class="pm-field__label" for="user">Username</label>
+    <div class="pm-field__control">
+      <input id="user" class="pm-field__input" value="purr" aria-invalid="true" aria-describedby="user-note" />
+    </div>
+    <span class="pm-field__error" id="user-note"><svg class="pm-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.457 1.047c.659-1.234 2.427-1.234 3.086 0l6.082 11.378A1.75 1.75 0 0 1 14.082 15H1.918a1.75 1.75 0 0 1-1.543-2.575ZM8 5a.75.75 0 0 0-.75.75v2.5a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8 5Zm1 6a1 1 0 1 0-2 0 1 1 0 0 0 2 0Z"/></svg>That name is taken.</span>
+  </div>
+</div>

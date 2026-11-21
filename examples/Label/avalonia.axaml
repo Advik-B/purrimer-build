@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <WrapPanel ItemSpacing="8" LineSpacing="8">
+    <pm:Label Text="Draft" />
+    <pm:Label Text="New" Tone="accent" />
+    <pm:Label Text="Merged" Tone="success" />
+    <pm:Label Text="Pending" Tone="attention" />
+    <pm:Label Text="Failed" Tone="danger" />
+    <pm:Label Text="Closed" Tone="done" />
+  </WrapPanel>
+</UserControl>

@@ -1,0 +1,14 @@
+import { Purrimer, Tabs } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    tabs := Tabs {
+        height: 120px;
+        items: ["Overview", "Activity", "Settings"];
+        activated(index) => { self.selected = index; }
+        Text {
+            text: tabs.selected == 0 ? "Three open issues, two in review." : tabs.selected == 1 ? "Updated 2 hours ago." : "Visible to your team.";
+            color: Purrimer.fg-color-default;
+        }
+    }
+}

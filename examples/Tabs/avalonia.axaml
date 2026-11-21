@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <TabControl Height="120">
+    <TabItem Header="Overview">
+      <TextBlock Text="Three open issues, two in review." />
+    </TabItem>
+    <TabItem Header="Activity">
+      <TextBlock Text="Updated 2 hours ago." />
+    </TabItem>
+    <TabItem Header="Settings">
+      <TextBlock Text="Visible to your team." />
+    </TabItem>
+  </TabControl>
+</UserControl>

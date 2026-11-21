@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <!-- IsIndeterminate="True" sweeps while the amount is unknown. -->
+  <StackPanel Spacing="16">
+    <ProgressBar Value="40" />
+    <ProgressBar Value="75" Classes="success" />
+    <ProgressBar Value="95" Classes="danger" />
+  </StackPanel>
+</UserControl>

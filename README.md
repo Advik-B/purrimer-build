@@ -17,6 +17,61 @@ Every target covers the same 25 components: Icon, Button, IconButton, TextField,
 Label, Chip, Banner, ProgressBar, Card, Dialog, AppBar, BottomNav, BottomSheet, ListItem, ListSection, FAB, Snackbar,
 SearchBar, SegmentedControl, Tabs and Avatar. The themes are Blanc (default), Noir, Latte and Mocha.
 
+## Components
+
+Each component has a page in [docs/components](docs/components/README.md) with its props and a working example for
+every target, screenshotted in Blanc and Noir. The gallery shows the CSS target in Blanc.
+
+<!-- gallery:start -->
+
+<table>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Icon.md"><img src="docs/screenshots/css/Icon-blanc.png" width="240" alt="Icon"><br><b>Icon</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Button.md"><img src="docs/screenshots/css/Button-blanc.png" width="240" alt="Button"><br><b>Button</b></a></td>
+<td align="center" valign="top"><a href="docs/components/IconButton.md"><img src="docs/screenshots/css/IconButton-blanc.png" width="240" alt="IconButton"><br><b>IconButton</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/TextField.md"><img src="docs/screenshots/css/TextField-blanc.png" width="240" alt="TextField"><br><b>TextField</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Checkbox.md"><img src="docs/screenshots/css/Checkbox-blanc.png" width="240" alt="Checkbox"><br><b>Checkbox</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Radio.md"><img src="docs/screenshots/css/Radio-blanc.png" width="240" alt="Radio"><br><b>Radio</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Toggle.md"><img src="docs/screenshots/css/Toggle-blanc.png" width="240" alt="Toggle"><br><b>Toggle</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Select.md"><img src="docs/screenshots/css/Select-blanc.png" width="240" alt="Select"><br><b>Select</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Label.md"><img src="docs/screenshots/css/Label-blanc.png" width="240" alt="Label"><br><b>Label</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Chip.md"><img src="docs/screenshots/css/Chip-blanc.png" width="240" alt="Chip"><br><b>Chip</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Banner.md"><img src="docs/screenshots/css/Banner-blanc.png" width="240" alt="Banner"><br><b>Banner</b></a></td>
+<td align="center" valign="top"><a href="docs/components/ProgressBar.md"><img src="docs/screenshots/css/ProgressBar-blanc.png" width="240" alt="ProgressBar"><br><b>ProgressBar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Card.md"><img src="docs/screenshots/css/Card-blanc.png" width="240" alt="Card"><br><b>Card</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Dialog.md"><img src="docs/screenshots/css/Dialog-blanc.png" width="240" alt="Dialog"><br><b>Dialog</b></a></td>
+<td align="center" valign="top"><a href="docs/components/AppBar.md"><img src="docs/screenshots/css/AppBar-blanc.png" width="240" alt="AppBar"><br><b>AppBar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/BottomNav.md"><img src="docs/screenshots/css/BottomNav-blanc.png" width="240" alt="BottomNav"><br><b>BottomNav</b></a></td>
+<td align="center" valign="top"><a href="docs/components/BottomSheet.md"><img src="docs/screenshots/css/BottomSheet-blanc.png" width="240" alt="BottomSheet"><br><b>BottomSheet</b></a></td>
+<td align="center" valign="top"><a href="docs/components/ListItem.md"><img src="docs/screenshots/css/ListItem-blanc.png" width="240" alt="ListItem"><br><b>ListItem</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/ListSection.md"><img src="docs/screenshots/css/ListSection-blanc.png" width="240" alt="ListSection"><br><b>ListSection</b></a></td>
+<td align="center" valign="top"><a href="docs/components/FAB.md"><img src="docs/screenshots/css/FAB-blanc.png" width="240" alt="FAB"><br><b>FAB</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Snackbar.md"><img src="docs/screenshots/css/Snackbar-blanc.png" width="240" alt="Snackbar"><br><b>Snackbar</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/SearchBar.md"><img src="docs/screenshots/css/SearchBar-blanc.png" width="240" alt="SearchBar"><br><b>SearchBar</b></a></td>
+<td align="center" valign="top"><a href="docs/components/SegmentedControl.md"><img src="docs/screenshots/css/SegmentedControl-blanc.png" width="240" alt="SegmentedControl"><br><b>SegmentedControl</b></a></td>
+<td align="center" valign="top"><a href="docs/components/Tabs.md"><img src="docs/screenshots/css/Tabs-blanc.png" width="240" alt="Tabs"><br><b>Tabs</b></a></td>
+</tr>
+<tr>
+<td align="center" valign="top"><a href="docs/components/Avatar.md"><img src="docs/screenshots/css/Avatar-blanc.png" width="240" alt="Avatar"><br><b>Avatar</b></a></td>
+</tr>
+</table>
+
+<!-- gallery:end -->
+
 ## Install
 
 The project uses [uv](https://docs.astral.sh/uv/).
@@ -80,11 +135,12 @@ and Dialog shadows use `RectangularShadow`, so Qt 6.9 or later is required.
 and TabControl get Purrimer as their default theme; the other components are `pm:` controls.
 
 **Slint.** Import from `slint/purrimer-components.slint` and set `Purrimer.theme = PurrimerTheme.noir` (or `latte`,
-`mocha`). Icons are path
-commands such as `PurrimerIcons.search-16`.
+`mocha`). Icons are path commands such as `PurrimerIcons.search-16`. Set
+`default-font-family: Purrimer.text-body-medium.font-family` on your `Window` so plain `Text` uses Mona Sans.
 
-**Overlays.** Dialog, BottomSheet and Snackbar on Avalonia, Slint and PySide6 draw inside their parent: place them
-last in a panel that covers the window or screen.
+**Overlays.** Dialog, BottomSheet and Snackbar on Avalonia and Slint, and BottomSheet and Snackbar on PySide6, draw
+inside their parent: place them last in a panel that covers the window or screen. The PySide6 Dialog is a `QDialog`;
+show it with `open()` or `exec()`. On Qt Quick all three are popups on the window overlay.
 
 ## Adding a component
 
@@ -107,7 +163,8 @@ uv run purrimer new DatePicker --group Forms
 uv run purrimer components
 ```
 
-A target skips a component that lacks its layers and says so in the build output. Pass `--components-dir path` to
+Add `examples/DatePicker/` too, with one example per target (see [Examples and screenshots](#examples-and-screenshots));
+the tests fail without it. A target skips a component that lacks its layers and says so in the build output. Pass `--components-dir path` to
 keep components outside this repository; a folder there with the same name as a built-in one replaces it.
 
 ## Template rules
@@ -130,10 +187,34 @@ uv run ruff format --check
 uv run pytest
 ```
 
-The tests build every target once and check names, coverage and output. The generated code was also checked with
-each platform's own tools during development: lightningcss, svelte-check, `tsc` with Solid 2.0.3, `pyside6-qmllint`
-and an offscreen render with PySide6 6.12, a `dotnet build` and headless render with Avalonia 12.1.5, and the Slint
-1.18 compiler with a software-rendered window.
+The tests build every target once and check names, coverage and output, plus the bugs that the examples below
+turned up.
+
+## Examples and screenshots
+
+`examples/<Name>/` holds one small example per target: `css.html`, `svelte.svelte`, `solid.tsx`, `qtwidgets.py`,
+`qtquick.qml`, `avalonia.axaml` and `slint.slint`, plus `example.toml` with the frame size. `scripts/showcase.py`
+builds every target, runs each example on its real toolkit and screenshots it in Blanc and Noir:
+
+```sh
+uv sync --group showcase
+uv run scripts/showcase.py build
+uv run scripts/showcase.py run                      # all targets; or --targets svelte,slint --only Button,Card
+uv run scripts/showcase.py docs                     # docs/components/*.md and the README gallery
+```
+
+| Target | Checked with | Fails on |
+| --- | --- | --- |
+| css, svelte, solid | `svelte-check`, `tsc` with Solid 2.0.3, Vite, Playwright and Chromium | console errors or warnings, failed requests, `pm-*` classes with no CSS rule |
+| qtwidgets | PySide6 6.12, offscreen | any Qt warning |
+| qtquick | `pyside6-qmllint`, PySide6 6.12 in a window | any QML warning, the software renderer (it drops shadows) |
+| avalonia | `dotnet build -warnaserror`, Avalonia 12.1.5 headless with Skia | XAML errors, Avalonia warnings such as binding errors |
+| slint | `slint-viewer` 1.18 `--check` and `--screenshot` | any diagnostic |
+
+Every screenshot must also be more than one flat colour. The run needs Node 24, the .NET 10 SDK and `slint-viewer`
+on `PATH`. Screenshots land in `showcase/out/`; only CI writes `docs/screenshots/`, so that pixels do not change
+with the machine. On every push to `master`, the Showcase workflow runs all of this on Linux and commits the new
+screenshots and docs; on pull requests it only runs the checks.
 
 ## Licences
 

@@ -1,0 +1,11 @@
+import { Select } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Select {
+        label: "T-shirt size";
+        options: ["Small", "Medium", "Large"];
+        current-index: 1;
+        selected(index) => { debug("size", index); }
+    }
+}

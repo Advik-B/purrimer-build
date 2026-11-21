@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Select Label="T-shirt size" SelectedIndex="1" HorizontalAlignment="Stretch">
+    <ComboBoxItem Content="Small" />
+    <ComboBoxItem Content="Medium" />
+    <ComboBoxItem Content="Large" />
+  </pm:Select>
+</UserControl>

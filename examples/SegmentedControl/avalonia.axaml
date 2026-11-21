@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:SegmentedControl SelectedIndex="1">
+    <ListBoxItem Content="Day" />
+    <ListBoxItem Content="Week" />
+    <ListBoxItem Content="Month" />
+  </pm:SegmentedControl>
+</UserControl>

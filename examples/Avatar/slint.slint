@@ -1,0 +1,11 @@
+import { Avatar } from "purrimer-components.slint";
+
+// Slint cannot split strings, so pass the initials too. Set source for a picture.
+export component Example inherits HorizontalLayout {
+    spacing: 12px;
+    alignment: start;
+    Avatar { name: "Ada Lovelace"; initials: "AL"; size: 24px; y: 12px; }
+    Avatar { name: "Grace Hopper"; initials: "GH"; y: 8px; }
+    Avatar { name: "Alan Turing"; initials: "AT"; size: 40px; y: 4px; }
+    Avatar { name: "Purrimer"; initials: "P"; size: 48px; square: true; }
+}

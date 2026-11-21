@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="8">
+    <pm:IconButton IconName="pencil" Label="Edit" />
+    <pm:IconButton IconName="plus" Label="Add" Classes="primary" />
+    <pm:IconButton IconName="trash" Label="Delete" Classes="danger" />
+    <pm:IconButton IconName="kebab-horizontal" Label="More" Classes="invisible" />
+    <pm:IconButton IconName="x" Label="Close" Classes="small" VerticalAlignment="Center" />
+  </StackPanel>
+</UserControl>

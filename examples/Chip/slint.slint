@@ -1,0 +1,11 @@
+import { Chip, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    in-out property <bool> archived;
+    spacing: 8px;
+    alignment: start;
+    Chip { text: "Design"; icon: PurrimerIcons.tag-16; }
+    Chip { text: "Shipped"; tone: "success"; }
+    if !archived: Chip { text: "Archive"; tone: "neutral"; removable: true; removed => { archived = true; } }
+    Chip { text: "Docs"; tone: "info"; }
+}

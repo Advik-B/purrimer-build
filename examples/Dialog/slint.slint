@@ -1,0 +1,27 @@
+import { Button, Dialog, Purrimer } from "purrimer-components.slint";
+
+// The dialog draws over its parent: put it last in an element that covers the window.
+export component Example inherits Rectangle {
+    Text {
+        x: 16px;
+        y: 16px;
+        text: "Repository settings";
+        color: Purrimer.fg-color-default;
+    }
+
+    dialog := Dialog {
+        open: true;
+        title: "Delete repository?";
+        Text {
+            text: "This deletes purrimer-build and its history for good.";
+            wrap: word-wrap;
+            color: Purrimer.fg-color-default;
+        }
+        HorizontalLayout {
+            spacing: 8px;
+            alignment: end;
+            Button { text: "Cancel"; clicked => { dialog.open = false; } }
+            Button { text: "Delete"; variant: "danger"; clicked => { dialog.open = false; } }
+        }
+    }
+}

@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Renders each examples/<Name>/avalonia.axaml headlessly with Skia and saves a screenshot.
+       The assembly is named Purrimer.Avalonia because the generated avares:// URIs use that name
+       (the avalonia-assembly option of purrimer build). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>Purrimer.Avalonia</AssemblyName>
+    <RootNamespace>Purrimer.Showcase</RootNamespace>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PurrimerDir>$(MSBuildThisFileDirectory)../dist/avalonia/Purrimer/</PurrimerDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Headless" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Markup.Xaml.Loader" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Skia" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+  </ItemGroup>
+
+  <!-- The generated code, linked in as if it had been copied into the project. -->
+  <ItemGroup>
+    <Compile Include="$(PurrimerDir)**/*.cs" Link="Purrimer/%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaXaml Include="$(PurrimerDir)**/*.axaml" Link="Purrimer/%(RecursiveDir)%(Filename)%(Extension)" />
+    <AvaloniaResource Include="$(PurrimerDir)Fonts/**" Link="Purrimer/Fonts/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+</Project>

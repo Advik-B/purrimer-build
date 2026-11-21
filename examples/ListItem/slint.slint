@@ -1,0 +1,15 @@
+import { ListItem, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    ListItem {
+        icon: PurrimerIcons.bell-16;
+        headline: "Notifications";
+        supporting: "Mentions and replies";
+        trailing: "On";
+        chevron: true;
+        clickable: true;
+        clicked => { debug("open notifications"); }
+    }
+    ListItem { icon: PurrimerIcons.globe-16; headline: "Language"; trailing: "English"; }
+}
