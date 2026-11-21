@@ -1,0 +1,154 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { BottomSheet } from "bottom-sheet.slint";
+import { Icon } from "icon.slint";
+
+// One row: a choice, a divider or a group heading. icon takes path commands (PurrimerIcons.link-16). checkable shows
+// the row as a checkbox item ticked by checked. submenu shows a chevron: Slint structs cannot nest, so choosing it
+// calls selected(index) without closing, and the app swaps in the submenu's items with in-submenu set.
+export struct ActionSheetItem {
+    label: string,
+    description: string,
+    icon: string,
+    variant: string,
+    disabled: bool,
+    checkable: bool,
+    checked: bool,
+    submenu: bool,
+    divider: bool,
+    group: string,
+}
+
+// A menu in a bottom sheet. Choosing a row calls selected(index) and closes the sheet unless close-on-select is off.
+// dismissed(reason) reports "select", "cancel" or "outside". An empty cancel-label hides Cancel.
+export component ActionSheet inherits BottomSheet {
+    in property <[ActionSheetItem]> items;
+    in property <string> cancel-label: "Cancel";
+    in property <string> back-label: "Back";
+    in property <bool> close-on-select: true;
+    // Shows the Back row; set it while items holds a submenu.
+    in property <bool> in-submenu;
+    callback selected(int);
+    callback back();
+    callback dismissed(string);
+    property <bool> has-icons: false;
+
+    actions: root.cancel-label == "" ? [] : [{ label: root.cancel-label, variant: "default" }];
+    action(index) => {
+        root.close();
+        root.dismissed("cancel");
+    }
+    closed => { root.dismissed("outside"); }
+
+    VerticalLayout {
+        padding-left: -{{ "mobile-gutter" | tok }};
+        padding-right: -{{ "mobile-gutter" | tok }};
+        padding-bottom: -8px;
+        accessible-role: list;
+
+        if root.in-submenu: back-row := Rectangle {
+            height: 48px;
+            accessible-role: button;
+            accessible-label: root.back-label;
+            accessible-action-default => { root.back(); }
+            background: back-touch.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+            HorizontalLayout {
+                padding-left: {{ "mobile-gutter" | tok }};
+                padding-right: {{ "mobile-gutter" | tok }};
+                spacing: 12px;
+                Rectangle {
+                    width: 32px;
+                    Icon { path: PurrimerIcons.chevron-left-16; color: {{ "fgColor-muted" | tok }}; }
+                }
+                Text {
+                    text: root.back-label;
+                    vertical-alignment: center;
+                    color: {{ "fgColor-default" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 16px;
+                }
+            }
+            back-touch := TouchArea { clicked => { root.back(); } }
+        }
+
+        for item[i] in root.items: row := Rectangle {
+            property <bool> danger: item.variant == "danger";
+            property <brush> ink: item.disabled ? {{ "fgColor-disabled" | tok }} : self.danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }};
+            property <brush> soft: item.disabled ? {{ "fgColor-disabled" | tok }} : self.danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }};
+            height: item.divider ? 9px : item.group != "" ? 28px : item.description != "" ? 60px : 48px;
+            accessible-role: button;
+            accessible-label: item.label;
+            accessible-checkable: item.checkable;
+            accessible-checked: item.checked;
+            accessible-enabled: !item.disabled;
+            background: touch.pressed && !item.disabled && !item.divider && item.group == "" ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+
+            if item.divider: Rectangle {
+                x: {{ "mobile-gutter" | tok }};
+                y: 4px;
+                width: parent.width - 2 * {{ "mobile-gutter" | tok }};
+                height: {{ "borderWidth-thin" | tok }};
+                background: {{ "borderColor-muted" | tok }};
+            }
+            if item.group != "": Text {
+                x: {{ "mobile-gutter" | tok }};
+                y: 8px;
+                text: item.group;
+                color: {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            if !item.divider && item.group == "": HorizontalLayout {
+                padding-left: {{ "mobile-gutter" | tok }};
+                padding-right: {{ "mobile-gutter" | tok }};
+                spacing: 12px;
+                if item.icon != "": Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    y: (parent.height - self.height) / 2;
+                    border-radius: {{ "borderRadius-medium" | tok }};
+                    background: row.danger ? {{ "bgColor-danger-muted" | tok }} : {{ "bgColor-neutral-muted" | tok }};
+                    Icon { path: item.icon; color: row.soft; }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    Text {
+                        text: item.label;
+                        overflow: elide;
+                        color: row.ink;
+                        font-family: {{ "text-body-medium" | tok }}.font-family;
+                        font-size: 16px;
+                        font-weight: item.checked ? 600 : 400;
+                    }
+                    if item.description != "": Text {
+                        text: item.description;
+                        overflow: elide;
+                        color: item.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }};
+                        font-family: {{ "text-body-medium" | tok }}.font-family;
+                        font-size: 14px;
+                    }
+                }
+                if item.submenu || (item.checkable && item.checked): Rectangle {
+                    width: 16px;
+                    Icon {
+                        path: item.submenu ? PurrimerIcons.chevron-right-16 : PurrimerIcons.check-16;
+                        color: item.submenu ? {{ "fgColor-muted" | tok }} : {{ "fgColor-accent" | tok }};
+                    }
+                }
+            }
+            touch := TouchArea {
+                enabled: !item.disabled && !item.divider && item.group == "";
+                clicked => {
+                    root.selected(i);
+                    if root.close-on-select && !item.submenu {
+                        root.close();
+                        root.dismissed("select");
+                    }
+                }
+            }
+        }
+    }
+}

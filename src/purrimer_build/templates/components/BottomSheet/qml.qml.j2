@@ -8,6 +8,9 @@ T.Popup {
     id: control
     property string title
     property string description
+    // What the head shows; a component built on the sheet can rebind these (ActionSheet shows a submenu's label).
+    property string heading: title
+    property string subheading: description
     // An Octicon in a 32px tile before the title, coloured by tone.
     // information, warning, critical and question pick their own glyph and tone.
     property string icon
@@ -108,11 +111,11 @@ T.Popup {
                 x: {{ "mobile-gutter" | tok }}
                 y: control.grabber ? 21 : 8
                 width: parent.width - 2 * {{ "mobile-gutter" | tok }}
-                topPadding: control.title !== "" ? 4 : 0
-                bottomPadding: control.title !== "" ? 12 : 0
+                topPadding: control.heading !== "" ? 4 : 0
+                bottomPadding: control.heading !== "" ? 12 : 0
                 spacing: 4
                 Row {
-                    visible: control.title !== ""
+                    visible: control.heading !== ""
                     width: parent.width
                     spacing: 12
                     Rectangle {
@@ -131,7 +134,7 @@ T.Popup {
                     Text {
                         width: parent.width - (control.icon !== "" ? 44 : 0)
                         wrapMode: Text.Wrap
-                        text: control.title
+                        text: control.heading
                         font: {{ "text-mobile-title" | tok }}
                         color: {{ "fgColor-default" | tok }}
                         anchors.verticalCenter: parent.verticalCenter
@@ -139,10 +142,10 @@ T.Popup {
                     }
                 }
                 Text {
-                    visible: control.description !== ""
+                    visible: control.subheading !== ""
                     width: parent.width
                     wrapMode: Text.Wrap
-                    text: control.description
+                    text: control.subheading
                     font: {{ "text-body-medium" | tok }}
                     color: {{ "fgColor-muted" | tok }}
                 }

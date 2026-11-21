@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <!-- IsInline draws the sheet in place, for docs; in an app, put it last in a panel that covers the screen. -->
+  <pm:ActionSheet IsInline="True" Title="Photo.jpg">
+    <pm:ActionSheet.Items>
+      <pm:ActionSheetItem Label="Share" IconName="share-android" />
+      <pm:ActionSheetItem Label="Copy link" IconName="link" Description="Anyone with the link can view" />
+      <pm:ActionSheetItem Label="Move to" IconName="file-directory">
+        <pm:ActionSheetItem Label="Holidays" />
+        <pm:ActionSheetItem Label="Family" />
+      </pm:ActionSheetItem>
+      <pm:ActionSheetItem Label="Favourite" IconName="star" IsChecked="True" />
+      <pm:ActionSheetItem IsDivider="True" />
+      <pm:ActionSheetItem Label="Delete" IconName="trash" Variant="danger" />
+    </pm:ActionSheet.Items>
+  </pm:ActionSheet>
+</UserControl>

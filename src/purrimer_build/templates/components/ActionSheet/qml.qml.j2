@@ -1,0 +1,190 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+// Choosing a row emits selected(item, index) and closes the sheet unless closeOnSelect is off; a row with items opens
+// its submenu in place. dismissed(reason) reports "select", "cancel" or "outside".
+BottomSheet {
+    id: sheet
+    // Rows: { label, description?, icon?, variant?: "danger", disabled?, checked?, items? }, { divider: true } or
+    // { group: "Heading" }.
+    property var items: []
+    // An empty string hides Cancel.
+    property string cancelLabel: "Cancel"
+    property string backLabel: "Back"
+    property bool closeOnSelect: true
+    property var path: []
+    property string reason: "outside"
+    readonly property var parentItem: {
+        let at = null
+        let list = items
+        for (const i of path) {
+            at = list[i]
+            list = at.items || []
+        }
+        return at
+    }
+    readonly property var currentItems: parentItem ? (parentItem.items || []) : items
+    readonly property bool hasIcons: currentItems.some(it => !!it.icon)
+    signal selected(var item, int index)
+    signal dismissed(string reason)
+
+    heading: parentItem ? parentItem.label : title
+    subheading: parentItem ? "" : description
+    onAboutToShow: {
+        path = []
+        reason = "outside"
+    }
+    onClosed: dismissed(reason)
+
+    function choose(item, index) {
+        if (item.disabled)
+            return
+        if (item.items) {
+            path = path.concat([index])
+            return
+        }
+        selected(item, index)
+        if (closeOnSelect) {
+            reason = "select"
+            close()
+        }
+    }
+
+    Column {
+        x: -{{ "mobile-gutter" | tok }}
+        width: parent ? parent.width + 2 * {{ "mobile-gutter" | tok }} : 0
+        Accessible.role: Accessible.PopupMenu
+        Accessible.name: sheet.heading
+
+        Repeater {
+            model: (sheet.parentItem ? [{ label: sheet.backLabel, icon: "chevron-left", back: true }] : []).concat(sheet.currentItems)
+
+            Item {
+                id: row
+                required property var modelData
+                required property int index
+                readonly property bool back: !!modelData.back
+                readonly property int itemIndex: index - (sheet.parentItem ? 1 : 0)
+                readonly property bool danger: modelData.variant === "danger"
+                readonly property bool disabled: !!modelData.disabled
+                readonly property color ink: disabled ? {{ "fgColor-disabled" | tok }} : danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }}
+                readonly property color muted: disabled ? {{ "fgColor-disabled" | tok }} : danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }}
+                width: parent.width
+                height: modelData.divider ? 9 : modelData.group ? 28 : modelData.description ? 60 : 48
+                activeFocusOnTab: !modelData.divider && !modelData.group && !disabled
+                Accessible.role: modelData.checked !== undefined ? Accessible.CheckBox : Accessible.MenuItem
+                Accessible.name: modelData.label || ""
+                Accessible.checked: !!modelData.checked
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        row.activate()
+                        event.accepted = true
+                    }
+                }
+
+                function activate() {
+                    if (back)
+                        sheet.path = sheet.path.slice(0, -1)
+                    else
+                        sheet.choose(modelData, itemIndex)
+                }
+
+                Rectangle {
+                    visible: !!row.modelData.divider
+                    x: {{ "mobile-gutter" | tok }}
+                    y: 4
+                    width: parent.width - 2 * {{ "mobile-gutter" | tok }}
+                    height: {{ "borderWidth-thin" | tok }}
+                    color: {{ "borderColor-muted" | tok }}
+                }
+
+                Text {
+                    visible: !!row.modelData.group
+                    x: {{ "mobile-gutter" | tok }}
+                    y: 8
+                    text: row.modelData.group || ""
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                    color: {{ "fgColor-muted" | tok }}
+                }
+
+                Rectangle {
+                    visible: !row.modelData.divider && !row.modelData.group
+                    anchors.fill: parent
+                    color: tap.pressed && !row.disabled ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+                    border.width: row.activeFocus ? {{ "borderWidth-thick" | tok }} : 0
+                    border.color: {{ "focus-outlineColor" | tok }}
+
+                    Rectangle {
+                        id: tile
+                        visible: sheet.hasIcons || row.back
+                        x: {{ "mobile-gutter" | tok }}
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 32
+                        height: 32
+                        radius: {{ "borderRadius-medium" | tok }}
+                        color: row.back || !row.modelData.icon ? "transparent" : row.danger ? {{ "bgColor-danger-muted" | tok }} : {{ "bgColor-neutral-muted" | tok }}
+                        Icon {
+                            anchors.centerIn: parent
+                            visible: !!row.modelData.icon
+                            name: row.modelData.icon || ""
+                            color: row.muted
+                        }
+                    }
+
+                    Column {
+                        x: tile.visible ? {{ "mobile-gutter" | tok }} + 44 : {{ "mobile-gutter" | tok }}
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: parent.width - x - {{ "mobile-gutter" | tok }} - (trail.visible ? 28 : 0)
+                        Text {
+                            width: parent.width
+                            elide: Text.ElideRight
+                            text: row.modelData.label || ""
+                            font.family: {{ "text-body-medium" | tok }}.family
+                            font.pixelSize: 16
+                            font.weight: row.modelData.checked ? Font.DemiBold : Font.Normal
+                            color: row.ink
+                        }
+                        Text {
+                            visible: !!row.modelData.description
+                            width: parent.width
+                            elide: Text.ElideRight
+                            text: row.modelData.description || ""
+                            font.family: {{ "text-body-medium" | tok }}.family
+                            font.pixelSize: 14
+                            color: row.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }}
+                        }
+                    }
+
+                    Icon {
+                        id: trail
+                        visible: !row.back && (!!row.modelData.items || !!row.modelData.checked)
+                        anchors.right: parent.right
+                        anchors.rightMargin: {{ "mobile-gutter" | tok }}
+                        anchors.verticalCenter: parent.verticalCenter
+                        name: row.modelData.items ? "chevron-right" : "check"
+                        color: row.modelData.items ? {{ "fgColor-muted" | tok }} : {{ "fgColor-accent" | tok }}
+                    }
+
+                    TapHandler {
+                        id: tap
+                        enabled: !row.disabled
+                        onTapped: row.activate()
+                    }
+                }
+            }
+        }
+    }
+
+    actions: Button {
+        visible: sheet.cancelLabel !== ""
+        text: sheet.cancelLabel
+        onClicked: {
+            sheet.reason = "cancel"
+            sheet.close()
+        }
+    }
+}

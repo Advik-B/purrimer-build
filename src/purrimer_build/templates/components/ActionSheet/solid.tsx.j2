@@ -1,0 +1,118 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createEffect, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { BottomSheet } from "./BottomSheet";
+import { Button } from "./Button";
+import { Icon } from "./Icon";
+import { buzz } from "../motion";
+
+export type ActionSheetItem = {
+  label?: string;
+  description?: string;
+  icon?: string;
+  variant?: "default" | "danger";
+  disabled?: boolean;
+  // Set to show a check mark; the row becomes a checkbox item.
+  checked?: boolean;
+  // A submenu, opened in place.
+  items?: ActionSheetItem[];
+  divider?: boolean;
+  group?: string;
+};
+
+export type ActionSheetProps = {
+  open: boolean;
+  items?: ActionSheetItem[];
+  title?: string;
+  description?: string;
+  // An empty string hides Cancel.
+  cancelLabel?: string;
+  backLabel?: string;
+  closeOnSelect?: boolean;
+  inline?: boolean;
+  ariaLabel?: string;
+  onSelect?: (item: ActionSheetItem, index: number) => void;
+  // Set open to false here.
+  onClose?: (reason: "select" | "cancel" | "outside") => void;
+};
+
+export function ActionSheet(props: ActionSheetProps): JSX.Element {
+  const [path, setPath] = createSignal<number[]>([]);
+  const parent = () => path().reduce<ActionSheetItem | null>((at, i) => (at ? at.items?.[i] : props.items?.[i]) ?? null, null);
+  const rows = () => {
+    const p = parent();
+    return p ? (p.items ?? []) : (props.items ?? []);
+  };
+  const hasIcons = () => rows().some((it) => it.icon);
+  const cancelLabel = () => props.cancelLabel ?? "Cancel";
+
+  createEffect(
+    () => props.open,
+    (open) => {
+      if (!open) setPath([]);
+    },
+  );
+
+  function choose(item: ActionSheetItem, index: number) {
+    if (item.disabled) return;
+    if (item.items) {
+      setPath([...path(), index]);
+      return;
+    }
+    buzz();
+    props.onSelect?.(item, index);
+    if (props.closeOnSelect !== false) props.onClose?.("select");
+  }
+
+  return (
+    <BottomSheet
+      open={props.open}
+      title={parent()?.label ?? props.title}
+      description={parent() ? "" : props.description}
+      inline={props.inline}
+      ariaLabel={props.title ? "" : (props.ariaLabel ?? "Options")}
+      onClose={() => props.onClose?.("outside")}
+      actions={cancelLabel() ? <Button block label={cancelLabel()} onClick={() => props.onClose?.("cancel")} /> : undefined}
+    >
+      <div class="pm-action-sheet__rows" role="menu" aria-label={parent()?.label ?? (props.title || props.ariaLabel || "Options")}>
+        <Show when={parent()}>
+          <button type="button" role="menuitem" class="pm-action-sheet__row pm-action-sheet__row--back" onClick={() => setPath(path().slice(0, -1))}>
+            <span class="pm-action-sheet__tile"><Icon name="chevron-left" /></span>
+            <span class="pm-action-sheet__text"><span class="pm-action-sheet__label">{props.backLabel ?? "Back"}</span></span>
+          </button>
+        </Show>
+        <For each={rows()}>
+          {(item, i) =>
+            item.divider ? (
+              <hr class="pm-action-sheet__divider" />
+            ) : item.group ? (
+              <p class="pm-action-sheet__group" role="presentation">{item.group}</p>
+            ) : (
+              <button
+                type="button"
+                role={item.checked !== undefined ? "menuitemcheckbox" : "menuitem"}
+                aria-checked={item.checked === undefined ? undefined : item.checked ? "true" : "false"}
+                aria-haspopup={item.items ? "menu" : undefined}
+                class={`pm-action-sheet__row${item.variant === "danger" ? " pm-action-sheet__row--danger" : ""}${item.checked ? " pm-action-sheet__row--on" : ""}`}
+                disabled={item.disabled}
+                onClick={() => choose(item, i())}
+              >
+                <Show when={hasIcons()}>
+                  <span class="pm-action-sheet__tile"><Show when={item.icon}>{(name) => <Icon name={name()} />}</Show></span>
+                </Show>
+                <span class="pm-action-sheet__text">
+                  <span class="pm-action-sheet__label">{item.label}</span>
+                  <Show when={item.description}><span class="pm-action-sheet__desc">{item.description}</span></Show>
+                </span>
+                <Show when={item.items} fallback={<Show when={item.checked}><span class="pm-action-sheet__trail"><Icon name="check" /></span></Show>}>
+                  <span class="pm-action-sheet__trail pm-action-sheet__trail--more"><Icon name="chevron-right" /></span>
+                </Show>
+              </button>
+            )
+          }
+        </For>
+      </div>
+    </BottomSheet>
+  );
+}

@@ -1,0 +1,273 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+from .bottom_sheet import BottomSheet
+from .button import Button
+
+GUTTER = {{ px("mobile-gutter") | int }}
+
+
+@dataclass
+class ActionSheetItem:
+    label: str = ""
+    description: str = ""
+    icon: str | None = None
+    variant: str = "default"
+    disabled: bool = False
+    # Set to show a check mark; the row becomes a checkbox item.
+    checked: bool | None = None
+    # A submenu, opened in place.
+    items: list[ActionSheetItem] = field(default_factory=list)
+    divider: bool = False
+    group: str = ""
+
+
+class _Rows(QWidget):
+    def __init__(self, owner: ActionSheet) -> None:
+        super().__init__()
+        self._owner = owner
+        self._pressed = -1
+        self._focus = 0
+        self._keyboard = False
+        self._font = theme.font({{ "text-body-medium" | tok }})
+        self._font.setPixelSize(16)
+        self._bold = QFont(self._font)
+        self._bold.setWeight(QFont.Weight.DemiBold)
+        self._small = QFont(self._font)
+        self._small.setPixelSize(14)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        theme.changed.connect(self.update)
+
+    def rows(self) -> list[ActionSheetItem]:
+        back = [ActionSheetItem(self._owner.back_label, icon="chevron-left")] if self._owner._path else []
+        return back + self._owner.current_items()
+
+    @staticmethod
+    def _height(item: ActionSheetItem) -> int:
+        if item.divider:
+            return 9
+        if item.group:
+            return 28
+        return 60 if item.description else 48
+
+    def layout_rows(self) -> list[QRectF]:
+        rects, y = [], 0.0
+        for item in self.rows():
+            h = self._height(item)
+            rects.append(QRectF(0, y, self.width(), h))
+            y += h
+        return rects
+
+    def sizeHint(self) -> QSize:
+        return QSize(320, sum(self._height(i) for i in self.rows()))
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def refresh(self) -> None:
+        self._focus = 0
+        self.setFixedHeight(self.sizeHint().height())
+        self.update()
+
+    def _hit(self, point: QPointF) -> int:
+        for i, rect in enumerate(self.layout_rows()):
+            if rect.contains(point):
+                return i
+        return -1
+
+    def _activate(self, index: int) -> None:
+        rows = self.rows()
+        if not 0 <= index < len(rows) or rows[index].divider or rows[index].group or rows[index].disabled:
+            return
+        if self._owner._path and index == 0:
+            self._owner._leave()
+        else:
+            self._owner._choose(index - (1 if self._owner._path else 0))
+
+    def mousePressEvent(self, event) -> None:
+        self._keyboard = False
+        self._pressed = self._hit(event.position())
+        self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        index = self._pressed
+        self._pressed = -1
+        self.update()
+        if index >= 0 and self._hit(event.position()) == index:
+            self._activate(index)
+
+    def keyPressEvent(self, event) -> None:
+        rows = self.rows()
+        step = {Qt.Key.Key_Up: -1, Qt.Key.Key_Down: 1}.get(event.key())
+        if step:
+            self._keyboard = True
+            i = self._focus
+            while 0 <= i + step < len(rows):
+                i += step
+                if not (rows[i].divider or rows[i].group or rows[i].disabled):
+                    self._focus = i
+                    break
+            self.update()
+        elif event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self._keyboard = True
+            self._activate(self._focus)
+        else:
+            super().keyPressEvent(event)
+
+    def focusInEvent(self, event) -> None:
+        self._keyboard = event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason)
+        super().focusInEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rows = self.rows()
+        has_icons = any(item.icon for item in self._owner.current_items())
+        back = bool(self._owner._path)
+        for i, (item, rect) in enumerate(zip(rows, self.layout_rows(), strict=True)):
+            if item.divider:
+                painter.fillRect(QRectF(GUTTER, rect.top() + 4, rect.width() - 2 * GUTTER, 1),
+                                 theme.color({{ "borderColor-muted" | tok }}))
+                continue
+            if item.group:
+                painter.setFont(self._small)
+                bold = QFont(self._small)
+                bold.setWeight(QFont.Weight.DemiBold)
+                painter.setFont(bold)
+                painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+                painter.drawText(QRectF(GUTTER, rect.top() + 8, rect.width() - 2 * GUTTER, 20),
+                                 Qt.AlignmentFlag.AlignVCenter, item.group)
+                continue
+            is_back = back and i == 0
+            danger = item.variant == "danger"
+            if item.disabled:
+                ink = muted = theme.color({{ "fgColor-disabled" | tok }})
+            elif danger:
+                ink = muted = theme.color({{ "fgColor-danger" | tok }})
+            else:
+                ink, muted = theme.color({{ "fgColor-default" | tok }}), theme.color({{ "fgColor-muted" | tok }})
+            if i == self._pressed and not item.disabled:
+                painter.fillRect(rect, theme.color({{ "control-transparent-bgColor-hover" | tok }}))
+            x = float(GUTTER)
+            if has_icons or is_back:
+                tile = QRectF(x, rect.center().y() - 16, 32, 32)
+                if item.icon and not is_back:
+                    painter.setPen(Qt.PenStyle.NoPen)
+                    painter.setBrush(theme.color({{ "bgColor-danger-muted" | tok }} if danger else {{ "bgColor-neutral-muted" | tok }}))
+                    painter.drawRoundedRect(tile, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+                if item.icon:
+                    paint_icon(painter, tile.adjusted(8, 8, -8, -8), item.icon, muted)
+                x += 32 + 12
+            trail = 0.0
+            if item.items or item.checked:
+                trail = 16 + 12
+                icon = "chevron-right" if item.items else "check"
+                color = theme.color({{ "fgColor-muted" | tok }}) if item.items else theme.color({{ "fgColor-accent" | tok }})
+                paint_icon(painter, QRectF(rect.right() - GUTTER - 16, rect.center().y() - 8, 16, 16), icon, color)
+            width = rect.right() - GUTTER - trail - x
+            label_font = self._bold if item.checked else self._font
+            painter.setFont(label_font)
+            painter.setPen(ink)
+            label = QFontMetrics(label_font).elidedText(item.label, Qt.TextElideMode.ElideRight, int(width))
+            if item.description:
+                painter.drawText(QRectF(x, rect.top() + 8, width, 24), Qt.AlignmentFlag.AlignVCenter, label)
+                painter.setFont(self._small)
+                painter.setPen(theme.color({{ "fgColor-disabled" | tok }}) if item.disabled else theme.color({{ "fgColor-muted" | tok }}))
+                desc = QFontMetrics(self._small).elidedText(item.description, Qt.TextElideMode.ElideRight, int(width))
+                painter.drawText(QRectF(x, rect.top() + 32, width, 20), Qt.AlignmentFlag.AlignVCenter, desc)
+            else:
+                painter.drawText(QRectF(x, rect.top(), width, rect.height()), Qt.AlignmentFlag.AlignVCenter, label)
+            if self.hasFocus() and self._keyboard and i == self._focus:
+                painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRect(rect.adjusted(1, 1, -1, -1))
+
+
+class ActionSheet(BottomSheet):
+    """A menu in a bottom sheet. Choosing a row emits `selected(item, index)` and closes the sheet unless
+    `close_on_select` is off; a row with `items` opens its submenu in place. `dismissed(reason)` reports "select",
+    "cancel" or "outside". An empty `cancel_label` hides Cancel.
+    """
+
+    selected = Signal(object, int)
+    dismissed = Signal(str)
+
+    def __init__(self, parent: QWidget, items: list[ActionSheetItem], title: str = "", description: str = "",
+                 cancel_label: str = "Cancel", back_label: str = "Back", close_on_select: bool = True,
+                 inline: bool = False) -> None:
+        super().__init__(parent, title, description, inline=inline)
+        self.items = items
+        self.back_label = back_label
+        self.close_on_select = close_on_select
+        self._title_text = title
+        self._description_text = description
+        self._path: list[int] = []
+        self._reason = "outside"
+        self.body.setContentsMargins(0, 0, 0, 8)
+        self._rows = _Rows(self)
+        self._rows.refresh()
+        self.body.addWidget(self._rows)
+        if cancel_label:
+            cancel = Button(cancel_label, block=True)
+            cancel.clicked.connect(lambda: self._close("cancel"))
+            self.add_action(cancel)
+        self.closed.connect(self._on_closed)
+
+    def current_items(self) -> list[ActionSheetItem]:
+        items = self.items
+        for i in self._path:
+            items = items[i].items
+        return items
+
+    def open(self) -> None:
+        self._show_level([])
+        self._reason = "outside"
+        super().open()
+        self._rows.setFocus()
+
+    def _show_level(self, path: list[int]) -> None:
+        self._path = path
+        parent = None
+        items = self.items
+        for i in path:
+            parent = items[i]
+            items = parent.items
+        self.title.setText(parent.label if parent else self._title_text)
+        self.title.setVisible(bool(self.title.text()))
+        self._head.setVisible(bool(self.title.text()))
+        self.description.setVisible(parent is None and bool(self._description_text))
+        self._rows.refresh()
+        if self.isVisible() and not self.inline:
+            self._fit()
+
+    def _leave(self) -> None:
+        self._show_level(self._path[:-1])
+
+    def _choose(self, index: int) -> None:
+        item = self.current_items()[index]
+        if item.items:
+            self._show_level([*self._path, index])
+            return
+        self.selected.emit(item, index)
+        if self.close_on_select:
+            self._close("select")
+
+    def _close(self, reason: str) -> None:
+        self._reason = reason
+        self.close_sheet()
+
+    def _on_closed(self) -> None:
+        self.dismissed.emit(self._reason)
+        self._reason = "outside"

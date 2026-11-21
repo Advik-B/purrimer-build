@@ -1,0 +1,394 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Metadata;
+
+namespace {{ ns }};
+
+// One row in an ActionSheet: a choice, a divider (IsDivider) or a group heading (Group). A row with Items opens a
+// submenu in place; IsChecked set to true or false shows it as a checkbox item.
+public class ActionSheetItem
+{
+    public string Label { get; set; } = "";
+    public string? Description { get; set; }
+    public string? IconName { get; set; }
+    public string Variant { get; set; } = "default";
+    public bool IsDisabled { get; set; }
+    public bool? IsChecked { get; set; }
+    public bool IsDivider { get; set; }
+    public string? Group { get; set; }
+
+    [Content]
+    public AvaloniaList<ActionSheetItem> Items { get; } = new();
+}
+
+public class ActionSheetSelectedEventArgs : RoutedEventArgs
+{
+    public ActionSheetSelectedEventArgs(RoutedEvent routedEvent, ActionSheetItem item, int index) : base(routedEvent)
+    {
+        Item = item;
+        Index = index;
+    }
+
+    public ActionSheetItem Item { get; }
+    public int Index { get; }
+}
+
+// A menu in a bottom sheet. Choosing a row raises Selected and closes the sheet unless CloseOnSelect is off. Closed
+// reports every close; DismissReason says whether it came from a choice ("select"), Cancel ("cancel") or the scrim,
+// a drag or Escape ("outside"). An empty CancelLabel hides Cancel.
+public class ActionSheet : BottomSheet
+{
+    public static readonly StyledProperty<string> CancelLabelProperty =
+        AvaloniaProperty.Register<ActionSheet, string>(nameof(CancelLabel), "Cancel");
+
+    public static readonly StyledProperty<string> BackLabelProperty =
+        AvaloniaProperty.Register<ActionSheet, string>(nameof(BackLabel), "Back");
+
+    public static readonly StyledProperty<bool> CloseOnSelectProperty =
+        AvaloniaProperty.Register<ActionSheet, bool>(nameof(CloseOnSelect), true);
+
+    public static readonly RoutedEvent<ActionSheetSelectedEventArgs> SelectedEvent =
+        RoutedEvent.Register<ActionSheet, ActionSheetSelectedEventArgs>(nameof(Selected), RoutingStrategies.Bubble);
+
+    private readonly ActionSheetRows _rows;
+    private readonly Button _cancel = new() { HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly List<int> _path = new();
+    private string? _rootTitle;
+    private string? _rootDescription;
+    private bool _leveling;
+
+    public ActionSheet()
+    {
+        _rows = new ActionSheetRows(this) { Margin = new Thickness(-{{ px("mobile-gutter") | num }}, 0, -{{ px("mobile-gutter") | num }}, -8) };
+        Content = _rows;
+        _cancel.Classes.Add("block");
+        _cancel.Click += (_, _) =>
+        {
+            DismissReason = "cancel";
+            Close();
+        };
+        Items.CollectionChanged += (_, _) => _rows.Refresh();
+        Closed += (_, _) => _path.Clear();
+    }
+
+    protected override Type StyleKeyOverride => typeof(BottomSheet);
+
+    public AvaloniaList<ActionSheetItem> Items { get; } = new();
+
+    // An empty string hides Cancel.
+    public string CancelLabel
+    {
+        get => GetValue(CancelLabelProperty);
+        set => SetValue(CancelLabelProperty, value);
+    }
+
+    public string BackLabel
+    {
+        get => GetValue(BackLabelProperty);
+        set => SetValue(BackLabelProperty, value);
+    }
+
+    public bool CloseOnSelect
+    {
+        get => GetValue(CloseOnSelectProperty);
+        set => SetValue(CloseOnSelectProperty, value);
+    }
+
+    public string DismissReason { get; private set; } = "outside";
+
+    public event EventHandler<ActionSheetSelectedEventArgs>? Selected
+    {
+        add => AddHandler(SelectedEvent, value);
+        remove => RemoveHandler(SelectedEvent, value);
+    }
+
+    internal bool InSubmenu => _path.Count > 0;
+
+    internal IList<ActionSheetItem> CurrentItems()
+    {
+        IList<ActionSheetItem> items = Items;
+        foreach (var i in _path)
+            items = items[i].Items;
+        return items;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == CancelLabelProperty)
+        {
+            _cancel.Content = CancelLabel;
+            Actions = string.IsNullOrEmpty(CancelLabel) ? null : _cancel;
+        }
+        else if (change.Property == IsOpenProperty && IsOpen)
+        {
+            DismissReason = "outside";
+            ShowLevel(new List<int>());
+        }
+        else if (!_leveling && change.Property == TitleProperty)
+        {
+            _rootTitle = Title;
+        }
+        else if (!_leveling && change.Property == DescriptionProperty)
+        {
+            _rootDescription = Description;
+        }
+    }
+
+    protected override void OnApplyTemplate(global::Avalonia.Controls.Primitives.TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        if (Actions == null && !string.IsNullOrEmpty(CancelLabel))
+        {
+            _cancel.Content = CancelLabel;
+            Actions = _cancel;
+        }
+    }
+
+    private void ShowLevel(List<int> path)
+    {
+        _path.Clear();
+        _path.AddRange(path);
+        ActionSheetItem? parent = null;
+        IList<ActionSheetItem> items = Items;
+        foreach (var i in path)
+        {
+            parent = items[i];
+            items = parent.Items;
+        }
+        _leveling = true;
+        SetCurrentValue(TitleProperty, parent?.Label ?? _rootTitle);
+        SetCurrentValue(DescriptionProperty, parent == null ? _rootDescription : null);
+        _leveling = false;
+        _rows.Refresh();
+    }
+
+    internal void Leave() => ShowLevel(_path.Take(_path.Count - 1).ToList());
+
+    internal void Choose(int index)
+    {
+        var item = CurrentItems()[index];
+        if (item.IsDisabled)
+            return;
+        if (item.Items.Count > 0)
+        {
+            ShowLevel(_path.Append(index).ToList());
+            return;
+        }
+        RaiseEvent(new ActionSheetSelectedEventArgs(SelectedEvent, item, index));
+        if (CloseOnSelect)
+        {
+            DismissReason = "select";
+            Close();
+        }
+    }
+}
+
+// The painted rows of an ActionSheet.
+public class ActionSheetRows : Control
+{
+    private const double Gutter = {{ px("mobile-gutter") | num }};
+    private readonly ActionSheet _owner;
+    private int _pressed = -1;
+    private int _focus;
+    private bool _keyboard;
+
+    public ActionSheetRows(ActionSheet owner)
+    {
+        _owner = owner;
+        Focusable = true;
+        Cursor = new Cursor(StandardCursorType.Hand);
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    }
+
+    private List<ActionSheetItem> Rows()
+    {
+        var rows = new List<ActionSheetItem>();
+        if (_owner.InSubmenu)
+            rows.Add(new ActionSheetItem { Label = _owner.BackLabel, IconName = "chevron-left" });
+        rows.AddRange(_owner.CurrentItems());
+        return rows;
+    }
+
+    private static double RowHeight(ActionSheetItem item) =>
+        item.IsDivider ? 9 : !string.IsNullOrEmpty(item.Group) ? 28 : !string.IsNullOrEmpty(item.Description) ? 60 : 48;
+
+    public void Refresh()
+    {
+        _focus = 0;
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    protected override Size MeasureOverride(Size availableSize) =>
+        new(double.IsInfinity(availableSize.Width) ? 320 : availableSize.Width, Rows().Sum(RowHeight));
+
+    private int Hit(Point p)
+    {
+        double y = 0;
+        var rows = Rows();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var h = RowHeight(rows[i]);
+            if (p.Y >= y && p.Y < y + h)
+                return i;
+            y += h;
+        }
+        return -1;
+    }
+
+    private void Activate(int index)
+    {
+        var rows = Rows();
+        if (index < 0 || index >= rows.Count || rows[index].IsDivider || !string.IsNullOrEmpty(rows[index].Group) || rows[index].IsDisabled)
+            return;
+        if (_owner.InSubmenu && index == 0)
+            _owner.Leave();
+        else
+            _owner.Choose(index - (_owner.InSubmenu ? 1 : 0));
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        _keyboard = false;
+        _pressed = Hit(e.GetPosition(this));
+        InvalidateVisual();
+        e.Handled = true;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        var index = _pressed;
+        _pressed = -1;
+        InvalidateVisual();
+        if (index >= 0 && Hit(e.GetPosition(this)) == index)
+            Activate(index);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        var rows = Rows();
+        var step = e.Key switch { Key.Up => -1, Key.Down => 1, _ => 0 };
+        if (step != 0)
+        {
+            _keyboard = true;
+            for (var i = _focus + step; i >= 0 && i < rows.Count; i += step)
+            {
+                var r = rows[i];
+                if (r.IsDivider || !string.IsNullOrEmpty(r.Group) || r.IsDisabled)
+                    continue;
+                _focus = i;
+                break;
+            }
+            InvalidateVisual();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Space)
+        {
+            _keyboard = true;
+            Activate(_focus);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _keyboard = e.NavigationMethod == NavigationMethod.Tab;
+        InvalidateVisual();
+    }
+
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    private FormattedText Text(string text, double size, FontWeight weight, IBrush? brush) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(_owner.FontFamily, FontStyle.Normal, weight), size, brush)
+        {
+            MaxTextWidth = Math.Max(1, Bounds.Width - 2 * Gutter - 44 - 28),
+            MaxLineCount = 1,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+
+    public override void Render(DrawingContext context)
+    {
+        var rows = Rows();
+        var hasIcons = _owner.CurrentItems().Any(i => !string.IsNullOrEmpty(i.IconName));
+        var fg = Brush("PmFgColorDefault");
+        var muted = Brush("PmFgColorMuted");
+        var disabled = Brush("PmFgColorDisabled");
+        var danger = Brush("PmFgColorDanger");
+        double y = 0;
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var item = rows[i];
+            var h = RowHeight(item);
+            var rect = new Rect(0, y, Bounds.Width, h);
+            y += h;
+            if (item.IsDivider)
+            {
+                context.FillRectangle(Brush("PmBorderColorMuted")!, new Rect(Gutter, rect.Y + 4, rect.Width - 2 * Gutter, 1));
+                continue;
+            }
+            if (!string.IsNullOrEmpty(item.Group))
+            {
+                context.DrawText(Text(item.Group, 14, FontWeight.SemiBold, muted), new Point(Gutter, rect.Y + 8));
+                continue;
+            }
+            var back = _owner.InSubmenu && i == 0;
+            var isDanger = item.Variant == "danger";
+            var ink = item.IsDisabled ? disabled : isDanger ? danger : fg;
+            var soft = item.IsDisabled ? disabled : isDanger ? danger : muted;
+            if (i == _pressed && !item.IsDisabled)
+                context.FillRectangle(Brush("PmControlTransparentBgColorHover")!, rect);
+            var x = Gutter;
+            if (hasIcons || back)
+            {
+                var tile = new Rect(x, rect.Center.Y - 16, 32, 32);
+                if (!back && !string.IsNullOrEmpty(item.IconName))
+                    context.DrawRectangle(Brush(isDanger ? "PmBgColorDangerMuted" : "PmBgColorNeutralMuted"), null, tile,
+                        {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }});
+                DrawIcon(context, item.IconName, tile.X + 8, tile.Y + 8, soft);
+                x += 44;
+            }
+            if (!back && (item.Items.Count > 0 || item.IsChecked == true))
+                DrawIcon(context, item.Items.Count > 0 ? "chevron-right" : "check", rect.Right - Gutter - 16, rect.Center.Y - 8,
+                    item.Items.Count > 0 ? muted : Brush("PmFgColorAccent"));
+            var label = Text(item.Label, 16, item.IsChecked == true ? FontWeight.SemiBold : FontWeight.Normal, ink);
+            if (!string.IsNullOrEmpty(item.Description))
+            {
+                context.DrawText(label, new Point(x, rect.Y + 8 + (24 - label.Height) / 2));
+                var desc = Text(item.Description, 14, FontWeight.Normal, item.IsDisabled ? disabled : muted);
+                context.DrawText(desc, new Point(x, rect.Y + 32 + (20 - desc.Height) / 2));
+            }
+            else
+            {
+                context.DrawText(label, new Point(x, rect.Y + (h - label.Height) / 2));
+            }
+            if (IsFocused && _keyboard && i == _focus)
+                context.DrawRectangle(null, new Pen(Brush("PmFocusOutlineColor"), {{ px("borderWidth-thick") | num }}), rect.Deflate(1));
+        }
+    }
+
+    private void DrawIcon(DrawingContext context, string? name, double x, double y, IBrush? brush)
+    {
+        if (string.IsNullOrEmpty(name) || !this.TryFindResource(Icon.ResourceKey(name, 16), out var found) || found is not Geometry geometry)
+            return;
+        using (context.PushTransform(Matrix.CreateTranslation(x, y)))
+            context.DrawGeometry(brush, null, geometry);
+    }
+}
