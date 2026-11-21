@@ -1,0 +1,307 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+
+// A list people put in their own order. Holding a row, or pressing its handle, lifts it to follow the finger or
+// mouse; the rows it passes slide aside and release settles the row into its gap and emits reordered(from, to). A tap
+// on the handle moves it with Move up, Move down and Done buttons instead; the arrow keys move a row in that mode and
+// Escape puts it back.
+Item {
+    id: root
+    // Rows: [{ key, headline, supporting?, icon? }]. The list rearranges this array itself.
+    property var items: []
+    // "inset" draws a card for settings; "plain" runs edge to edge.
+    property string variant: "inset"
+    property bool disabled: false
+    property string accessibleName
+    property int dragging: -1
+    property int target: -1
+    property real dragY: 0
+    property int moving: -1
+    property int movingStart: -1
+    readonly property real inset: variant === "inset" ? {{ "mobile-gutter" | tok }} : 0
+    signal reordered(int from, int to)
+
+    function heightOf(i) {
+        return items[i].supporting ? {{ "mobile-row-height-twoLine" | tok }} : {{ "mobile-row-height" | tok }}
+    }
+
+    function topOf(i) {
+        let y = 1
+        for (let j = 0; j < i; j++)
+            y += heightOf(j)
+        return y
+    }
+
+    function commit(from, to) {
+        if (from === to || to < 0 || to >= items.length)
+            return
+        const next = items.slice()
+        const row = next.splice(from, 1)[0]
+        next.splice(to, 0, row)
+        items = next
+        reordered(from, to)
+    }
+
+    function place(dy) {
+        dragY = dy
+        const center = topOf(dragging) + heightOf(dragging) / 2 + dy
+        let t = dragging
+        for (let j = 0; j < items.length; j++) {
+            const mid = topOf(j) + heightOf(j) / 2
+            if (j > dragging && center > mid)
+                t = j
+            if (j < dragging && center < mid && t === dragging)
+                t = j
+        }
+        target = t
+    }
+
+    function shiftOf(i) {
+        if (dragging < 0 || i === dragging)
+            return 0
+        const h = heightOf(dragging)
+        if (dragging < target && i > dragging && i <= target)
+            return -h
+        if (dragging > target && i < dragging && i >= target)
+            return h
+        return 0
+    }
+
+    function drop() {
+        const from = dragging
+        const to = target
+        let offset = 0
+        for (let j = from + 1; j <= to; j++)
+            offset += heightOf(j)
+        for (let j = to; j < from; j++)
+            offset -= heightOf(j)
+        settle.from = dragY
+        settle.to = offset
+        settle.pending = [from, to]
+        settle.restart()
+    }
+
+    implicitWidth: 360
+    implicitHeight: (items.length ? topOf(items.length) : 0) + 1
+    Accessible.role: Accessible.List
+    Accessible.name: accessibleName
+
+    NumberAnimation {
+        id: settle
+        property var pending: null
+        target: root
+        property: "dragY"
+        duration: Purrimer.pauseLoops ? 0 : {{ "duration-base" | tok }}
+        easing.type: Easing.OutCubic
+        onFinished: {
+            const from = pending[0]
+            const to = pending[1]
+            root.dragging = -1
+            root.target = -1
+            root.dragY = 0
+            root.commit(from, to)
+        }
+    }
+
+    Rectangle {
+        x: root.inset
+        width: parent.width - 2 * root.inset
+        height: parent.height
+        radius: root.variant === "inset" ? {{ "borderRadius-large" | tok }} : 0
+        color: {{ "bgColor-default" | tok }}
+        border.width: root.variant === "inset" ? {{ "borderWidth-thin" | tok }} : 0
+        border.color: {{ "borderColor-default" | tok }}
+    }
+
+    Repeater {
+        model: root.items
+
+        Item {
+            id: row
+            required property var modelData
+            required property int index
+            readonly property bool lifted: root.dragging === index
+            readonly property bool movingRow: root.moving === index
+            x: root.inset
+            width: root.width - 2 * root.inset
+            height: root.heightOf(index)
+            y: root.topOf(index) + (lifted ? root.dragY : shift)
+            z: lifted ? 2 : 0
+            scale: lifted ? 1.02 : 1
+            property real shift: root.shiftOf(index)
+            Behavior on shift { NumberAnimation { duration: Purrimer.pauseLoops ? 0 : {{ "duration-slow" | tok }}; easing.type: Easing.OutCubic } }
+            Behavior on scale { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
+            Accessible.role: Accessible.ListItem
+            Accessible.name: modelData.headline
+
+            RectangularShadow {
+                anchors.fill: body
+                visible: row.lifted
+                readonly property var key: {{ "shadow-floating-small" | tok }}[0]
+                offset.y: key ? key.y : 2
+                blur: key ? key.blur : 8
+                color: key ? key.color : "transparent"
+                radius: body.radius
+            }
+
+            Rectangle {
+                id: body
+                anchors.fill: parent
+                radius: row.lifted ? {{ "borderRadius-medium" | tok }} : 0
+                color: row.movingRow ? {{ "bgColor-accent-muted" | tok }} : row.lifted ? {{ "bgColor-default" | tok }} : "transparent"
+                Rectangle {
+                    visible: row.index > 0 && !row.lifted
+                    width: parent.width
+                    height: 1
+                    color: {{ "borderColor-muted" | tok }}
+                }
+            }
+
+            Row {
+                x: {{ "mobile-gutter" | tok }}
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 12
+                Rectangle {
+                    visible: !!row.modelData.icon
+                    width: 32
+                    height: 32
+                    radius: {{ "borderRadius-medium" | tok }}
+                    color: {{ "bgColor-accent-muted" | tok }}
+                    anchors.verticalCenter: parent.verticalCenter
+                    Icon { anchors.centerIn: parent; name: row.modelData.icon || ""; color: {{ "fgColor-accent" | tok }} }
+                }
+                Column {
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: row.width - {{ "mobile-gutter" | tok }} - (row.modelData.icon ? 44 : 0) - actions.width - 8
+                    Text {
+                        width: parent.width
+                        elide: Text.ElideRight
+                        text: row.modelData.headline
+                        font.family: {{ "text-body-medium" | tok }}.family
+                        font.pixelSize: 16
+                        color: {{ "fgColor-default" | tok }}
+                    }
+                    Text {
+                        visible: !!row.modelData.supporting
+                        width: parent.width
+                        elide: Text.ElideRight
+                        text: row.modelData.supporting || ""
+                        font.family: {{ "text-body-medium" | tok }}.family
+                        font.pixelSize: 14
+                        color: {{ "fgColor-muted" | tok }}
+                    }
+                }
+            }
+
+            MouseArea {
+                property real grabY
+                anchors.fill: parent
+                enabled: !root.disabled && root.moving < 0
+                pressAndHoldInterval: {{ "duration-hold" | tok }}
+                onPressed: (mouse) => grabY = mapToItem(root, mouse.x, mouse.y).y
+                onPressAndHold: {
+                    root.dragging = row.index
+                    root.target = row.index
+                    root.dragY = 0
+                }
+                onPositionChanged: (mouse) => {
+                    if (root.dragging === row.index)
+                        root.place(mapToItem(root, mouse.x, mouse.y).y - grabY)
+                }
+                onReleased: if (root.dragging === row.index) root.drop()
+                onCanceled: if (root.dragging === row.index) root.drop()
+            }
+
+            Row {
+                id: actions
+                anchors.right: parent.right
+                anchors.rightMargin: 4
+                anchors.verticalCenter: parent.verticalCenter
+
+                IconButton {
+                    id: handle
+                    visible: !row.movingRow && !root.disabled
+                    width: 44
+                    height: 44
+                    iconName: "grabber"
+                    label: "Reorder " + row.modelData.headline
+                    variant: "invisible"
+                    onClicked: {
+                        root.moving = row.index
+                        root.movingStart = row.index
+                        root.forceActiveFocus()
+                    }
+                    DragHandler {
+                        target: null
+                        xAxis.enabled: false
+                        onActiveChanged: {
+                            if (active) {
+                                root.dragging = row.index
+                                root.target = row.index
+                                root.dragY = 0
+                            } else if (root.dragging === row.index) {
+                                root.drop()
+                            }
+                        }
+                        onTranslationChanged: if (root.dragging === row.index) root.place(translation.y)
+                    }
+                }
+                IconButton {
+                    visible: row.movingRow
+                    width: 44
+                    height: 44
+                    iconName: "arrow-up"
+                    label: "Move up"
+                    variant: "invisible"
+                    enabled: row.index > 0
+                    onClicked: {
+                        root.moving = row.index - 1
+                        root.commit(row.index, row.index - 1)
+                    }
+                }
+                IconButton {
+                    visible: row.movingRow
+                    width: 44
+                    height: 44
+                    iconName: "arrow-down"
+                    label: "Move down"
+                    variant: "invisible"
+                    enabled: row.index < root.items.length - 1
+                    onClicked: {
+                        root.moving = row.index + 1
+                        root.commit(row.index, row.index + 1)
+                    }
+                }
+                IconButton {
+                    visible: row.movingRow
+                    width: 44
+                    height: 44
+                    iconName: "check"
+                    label: "Done"
+                    variant: "invisible"
+                    onClicked: root.moving = -1
+                }
+            }
+        }
+    }
+
+    focus: true
+    Keys.onPressed: (event) => {
+        if (moving < 0)
+            return
+        const moves = { [Qt.Key_Up]: moving - 1, [Qt.Key_Down]: moving + 1, [Qt.Key_Home]: 0, [Qt.Key_End]: items.length - 1 }
+        if (moves[event.key] !== undefined && moves[event.key] >= 0 && moves[event.key] < items.length) {
+            const to = moves[event.key]
+            commit(moving, to)
+            moving = to
+            event.accepted = true
+        } else if (event.key === Qt.Key_Escape) {
+            commit(moving, movingStart)
+            moving = -1
+            event.accepted = true
+        }
+    }
+}

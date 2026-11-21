@@ -1,0 +1,102 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type ReorderItem = { key: string; headline: string; supporting?: string; icon?: string };
+</script>
+
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+  import IconButton from "./IconButton.svelte";
+  import { buzz, wireReorder } from "../motion";
+
+  let {
+    items = $bindable([]),
+    variant = "inset",
+    disabled = false,
+    ariaLabel = "",
+    onreorder,
+  }: {
+    items?: ReorderItem[];
+    variant?: "inset" | "plain";
+    disabled?: boolean;
+    ariaLabel?: string;
+    onreorder?: (items: ReorderItem[], from: number, to: number) => void;
+  } = $props();
+
+  let list: HTMLElement | undefined = $state();
+  // The row being moved with buttons, and where it started, for Escape.
+  let moving: { key: string; start: number } | null = $state(null);
+  let status = $state("");
+
+  function reorder(from: number, to: number, announce = false) {
+    if (from === to || to < 0 || to >= items.length) return;
+    const next = items.slice();
+    const [row] = next.splice(from, 1);
+    next.splice(to, 0, row);
+    items = next;
+    onreorder?.(next, from, to);
+    if (announce) {
+      buzz(to === 0 || to === items.length - 1 ? 14 : 6);
+      status = `${row.headline}, position ${to + 1} of ${items.length}`;
+    }
+  }
+
+  function startMoving(index: number) {
+    if (disabled) return;
+    moving = { key: items[index].key, start: index };
+    status = `Moving ${items[index].headline}, position ${index + 1} of ${items.length}`;
+  }
+
+  function onkeydown(e: KeyboardEvent, index: number) {
+    if (!moving || moving.key !== items[index].key) return;
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: items.length - 1 };
+    if (e.key in moves) {
+      e.preventDefault();
+      reorder(index, moves[e.key], true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      reorder(index, moving.start, true);
+      moving = null;
+    }
+  }
+
+  $effect(() => {
+    if (!list) return;
+    return wireReorder({ list, disabled: () => disabled || moving !== null, onDrop: (from, to) => reorder(from, to), onHandleTap: startMoving });
+  });
+</script>
+
+<ul bind:this={list} class={["pm-reorder", variant === "inset" && "pm-reorder--inset"]} aria-label={ariaLabel || undefined}>
+  {#each items as item, i (item.key)}
+    {@const isMoving = moving?.key === item.key}
+    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+    <li class={["pm-reorder__row", item.supporting && "pm-reorder__row--two-line", isMoving && "pm-reorder__row--moving"]} onkeydown={(e) => onkeydown(e, i)}>
+      {#if item.icon}<span class="pm-reorder__tile"><Icon name={item.icon} /></span>{/if}
+      <span class="pm-reorder__text">
+        <span class="pm-reorder__headline">{item.headline}</span>
+        {#if item.supporting}<span class="pm-reorder__supporting">{item.supporting}</span>{/if}
+      </span>
+      <span class="pm-reorder__actions">
+        {#if isMoving}
+          <IconButton variant="invisible" icon="arrow-up" label="Move up" disabled={i === 0} onclick={() => reorder(i, i - 1, true)} />
+          <IconButton variant="invisible" icon="arrow-down" label="Move down" disabled={i === items.length - 1} onclick={() => reorder(i, i + 1, true)} />
+          <IconButton variant="invisible" icon="check" label="Done" onclick={() => (moving = null)} />
+        {:else if !disabled}
+          <IconButton
+            class="pm-reorder__handle"
+            variant="invisible"
+            icon="grabber"
+            label={`Reorder ${item.headline}`}
+            onkeydown={(e: KeyboardEvent) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                startMoving(i);
+              }
+            }}
+          />
+        {/if}
+      </span>
+    </li>
+  {/each}
+</ul>
+<span class="pm-reorder__status" role="status">{status}</span>

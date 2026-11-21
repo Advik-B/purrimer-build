@@ -1,0 +1,383 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QScrollArea, QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..motion import LONG_PRESS_MS, SLOP, Spring
+from ..theme import theme
+
+ONE_LINE = {{ px("mobile-row-height") | int }}
+TWO_LINE = {{ px("mobile-row-height-twoLine") | int }}
+GUTTER = {{ px("mobile-gutter") | int }}
+RADIUS = {{ px("borderRadius-large") | num }}
+BUTTON = 44
+
+
+@dataclass
+class ReorderItem:
+    key: str
+    headline: str
+    supporting: str = ""
+    icon: str | None = None
+
+
+class ReorderList(QWidget):
+    """A list people put in their own order. Holding a row, or pressing its handle, lifts it to follow the finger or
+    mouse; the rows it passes slide aside, a scroll area around the list scrolls near its edges, and release settles
+    the row into its gap and emits `reordered(from, to)`. A tap on the handle, or Enter on a focused row, moves it with
+    Move up, Move down and Done buttons instead; the arrow keys, Home and End move it too and Escape puts it back.
+    """
+
+    reordered = Signal(int, int)
+
+    def __init__(self, items: list[ReorderItem], variant: str = "inset", disabled: bool = False,
+                 accessible_name: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.items = list(items)
+        self._inset = variant == "inset"
+        self._disabled = disabled
+        self._shifts = [Spring(0.0, precision=0.5, parent=self) for _ in self.items]
+        for spring in self._shifts:
+            spring.changed.connect(lambda _v: self.update())
+        self._lift = Spring(1.0, precision=0.0005, parent=self)
+        self._lift.changed.connect(lambda _v: self.update())
+        self._drag_y = Spring(0.0, precision=0.5, parent=self)
+        self._drag_y.changed.connect(lambda _v: self.update())
+        self._dragging = -1
+        self._target = -1
+        self._origin: QPointF | None = None
+        self._last_y = 0.0
+        self._press_row = -1
+        self._press_handle = False
+        self._travel = 0.0
+        self._moving: tuple[int, int] | None = None
+        self._focus = 0
+        self._keyboard = False
+        self._hold = QTimer(self)
+        self._hold.setSingleShot(True)
+        self._hold.setInterval(LONG_PRESS_MS)
+        self._hold.timeout.connect(self._start_drag)
+        self._auto = QTimer(self)
+        self._auto.setInterval(16)
+        self._auto.timeout.connect(self._auto_scroll)
+        self._font = theme.font({{ "text-body-medium" | tok }})
+        self._font.setPixelSize(16)
+        self._small = QFont(self._font)
+        self._small.setPixelSize(14)
+        self.setAccessibleName(accessible_name)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(self._content_height())
+        theme.changed.connect(self.update)
+
+    def _height(self, i: int) -> int:
+        return TWO_LINE if self.items[i].supporting else ONE_LINE
+
+    def _content_height(self) -> int:
+        return sum(self._height(i) for i in range(len(self.items))) + 2
+
+    def _tops(self) -> list[float]:
+        tops, y = [], 1.0
+        for i in range(len(self.items)):
+            tops.append(y)
+            y += self._height(i)
+        return tops
+
+    def _card(self) -> QRectF:
+        x = GUTTER if self._inset else 0
+        return QRectF(x, 0, self.width() - 2 * x, self.height())
+
+    def sizeHint(self) -> QSize:
+        return QSize(360, self._content_height())
+
+    def _row_at(self, y: float) -> int:
+        for i, top in enumerate(self._tops()):
+            if top <= y < top + self._height(i):
+                return i
+        return -1
+
+    def _buttons(self, i: int) -> list[tuple[str, QRectF]]:
+        card = self._card()
+        top = self._tops()[i]
+        right = card.right() - 4
+        names = ["arrow-up", "arrow-down", "check"] if self._moving and self._moving[0] == i else ["grabber"]
+        rects = []
+        for name in reversed(names):
+            right -= BUTTON
+            rects.append((name, QRectF(right, top + (self._height(i) - BUTTON) / 2, BUTTON, BUTTON)))
+        return list(reversed(rects))
+
+    def _commit(self, from_: int, to: int) -> None:
+        if from_ == to or not 0 <= to < len(self.items):
+            return
+        item = self.items.pop(from_)
+        self.items.insert(to, item)
+        self.reordered.emit(from_, to)
+        self.setAccessibleDescription(f"{item.headline}, position {to + 1} of {len(self.items)}")
+
+    def _start_drag(self) -> None:
+        if self._press_row < 0 or self._disabled:
+            return
+        self._dragging = self._press_row
+        self._target = self._press_row
+        self._drag_y.set(0.0)
+        self._lift.to(1.02)
+        self._auto.start()
+        self.update()
+
+    def _place(self, dy: float) -> None:
+        tops = self._tops()
+        i = self._dragging
+        self._drag_y.set(dy)
+        center = tops[i] + self._height(i) / 2 + dy
+        target = i
+        for j, top in enumerate(tops):
+            mid = top + self._height(j) / 2
+            if j > i and center > mid:
+                target = j
+            if j < i and center < mid and target == i:
+                target = j
+        self._target = target
+        height = self._height(i)
+        for j, spring in enumerate(self._shifts):
+            if j == i:
+                continue
+            shift = -height if i < j <= target else height if target <= j < i else 0
+            if spring.target != shift:
+                spring.to(float(shift))
+
+    def _drop(self, cancel: bool = False) -> None:
+        self._auto.stop()
+        i, target = self._dragging, (self._dragging if cancel else self._target)
+        offset = 0.0
+        if target > i:
+            offset = sum(self._height(j) for j in range(i + 1, target + 1))
+        elif target < i:
+            offset = -sum(self._height(j) for j in range(target, i))
+        self._lift.to(1.0)
+        self._drag_y.to(offset)
+
+        def finish() -> None:
+            self._drag_y.settled.disconnect(finish)
+            for spring in self._shifts:
+                spring.set(0.0)
+            self._drag_y.set(0.0)
+            self._dragging = -1
+            self._commit(i, target)
+            self._focus = target
+            self.update()
+
+        if theme.pause_loops or abs(self._drag_y.value - offset) < 0.5:
+            self._drag_y.set(offset)
+            self._dragging = -1
+            for spring in self._shifts:
+                spring.set(0.0)
+            self._drag_y.set(0.0)
+            self._commit(i, target)
+            self.update()
+            return
+        self._drag_y.settled.connect(finish)
+
+    def _scroll_area(self) -> QScrollArea | None:
+        parent = self.parentWidget()
+        while parent is not None:
+            if isinstance(parent, QScrollArea):
+                return parent
+            parent = parent.parentWidget()
+        return None
+
+    def _auto_scroll(self) -> None:
+        area = self._scroll_area()
+        if area is None or self._dragging < 0 or self._origin is None:
+            return
+        pos = area.viewport().mapFromGlobal(self.mapToGlobal(QPointF(0, self._last_y)))
+        zone, height = 64, area.viewport().height()
+        speed = -(zone - pos.y()) / 4 if pos.y() < zone else (pos.y() - (height - zone)) / 4 if pos.y() > height - zone else 0
+        if speed:
+            bar = area.verticalScrollBar()
+            before = bar.value()
+            bar.setValue(round(before + speed))
+            self._origin.setY(self._origin.y() - (bar.value() - before))
+            self._place(self._last_y - self._origin.y())
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._keyboard = False
+        p = event.position()
+        row = self._row_at(p.y())
+        if row < 0:
+            return
+        self._focus = row
+        if self._moving is not None:
+            for name, rect in self._buttons(self._moving[0]):
+                if rect.contains(p):
+                    self._button(name)
+                    return
+            return
+        self._origin = QPointF(p)
+        self._last_y = p.y()
+        self._press_row = row
+        self._travel = 0.0
+        self._press_handle = any(rect.contains(p) for _, rect in self._buttons(row))
+        if self._disabled:
+            return
+        if self._press_handle:
+            self._start_drag()
+        else:
+            self._hold.start()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        p = event.position()
+        self._last_y = p.y()
+        self._travel = max(self._travel, abs(p.y() - self._origin.y()))
+        if self._hold.isActive() and (p - self._origin).manhattanLength() > SLOP:
+            self._hold.stop()
+        if self._dragging >= 0:
+            self._place(p.y() - self._origin.y())
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._hold.stop()
+        if self._origin is None:
+            return
+        self._origin = None
+        if self._dragging >= 0:
+            if self._press_handle and self._travel < 4:
+                self._auto.stop()
+                self._lift.to(1.0)
+                self._dragging = -1
+                self._start_moving(self._press_row)
+            else:
+                self._drop()
+        self._press_row = -1
+
+    def _start_moving(self, row: int) -> None:
+        self._moving = (row, row)
+        self._focus = row
+        self.setAccessibleDescription(f"Moving {self.items[row].headline}, position {row + 1} of {len(self.items)}")
+        self.update()
+
+    def _button(self, name: str) -> None:
+        row, start = self._moving
+        if name == "check":
+            self._moving = None
+        else:
+            to = row + (-1 if name == "arrow-up" else 1)
+            if 0 <= to < len(self.items):
+                self._commit(row, to)
+                self._moving = (to, start)
+                self._focus = to
+        self.update()
+
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        self._keyboard = True
+        if self._moving is not None:
+            row, start = self._moving
+            moves = {Qt.Key.Key_Up: row - 1, Qt.Key.Key_Down: row + 1, Qt.Key.Key_Home: 0,
+                     Qt.Key.Key_End: len(self.items) - 1}
+            if key in moves and 0 <= moves[key] < len(self.items):
+                self._commit(row, moves[key])
+                self._moving = (moves[key], start)
+                self._focus = moves[key]
+            elif key == Qt.Key.Key_Escape:
+                self._commit(row, start)
+                self._moving = None
+                self._focus = start
+            elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+                self._moving = None
+            self.update()
+            return
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+            self._focus = max(0, min(len(self.items) - 1, self._focus + (-1 if key == Qt.Key.Key_Up else 1)))
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and not self._disabled:
+            self._start_moving(self._focus)
+        else:
+            super().keyPressEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        card = self._card()
+        if self._inset:
+            path = QPainterPath()
+            path.addRoundedRect(card.adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+            painter.fillPath(path, theme.color({{ "bgColor-default" | tok }}))
+            painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), {{ px("borderWidth-thin") | num }}))
+            painter.drawPath(path)
+            painter.setClipPath(path)
+        tops = self._tops()
+        order = [i for i in range(len(self.items)) if i != self._dragging]
+        if self._dragging >= 0:
+            order.append(self._dragging)
+        for i in order:
+            top = tops[i] + (self._drag_y.value if i == self._dragging else self._shifts[i].value)
+            rect = QRectF(card.x(), top, card.width(), self._height(i))
+            painter.save()
+            if i == self._dragging:
+                painter.setClipping(False)
+                scale = self._lift.value
+                painter.translate(rect.center())
+                painter.scale(scale, scale)
+                painter.translate(-rect.center())
+                lifted = QPainterPath()
+                lifted.addRoundedRect(rect, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+                shadow = theme.color({{ "borderColor-default" | tok }})
+                painter.fillPath(lifted.translated(0, 3), shadow)
+                painter.fillPath(lifted, theme.color({{ "bgColor-default" | tok }}))
+            elif self._moving and self._moving[0] == i:
+                painter.fillRect(rect, theme.color({{ "bgColor-accent-muted" | tok }}))
+            if i > 0 and i != self._dragging:
+                painter.fillRect(QRectF(rect.x(), rect.y(), rect.width(), 1), theme.color({{ "borderColor-muted" | tok }}))
+            self._paint_row(painter, i, rect)
+            painter.restore()
+        if self.hasFocus() and self._keyboard and self._focus < len(self.items):
+            painter.setClipping(False)
+            rect = QRectF(card.x(), tops[self._focus], card.width(), self._height(self._focus)).adjusted(2, 2, -2, -2)
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+
+    def _paint_row(self, painter: QPainter, i: int, rect: QRectF) -> None:
+        item = self.items[i]
+        x = rect.x() + GUTTER
+        if item.icon:
+            tile = QRectF(x, rect.center().y() - 16, 32, 32)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "bgColor-accent-muted" | tok }}))
+            painter.drawRoundedRect(tile, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+            paint_icon(painter, tile.adjusted(8, 8, -8, -8), item.icon, theme.color({{ "fgColor-accent" | tok }}))
+            x += 44
+        buttons = self._buttons(i) if not self._disabled or (self._moving and self._moving[0] == i) else []
+        right = buttons[0][1].left() if buttons else rect.right() - GUTTER
+        width = right - x - 4
+        painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+        painter.setFont(self._font)
+        headline = QFontMetrics(self._font).elidedText(item.headline, Qt.TextElideMode.ElideRight, int(width))
+        if item.supporting:
+            painter.drawText(QRectF(x, rect.y() + 8, width, 24), Qt.AlignmentFlag.AlignVCenter, headline)
+            painter.setFont(self._small)
+            painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+            painter.drawText(QRectF(x, rect.y() + 32, width, 20), Qt.AlignmentFlag.AlignVCenter, item.supporting)
+        else:
+            painter.drawText(QRectF(x, rect.y(), width, rect.height()), Qt.AlignmentFlag.AlignVCenter, headline)
+        for name, button in buttons:
+            button = button.translated(0, rect.y() - self._tops()[i])
+            disabled = (name == "arrow-up" and i == 0) or (name == "arrow-down" and i == len(self.items) - 1)
+            ink = {{ "fgColor-disabled" | tok }} if disabled else {{ "fgColor-muted" | tok }} if name == "grabber" else {{ "fgColor-default" | tok }}
+            paint_icon(painter, QRectF(button.center().x() - 8, button.center().y() - 8, 16, 16), name, theme.color(ink))

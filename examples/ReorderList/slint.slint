@@ -1,0 +1,16 @@
+import { ReorderList, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    padding-top: 16px;
+    ReorderList {
+        accessible-name: "Home sections";
+        items: [
+            { key: "today", headline: "Today", supporting: "Tasks due today", icon: PurrimerIcons.calendar-16 },
+            { key: "inbox", headline: "Inbox", icon: PurrimerIcons.inbox-16 },
+            { key: "starred", headline: "Starred", icon: PurrimerIcons.star-16 },
+            { key: "shared", headline: "Shared with me", supporting: "From 3 people", icon: PurrimerIcons.people-16 },
+        ];
+        reordered(from, to) => { debug("moved", from, to); }
+    }
+}

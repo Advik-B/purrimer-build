@@ -1,0 +1,10 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ReorderList}" TargetType="pm:ReorderList">
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="LiftShadow" Value="{{ "shadow-floating-small" | tok }}" />
+  </ControlTheme>
+</ResourceDictionary>

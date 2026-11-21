@@ -1,0 +1,116 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createSignal, onCleanup, onSettled } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { IconButton } from "./IconButton";
+import { buzz, wireReorder } from "../motion";
+
+export type ReorderItem = { key: string; headline: string; supporting?: string; icon?: string };
+
+export type ReorderListProps = {
+  items: ReorderItem[];
+  variant?: "inset" | "plain";
+  disabled?: boolean;
+  ariaLabel?: string;
+  onReorder?: (items: ReorderItem[], from: number, to: number) => void;
+};
+
+export function ReorderList(props: ReorderListProps): JSX.Element {
+  const [items, setItems] = createSignal(props.items);
+  // The row being moved with buttons, and where it started, for Escape.
+  const [moving, setMoving] = createSignal<{ key: string; start: number } | null>(null);
+  const [status, setStatus] = createSignal("");
+  let list: HTMLUListElement | undefined;
+
+  function reorder(from: number, to: number, announce = false) {
+    const current = items();
+    if (from === to || to < 0 || to >= current.length) return;
+    const next = current.slice();
+    const [row] = next.splice(from, 1);
+    next.splice(to, 0, row);
+    setItems(next);
+    props.onReorder?.(next, from, to);
+    if (announce) {
+      buzz(to === 0 || to === next.length - 1 ? 14 : 6);
+      setStatus(`${row.headline}, position ${to + 1} of ${next.length}`);
+    }
+  }
+
+  function startMoving(index: number) {
+    if (props.disabled) return;
+    const row = items()[index];
+    setMoving({ key: row.key, start: index });
+    setStatus(`Moving ${row.headline}, position ${index + 1} of ${items().length}`);
+  }
+
+  const onKeyDown = (e: KeyboardEvent, index: number) => {
+    const m = moving();
+    if (!m || m.key !== items()[index].key) return;
+    const moves: Record<string, number> = { ArrowUp: index - 1, ArrowDown: index + 1, Home: 0, End: items().length - 1 };
+    if (e.key in moves) {
+      e.preventDefault();
+      reorder(index, moves[e.key], true);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      reorder(index, m.start, true);
+      setMoving(null);
+    }
+  };
+
+  let unwire: (() => void) | undefined;
+  onSettled(() => {
+    if (list) unwire = wireReorder({ list, disabled: () => !!props.disabled || moving() !== null, onDrop: (from, to) => reorder(from, to), onHandleTap: startMoving });
+  });
+  onCleanup(() => unwire?.());
+
+  return (
+    <>
+      <ul ref={list} class={props.variant === "plain" ? "pm-reorder" : "pm-reorder pm-reorder--inset"} aria-label={props.ariaLabel || undefined}>
+        <For each={items()}>
+          {(item, i) => {
+            const isMoving = () => moving()?.key === item.key;
+            return (
+              <li
+                class={`pm-reorder__row${item.supporting ? " pm-reorder__row--two-line" : ""}${isMoving() ? " pm-reorder__row--moving" : ""}`}
+                onKeyDown={(e) => onKeyDown(e, i())}
+              >
+                <Show when={item.icon}>{(name) => <span class="pm-reorder__tile"><Icon name={name()} /></span>}</Show>
+                <span class="pm-reorder__text">
+                  <span class="pm-reorder__headline">{item.headline}</span>
+                  <Show when={item.supporting}><span class="pm-reorder__supporting">{item.supporting}</span></Show>
+                </span>
+                <span class="pm-reorder__actions">
+                  <Show
+                    when={isMoving()}
+                    fallback={
+                      <Show when={!props.disabled}>
+                        <IconButton
+                          class="pm-reorder__handle"
+                          variant="invisible"
+                          icon="grabber"
+                          label={`Reorder ${item.headline}`}
+                          onKeyDown={(e: KeyboardEvent) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              startMoving(i());
+                            }
+                          }}
+                        />
+                      </Show>
+                    }
+                  >
+                    <IconButton variant="invisible" icon="arrow-up" label="Move up" disabled={i() === 0} onClick={() => reorder(i(), i() - 1, true)} />
+                    <IconButton variant="invisible" icon="arrow-down" label="Move down" disabled={i() === items().length - 1} onClick={() => reorder(i(), i() + 1, true)} />
+                    <IconButton variant="invisible" icon="check" label="Done" onClick={() => setMoving(null)} />
+                  </Show>
+                </span>
+              </li>
+            );
+          }}
+        </For>
+      </ul>
+      <span class="pm-reorder__status" role="status">{status()}</span>
+    </>
+  );
+}

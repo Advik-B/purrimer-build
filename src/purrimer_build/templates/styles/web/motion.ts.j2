@@ -603,3 +603,167 @@ export function wireWheel(column: HTMLElement, onIndex: (index: number) => void)
     },
   };
 }
+
+export interface ReorderParts {
+  list: HTMLElement;
+  // Moves the row at from to to in the app's own array.
+  onDrop: (from: number, to: number) => void;
+  // A press on a row's handle that never moved: start moving that row with buttons.
+  onHandleTap?: (index: number) => void;
+  disabled?: () => boolean;
+}
+
+// Wires a ReorderList: holding a row (or pressing its handle) lifts it to follow the finger one to one, the rows it
+// passes slide aside, the list's scroll container scrolls near its edges, and release settles the row into its gap.
+export function wireReorder(parts: ReorderParts): () => void {
+  const { list } = parts;
+  const HOLD = 400;
+  type Drag = { row: HTMLElement; from: number; to: number; startY: number; rects: DOMRect[]; height: number; pointer: number; scroller: HTMLElement | null; scrollStart: number; handle: boolean; travel: number };
+  let pending: { row: HTMLElement; x: number; y: number; pointer: number; timer: number } | null = null;
+  let drag: Drag | null = null;
+  let lastY = 0;
+  let autoFrame = 0;
+  const rows = () => Array.from(list.children).filter((el) => el.classList.contains("pm-reorder__row")) as HTMLElement[];
+  const scrollerOf = (el: HTMLElement): HTMLElement | null => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const style = getComputedStyle(p);
+      if (/(auto|scroll)/.test(style.overflowY) && p.scrollHeight > p.clientHeight) return p;
+    }
+    return null;
+  };
+  const lift = (row: HTMLElement, y: number, pointer: number, handle = false) => {
+    const all = rows();
+    const from = all.indexOf(row);
+    if (from < 0) return;
+    const scroller = scrollerOf(list);
+    drag = { row, from, to: from, startY: y, rects: all.map((r) => r.getBoundingClientRect()), height: row.offsetHeight, pointer, scroller, scrollStart: scroller?.scrollTop ?? 0, handle, travel: 0 };
+    lastY = y;
+    row.classList.add("pm-reorder__row--lifted");
+    row.style.transition = "scale var(--pm-release-dur) var(--pm-release-ease), box-shadow var(--duration-fast)";
+    buzz(10);
+    try {
+      list.setPointerCapture(pointer);
+    } catch {
+      // The pointer may already be gone.
+    }
+    autoScroll();
+  };
+  const place = (y: number) => {
+    if (!drag) return;
+    lastY = y;
+    const scrolled = (drag.scroller?.scrollTop ?? 0) - drag.scrollStart;
+    const dy = y - drag.startY + scrolled;
+    drag.travel = Math.max(drag.travel, Math.abs(y - drag.startY));
+    drag.row.style.translate = `0 ${dy}px`;
+    const center = drag.rects[drag.from].top + drag.rects[drag.from].height / 2 + dy;
+    let to = drag.from;
+    drag.rects.forEach((r, i) => {
+      const mid = r.top + r.height / 2;
+      if (i > drag!.from && center > mid) to = i;
+      if (i < drag!.from && center < mid && to === drag!.from) to = i;
+    });
+    if (to !== drag.to) {
+      drag.to = to;
+      buzz(to === 0 || to === drag.rects.length - 1 ? 14 : 6);
+    }
+    rows().forEach((r, i) => {
+      if (i === drag!.from) return;
+      const shift = drag!.from < drag!.to && i > drag!.from && i <= drag!.to ? -drag!.height : drag!.from > drag!.to && i < drag!.from && i >= drag!.to ? drag!.height : 0;
+      r.style.translate = shift ? `0 ${shift}px` : "";
+    });
+  };
+  // Near the top or bottom of the scrolling screen the list scrolls on its own, faster closer to the edge.
+  const autoScroll = () => {
+    cancelAnimationFrame(autoFrame);
+    if (!drag || !drag.scroller) return;
+    const box = drag.scroller.getBoundingClientRect();
+    const zone = 64;
+    const speed = lastY < box.top + zone ? -(box.top + zone - lastY) / 4 : lastY > box.bottom - zone ? (lastY - (box.bottom - zone)) / 4 : 0;
+    if (speed) {
+      drag.scroller.scrollTop += speed;
+      place(lastY);
+    }
+    autoFrame = requestAnimationFrame(autoScroll);
+  };
+  const drop = (cancel: boolean) => {
+    cancelAnimationFrame(autoFrame);
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.handle && d.travel < 4) {
+      d.row.classList.remove("pm-reorder__row--lifted");
+      d.row.style.transition = "";
+      d.row.style.translate = "";
+      parts.onHandleTap?.(d.from);
+      return;
+    }
+    const to = cancel ? d.from : d.to;
+    // Settle the lifted row into its gap, then hand the new order to the app.
+    let offset = 0;
+    if (to > d.from) for (let i = d.from + 1; i <= to; i++) offset += d.rects[i].height;
+    if (to < d.from) for (let i = to; i < d.from; i++) offset -= d.rects[i].height;
+    d.row.classList.remove("pm-reorder__row--lifted");
+    d.row.style.transition = "";
+    d.row.style.translate = `0 ${offset}px`;
+    if (cancel) rows().forEach((r) => (r.style.translate = ""));
+    const finish = () => {
+      for (const r of rows()) {
+        r.style.transition = "none";
+        r.style.translate = "";
+      }
+      if (to !== d.from) parts.onDrop(d.from, to);
+      requestAnimationFrame(() => requestAnimationFrame(() => rows().forEach((r) => (r.style.transition = ""))));
+    };
+    if (reducedMotion()) finish();
+    else window.setTimeout(finish, Number.parseFloat(getComputedStyle(d.row).transitionDuration) * 1000 || 300);
+  };
+  const down = (e: PointerEvent) => {
+    if (parts.disabled?.() || e.button > 0 || drag) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".pm-reorder__row");
+    if (!row || row.classList.contains("pm-reorder__row--moving")) return;
+    if ((e.target as HTMLElement).closest(".pm-reorder__handle")) {
+      e.preventDefault();
+      lift(row, e.clientY, e.pointerId, true);
+      return;
+    }
+    if ((e.target as HTMLElement).closest("button")) return;
+    pending = { row, x: e.clientX, y: e.clientY, pointer: e.pointerId, timer: window.setTimeout(() => {
+      if (pending) lift(pending.row, pending.y, pending.pointer);
+      pending = null;
+    }, HOLD) };
+  };
+  const move = (e: PointerEvent) => {
+    if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
+      clearTimeout(pending.timer);
+      pending = null;
+    }
+    if (drag && e.pointerId === drag.pointer) {
+      e.preventDefault();
+      place(e.clientY);
+    }
+  };
+  const up = (e: PointerEvent) => {
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending = null;
+    }
+    if (drag && e.pointerId === drag.pointer) drop(e.type === "pointercancel");
+  };
+  // A held row must not scroll the page under the finger.
+  const touchMove = (e: TouchEvent) => {
+    if (drag && e.cancelable) e.preventDefault();
+  };
+  list.addEventListener("pointerdown", down);
+  list.addEventListener("pointermove", move);
+  list.addEventListener("pointerup", up);
+  list.addEventListener("pointercancel", up);
+  list.addEventListener("touchmove", touchMove, { passive: false });
+  return () => {
+    cancelAnimationFrame(autoFrame);
+    list.removeEventListener("pointerdown", down);
+    list.removeEventListener("pointermove", move);
+    list.removeEventListener("pointerup", up);
+    list.removeEventListener("pointercancel", up);
+    list.removeEventListener("touchmove", touchMove);
+  };
+}
