@@ -1,0 +1,100 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" generics="T">
+  import type { Snippet } from "svelte";
+  import IconButton from "./IconButton.svelte";
+  import { wireCarousel } from "../motion";
+
+  let {
+    items,
+    slide,
+    index = $bindable(0),
+    peek = false,
+    controls = true,
+    height = 200,
+    ariaLabel,
+    labels,
+    onchange,
+  }: {
+    // One entry per slide. Without a slide snippet, each item is drawn as a photo: { src, alt }.
+    items: T[];
+    slide?: Snippet<[T, number]>;
+    index?: number;
+    peek?: boolean;
+    controls?: boolean;
+    height?: number;
+    ariaLabel: string;
+    // Accessible names for the slides; "2 of 5" by default.
+    labels?: string[];
+    onchange?: (index: number) => void;
+  } = $props();
+
+  let track: HTMLElement | undefined = $state();
+  let dots: HTMLElement | undefined = $state();
+  let shown = $state(-1);
+  let wired: ReturnType<typeof wireCarousel> | undefined;
+
+  $effect(() => {
+    if (!track) return;
+    wired = wireCarousel({
+      track,
+      dots,
+      onIndex: (i) => {
+        shown = i;
+        if (i !== index) {
+          index = i;
+          onchange?.(i);
+        }
+      },
+    });
+    wired.go(index, false);
+    return () => wired?.dispose();
+  });
+
+  $effect(() => {
+    if (wired && shown !== -1 && index !== shown) wired.go(index);
+  });
+
+  function onkeydown(e: KeyboardEvent) {
+    const last = items.length - 1;
+    const next = { ArrowLeft: index - 1, ArrowRight: index + 1, Home: 0, End: last }[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    wired?.go(Math.max(0, Math.min(last, next)));
+  }
+
+  function step(delta: number, e: MouseEvent) {
+    const next = Math.max(0, Math.min(items.length - 1, index + delta));
+    wired?.go(next);
+    // A button that fades out at the end hands focus to the other one.
+    if (next === 0 || next === items.length - 1) {
+      const other = (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>(".pm-carousel__nav")[delta < 0 ? 1 : 0];
+      other?.focus();
+    }
+  }
+</script>
+
+<section class={["pm-carousel", peek && "pm-carousel--peek"]} aria-label={ariaLabel} aria-roledescription="carousel" style:--pm-carousel-h={`${height}px`}>
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_static_element_interactions -->
+  <div bind:this={track} class="pm-carousel__track" tabindex="0" {onkeydown}>
+    {#each items as item, i (i)}
+      <div class="pm-carousel__slide" role="group" aria-roledescription="slide" aria-label={labels?.[i] ?? `${i + 1} of ${items.length}`}>
+        {#if slide}
+          {@render slide(item, i)}
+        {:else}
+          {@const photo = item as { src: string; alt?: string }}
+          <img src={photo.src} alt={photo.alt ?? ""} draggable="false" />
+        {/if}
+      </div>
+    {/each}
+  </div>
+  {#if controls && items.length > 1}
+    <div class="pm-carousel__controls">
+      <IconButton class={["pm-carousel__nav", index === 0 && "pm-carousel__nav--hidden"]} variant="invisible" icon="chevron-left" label="Previous" tabindex={index === 0 ? -1 : undefined} onclick={(e: MouseEvent) => step(-1, e)} />
+      <div bind:this={dots} class="pm-carousel__dots" aria-hidden="true">
+        {#each items as _, i (i)}<span class="pm-carousel__dot"></span>{/each}
+      </div>
+      <IconButton class={["pm-carousel__nav", index === items.length - 1 && "pm-carousel__nav--hidden"]} variant="invisible" icon="chevron-right" label="Next" tabindex={index === items.length - 1 ? -1 : undefined} onclick={(e: MouseEvent) => step(1, e)} />
+    </div>
+  {/if}
+</section>

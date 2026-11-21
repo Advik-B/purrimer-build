@@ -1,0 +1,91 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createEffect, createSignal, onCleanup, onSettled } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { IconButton } from "./IconButton";
+import { wireCarousel } from "../motion";
+
+export type CarouselProps<T> = {
+  // One entry per slide. Without a slide function, each item is drawn as a photo: { src, alt }.
+  items: T[];
+  slide?: (item: T, index: number) => JSX.Element;
+  index?: number;
+  peek?: boolean;
+  controls?: boolean;
+  height?: number;
+  ariaLabel: string;
+  // Accessible names for the slides; "2 of 5" by default.
+  labels?: string[];
+  onChange?: (index: number) => void;
+};
+
+export function Carousel<T>(props: CarouselProps<T>): JSX.Element {
+  const [index, setIndex] = createSignal(props.index ?? 0);
+  let track: HTMLDivElement | undefined;
+  let dots: HTMLDivElement | undefined;
+  let wired: ReturnType<typeof wireCarousel> | undefined;
+  const last = () => props.items.length - 1;
+
+  onSettled(() => {
+    if (!track) return;
+    wired = wireCarousel({
+      track,
+      dots,
+      onIndex: (i) => {
+        if (i !== index()) {
+          setIndex(i);
+          props.onChange?.(i);
+        }
+      },
+    });
+    wired.go(index(), false);
+  });
+  onCleanup(() => wired?.dispose());
+
+  createEffect(
+    () => props.index,
+    (i) => {
+      if (i !== undefined && i !== index()) wired?.go(i);
+    },
+  );
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    const next = ({ ArrowLeft: index() - 1, ArrowRight: index() + 1, Home: 0, End: last() } as Record<string, number>)[e.key];
+    if (next === undefined) return;
+    e.preventDefault();
+    wired?.go(Math.max(0, Math.min(last(), next)));
+  };
+
+  const step = (delta: number, e: MouseEvent) => {
+    const next = Math.max(0, Math.min(last(), index() + delta));
+    wired?.go(next);
+    // A button that fades out at the end hands focus to the other one.
+    if (next === 0 || next === last()) {
+      const other = (e.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>(".pm-carousel__nav")[delta < 0 ? 1 : 0];
+      other?.focus();
+    }
+  };
+
+  return (
+    <section class={props.peek ? "pm-carousel pm-carousel--peek" : "pm-carousel"} aria-label={props.ariaLabel} aria-roledescription="carousel" style={ { "--pm-carousel-h": `${props.height ?? 200}px` } }>
+      <div ref={track} class="pm-carousel__track" tabindex="0" onKeyDown={onKeyDown}>
+        <For each={props.items}>
+          {(item, i) => (
+            <div class="pm-carousel__slide" role="group" aria-roledescription="slide" aria-label={props.labels?.[i()] ?? `${i() + 1} of ${props.items.length}`}>
+              {props.slide ? props.slide(item, i()) : <img src={(item as { src: string }).src} alt={(item as { alt?: string }).alt ?? ""} draggable={false} />}
+            </div>
+          )}
+        </For>
+      </div>
+      <Show when={props.controls !== false && props.items.length > 1}>
+        <div class="pm-carousel__controls">
+          <IconButton class={index() === 0 ? "pm-carousel__nav pm-carousel__nav--hidden" : "pm-carousel__nav"} variant="invisible" icon="chevron-left" label="Previous" tabindex={index() === 0 ? -1 : undefined} onClick={(e: MouseEvent) => step(-1, e)} />
+          <div ref={dots} class="pm-carousel__dots" aria-hidden="true">
+            <For each={props.items}>{() => <span class="pm-carousel__dot" />}</For>
+          </div>
+          <IconButton class={index() === last() ? "pm-carousel__nav pm-carousel__nav--hidden" : "pm-carousel__nav"} variant="invisible" icon="chevron-right" label="Next" tabindex={index() === last() ? -1 : undefined} onClick={(e: MouseEvent) => step(1, e)} />
+        </div>
+      </Show>
+    </section>
+  );
+}

@@ -1,0 +1,293 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Linq;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Metadata;
+
+namespace {{ ns }};
+
+// Slides side by side that page under a finger, pen or dragged mouse, with momentum and snapping one slide per
+// flick, and a page marker under them that follows the drag one to one. SelectedIndex changes as the slide changes;
+// setting it moves there. With IsPeeking, the edges of the neighbouring slides show.
+public class Carousel : Control
+{
+    public static readonly StyledProperty<int> SelectedIndexProperty =
+        AvaloniaProperty.Register<Carousel, int>(nameof(SelectedIndex), defaultBindingMode: global::Avalonia.Data.BindingMode.TwoWay);
+
+    public static readonly StyledProperty<bool> IsPeekingProperty =
+        AvaloniaProperty.Register<Carousel, bool>(nameof(IsPeeking));
+
+    public static readonly StyledProperty<bool> ShowControlsProperty =
+        AvaloniaProperty.Register<Carousel, bool>(nameof(ShowControls), true);
+
+    public static readonly StyledProperty<double> SlideHeightProperty =
+        AvaloniaProperty.Register<Carousel, double>(nameof(SlideHeight), 200);
+
+    public static readonly StyledProperty<IBrush?> DotBrushProperty =
+        AvaloniaProperty.Register<Carousel, IBrush?>(nameof(DotBrush));
+
+    public static readonly StyledProperty<IBrush?> CurrentDotBrushProperty =
+        AvaloniaProperty.Register<Carousel, IBrush?>(nameof(CurrentDotBrush));
+
+    private const double Gap = 8;
+    private const double Peek = 24;
+    private const double ControlsHeight = 52;
+    private const double Radius = {{ px("borderRadius-large") | num }};
+
+    private readonly PurrimerSpring _offset = new(0, 0.5);
+    private readonly PurrimerVelocityTracker _tracker = new();
+    private readonly IconButton _prev = new() { IconName = "chevron-left", Label = "Previous", Width = 44, Height = 44 };
+    private readonly IconButton _next = new() { IconName = "chevron-right", Label = "Next", Width = 44, Height = 44 };
+    private Point? _origin;
+    private double _originOffset;
+    private bool _dragging;
+    private bool _settingIndex;
+
+    static Carousel()
+    {
+        AffectsMeasure<Carousel>(IsPeekingProperty, ShowControlsProperty, SlideHeightProperty);
+        AffectsRender<Carousel>(DotBrushProperty, CurrentDotBrushProperty);
+        FocusableProperty.OverrideDefaultValue<Carousel>(true);
+    }
+
+    public Carousel()
+    {
+        ClipToBounds = true;
+        foreach (var button in new[] { _prev, _next })
+        {
+            button.Classes.Add("invisible");
+            LogicalChildren.Add(button);
+            VisualChildren.Add(button);
+        }
+        _prev.Click += (_, _) => SelectedIndex = Math.Max(0, SelectedIndex - 1);
+        _next.Click += (_, _) => SelectedIndex = Math.Min(Slides.Count - 1, SelectedIndex + 1);
+        _offset.Changed += _ =>
+        {
+            InvalidateArrange();
+            InvalidateVisual();
+        };
+        Slides.CollectionChanged += (_, e) =>
+        {
+            foreach (var old in e.OldItems?.OfType<Control>() ?? Enumerable.Empty<Control>())
+            {
+                LogicalChildren.Remove(old);
+                VisualChildren.Remove(old);
+            }
+            foreach (var added in e.NewItems?.OfType<Control>() ?? Enumerable.Empty<Control>())
+            {
+                added.ClipToBounds = true;
+                LogicalChildren.Add(added);
+                VisualChildren.Insert(0, added);
+            }
+            InvalidateMeasure();
+        };
+    }
+
+    [Content]
+    public AvaloniaList<Control> Slides { get; } = new();
+
+    public int SelectedIndex
+    {
+        get => GetValue(SelectedIndexProperty);
+        set => SetValue(SelectedIndexProperty, value);
+    }
+
+    public bool IsPeeking
+    {
+        get => GetValue(IsPeekingProperty);
+        set => SetValue(IsPeekingProperty, value);
+    }
+
+    public bool ShowControls
+    {
+        get => GetValue(ShowControlsProperty);
+        set => SetValue(ShowControlsProperty, value);
+    }
+
+    public double SlideHeight
+    {
+        get => GetValue(SlideHeightProperty);
+        set => SetValue(SlideHeightProperty, value);
+    }
+
+    public IBrush? DotBrush { get => GetValue(DotBrushProperty); set => SetValue(DotBrushProperty, value); }
+    public IBrush? CurrentDotBrush { get => GetValue(CurrentDotBrushProperty); set => SetValue(CurrentDotBrushProperty, value); }
+
+    private double _width;
+    private double SlideWidth => Math.Max(0, _width - (IsPeeking ? 2 * Peek : 0));
+    private double Step => Math.Max(1, SlideWidth + Gap);
+    private double Position => _offset.Value / Step;
+    private double MaxOffset => Math.Max(0, (Slides.Count - 1) * Step);
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SelectedIndexProperty && !_settingIndex)
+        {
+            var index = Math.Clamp(SelectedIndex, 0, Math.Max(0, Slides.Count - 1));
+            _offset.To(index * Step);
+            UpdateButtons();
+        }
+    }
+
+    private void SetIndexQuietly(int index)
+    {
+        _settingIndex = true;
+        SetCurrentValue(SelectedIndexProperty, index);
+        _settingIndex = false;
+        UpdateButtons();
+    }
+
+    private void UpdateButtons()
+    {
+        var multi = ShowControls && Slides.Count > 1;
+        // A hidden button keeps its space so the marker stays put; focus moves to the other one.
+        foreach (var (button, other, hidden) in new[] { (_prev, _next, SelectedIndex <= 0), (_next, _prev, SelectedIndex >= Slides.Count - 1) })
+        {
+            button.IsVisible = multi;
+            if (hidden && button.IsFocused)
+                other.Focus();
+            button.Opacity = hidden ? 0 : 1;
+            button.IsHitTestVisible = !hidden;
+            button.IsTabStop = !hidden;
+        }
+    }
+
+    private double DotsWidth => Slides.Count * 6 + 14 + Math.Max(0, Slides.Count - 1) * 6;
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var width = double.IsInfinity(availableSize.Width) ? 360 : availableSize.Width;
+        var slideWidth = width - (IsPeeking ? 2 * Peek : 0);
+        foreach (var slide in Slides)
+            slide.Measure(new Size(slideWidth, SlideHeight));
+        _prev.Measure(new Size(44, 44));
+        _next.Measure(new Size(44, 44));
+        return new Size(width, SlideHeight + (ShowControls ? ControlsHeight : 0));
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        if (Math.Abs(finalSize.Width - _width) > 0.5)
+        {
+            _width = finalSize.Width;
+            _offset.Set(Math.Clamp(SelectedIndex, 0, Math.Max(0, Slides.Count - 1)) * Step);
+        }
+        var x0 = IsPeeking ? Peek : 0;
+        for (var i = 0; i < Slides.Count; i++)
+        {
+            Slides[i].Arrange(new Rect(x0 + i * Step - _offset.Value, 0, SlideWidth, SlideHeight));
+            Slides[i].Clip = new RectangleGeometry(new Rect(0, 0, SlideWidth, SlideHeight), Radius, Radius);
+        }
+        var y = SlideHeight + 4;
+        var center = finalSize.Width / 2;
+        _prev.Arrange(new Rect(center - DotsWidth / 2 - 4 - 44, y, 44, 44));
+        _next.Arrange(new Rect(center + DotsWidth / 2 + 4, y, 44, 44));
+        UpdateButtons();
+        return finalSize;
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        if (!ShowControls || Slides.Count < 2)
+            return;
+        var x = Bounds.Width / 2 - DotsWidth / 2;
+        var y = SlideHeight + 4 + 22 - 3;
+        var rest = (DotBrush as ISolidColorBrush)?.Color ?? Colors.Gray;
+        var current = (CurrentDotBrush as ISolidColorBrush)?.Color ?? Colors.Black;
+        for (var i = 0; i < Slides.Count; i++)
+        {
+            var t = Math.Max(0, 1 - Math.Abs(Position - i));
+            var w = 6 + 14 * t;
+            var color = Color.FromArgb(
+                (byte)(rest.A + (current.A - rest.A) * t), (byte)(rest.R + (current.R - rest.R) * t),
+                (byte)(rest.G + (current.G - rest.G) * t), (byte)(rest.B + (current.B - rest.B) * t));
+            context.DrawRectangle(new SolidColorBrush(color), null, new Rect(x, y, w, 6), 3, 3);
+            x += w + 6;
+        }
+        if (!_dragging)
+            return;
+        var index = Math.Clamp((int)Math.Round(Position), 0, Slides.Count - 1);
+        if (index != SelectedIndex)
+            SetIndexQuietly(index);
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        var p = e.GetPosition(this);
+        if (p.Y > SlideHeight || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _offset.Stop();
+        _origin = p;
+        _originOffset = _offset.Value;
+        _dragging = false;
+        _tracker.Reset();
+        _tracker.Add(p);
+        e.Pointer.Capture(this);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var p = e.GetPosition(this);
+        _tracker.Add(p);
+        var dx = p.X - origin.X;
+        if (!_dragging && Math.Abs(dx) > PurrimerMotion.Slop)
+            _dragging = true;
+        if (!_dragging)
+            return;
+        var offset = _originOffset - dx;
+        if (offset < 0)
+            offset = PurrimerMotion.RubberBand(offset, Bounds.Width);
+        else if (offset > MaxOffset)
+            offset = MaxOffset + PurrimerMotion.RubberBand(offset - MaxOffset, Bounds.Width);
+        _offset.Set(offset);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_origin == null)
+            return;
+        _origin = null;
+        e.Pointer.Capture(null);
+        if (!_dragging)
+            return;
+        _dragging = false;
+        var velocity = -_tracker.Velocity().X;
+        var start = (int)Math.Round(_originOffset / Step);
+        var target = (int)Math.Round((_offset.Value + PurrimerMotion.Project(velocity) * 0.3) / Step);
+        // One flick moves one slide, as scroll snapping does.
+        target = Math.Clamp(Math.Clamp(target, start - 1, start + 1), 0, Math.Max(0, Slides.Count - 1));
+        _offset.To(target * Step, velocity);
+        SetIndexQuietly(target);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        int? next = e.Key switch
+        {
+            Key.Left => SelectedIndex - 1,
+            Key.Right => SelectedIndex + 1,
+            Key.Home => 0,
+            Key.End => Slides.Count - 1,
+            _ => null,
+        };
+        if (next is { } n)
+        {
+            SelectedIndex = Math.Clamp(n, 0, Math.Max(0, Slides.Count - 1));
+            e.Handled = true;
+        }
+    }
+}

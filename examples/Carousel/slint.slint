@@ -1,0 +1,17 @@
+import { Carousel, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Carousel {
+        accessible-label: "Highlights";
+        peek: true;
+        slide-height: 220px;
+        items: [
+            { title: "Morning walk", background: Purrimer.bg-color-accent-muted },
+            { title: "Market haul", background: Purrimer.bg-color-success-muted },
+            { title: "Rainy afternoon", background: Purrimer.bg-color-attention-muted },
+            { title: "Late train", background: Purrimer.bg-color-done-muted },
+        ];
+        changed(index) => { debug("slide", index); }
+    }
+}

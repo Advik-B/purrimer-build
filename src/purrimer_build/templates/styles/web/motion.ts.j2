@@ -459,3 +459,89 @@ export function wireEdgeSwipe(edge: HTMLElement, opts: EdgeSwipe): () => void {
     edge.removeEventListener("pointercancel", up);
   };
 }
+
+export interface CarouselParts {
+  track: HTMLElement;
+  dots?: HTMLElement | null;
+  onIndex: (index: number) => void;
+}
+
+// Wires a Carousel track: the page marker follows the scroll one to one, the phone ticks as each slide takes over
+// (firmer at the ends), and a mouse drag pages the track the way a finger would. Returns go(index) and a cleanup.
+export function wireCarousel(parts: CarouselParts): { go: (index: number, smooth?: boolean) => void; dispose: () => void } {
+  const { track } = parts;
+  const slides = () => Array.from(track.children) as HTMLElement[];
+  const position = () => {
+    const list = slides();
+    if (list.length < 2) return 0;
+    const step = list[1].offsetLeft - list[0].offsetLeft || 1;
+    return track.scrollLeft / step;
+  };
+  let current = -1;
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const pos = position();
+    const dots = parts.dots ? (Array.from(parts.dots.children) as HTMLElement[]) : [];
+    dots.forEach((dot, i) => dot.style.setProperty("--pm-dot", String(Math.max(0, 1 - Math.abs(pos - i)))));
+    const index = Math.round(pos);
+    if (index !== current) {
+      const first = current === -1;
+      current = index;
+      if (!first) buzz(index === 0 || index === slides().length - 1 ? 14 : 6);
+      parts.onIndex(index);
+    }
+  };
+  const onScroll = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  const go = (index: number, smooth = true) => {
+    const list = slides();
+    const slide = list[Math.max(0, Math.min(index, list.length - 1))];
+    if (!slide) return;
+    const slideBox = slide.getBoundingClientRect();
+    const trackBox = track.getBoundingClientRect();
+    const delta = slideBox.left + slideBox.width / 2 - (trackBox.left + track.clientWidth / 2);
+    track.scrollTo({ left: track.scrollLeft + delta, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
+  };
+  let drag: { x: number; left: number; id: number } | null = null;
+  const tracker = new VelocityTracker();
+  const down = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.button > 0) return;
+    drag = { x: e.clientX, left: track.scrollLeft, id: e.pointerId };
+    tracker.reset();
+    tracker.add(e.clientX, 0);
+    track.setPointerCapture(e.pointerId);
+    track.classList.add("pm-carousel__track--dragging");
+  };
+  const move = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    tracker.add(e.clientX, 0);
+    track.scrollLeft = drag.left - (e.clientX - drag.x);
+  };
+  const up = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    drag = null;
+    const v = tracker.velocity().x;
+    const target = Math.round(position() + (Math.abs(v) > 300 ? -Math.sign(v) * 0.5 : 0));
+    track.classList.remove("pm-carousel__track--dragging");
+    go(target);
+  };
+  track.addEventListener("scroll", onScroll, { passive: true });
+  track.addEventListener("pointerdown", down);
+  track.addEventListener("pointermove", move);
+  track.addEventListener("pointerup", up);
+  track.addEventListener("pointercancel", up);
+  update();
+  return {
+    go,
+    dispose: () => {
+      cancelAnimationFrame(frame);
+      track.removeEventListener("scroll", onScroll);
+      track.removeEventListener("pointerdown", down);
+      track.removeEventListener("pointermove", move);
+      track.removeEventListener("pointerup", up);
+      track.removeEventListener("pointercancel", up);
+    },
+  };
+}
