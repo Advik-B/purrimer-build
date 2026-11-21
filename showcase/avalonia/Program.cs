@@ -28,6 +28,8 @@ var themes = new Dictionary<string, ThemeVariant>
     ["dark"] = PurrimerThemes.Mocha,
 };
 
+// Longer than the slowest enter transition (duration-sleepy-long, 900ms) with room for slow CI runners.
+const int SettleMs = 1500;
 var sink = new CollectingSink();
 Logger.Sink = sink;
 AppBuilder.Configure<App>()
@@ -74,7 +76,7 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
             // Let transitions settle. The animation clock follows real time, so tick for a little longer than the
             // slowest transition.
             var settle = System.Diagnostics.Stopwatch.StartNew();
-            while (settle.ElapsedMilliseconds < 700)
+            while (settle.ElapsedMilliseconds < SettleMs)
             {
                 Dispatcher.UIThread.RunJobs();
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();

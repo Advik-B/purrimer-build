@@ -213,8 +213,9 @@ uv run scripts/showcase.py docs                     # docs/components/*.md and t
 
 Every screenshot must also be more than one flat colour. The run needs Node 24, the .NET 10 SDK and `slint-viewer`
 on `PATH`. Screenshots land in `showcase/out/`; only CI writes `docs/screenshots/`, so that pixels do not change
-with the machine. On every push to `master`, the Showcase workflow runs all of this on Linux and commits the new
-screenshots and docs; on pull requests it only runs the checks.
+with the machine. On every push to `master`, the Showcase workflow runs all of this on Linux and commits the
+screenshots that visibly changed (it ignores one-step anti-aliasing noise) and the docs; on pull requests it only runs
+the checks.
 
 ## Licences
 

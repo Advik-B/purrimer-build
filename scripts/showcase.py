@@ -2,11 +2,11 @@
 
     uv run scripts/showcase.py build                 # purrimer build -> showcase/dist
     uv run scripts/showcase.py run --targets all     # render, check, screenshot -> showcase/out/<target>/
+    uv run scripts/showcase.py collect DIR           # CI: copy changed screenshots from DIR to docs/screenshots/
     uv run scripts/showcase.py docs                  # docs/components/*.md and the README gallery
 
 `run` exits non-zero when an example is missing, fails its target's checks, logs a warning or error while rendering,
-or produces a blank screenshot. CI copies showcase/out/ to docs/screenshots/ and commits it; local runs never touch
-docs/screenshots/.
+or produces a blank screenshot. Only CI runs `collect` and commits docs/screenshots/; local runs write showcase/out/.
 """
 
 from __future__ import annotations
@@ -271,9 +271,52 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--themes", default=",".join(THEMES))
     r.add_argument("--only", default="", help="Comma-separated component names.")
     r.set_defaults(func=cmd_run)
+    c = sub.add_parser("collect", help="Copy new screenshots into docs/screenshots, skipping ones that look the same.")
+    c.add_argument("source", type=Path, help="Folder with one subfolder of PNGs per target.")
+    c.set_defaults(func=cmd_collect)
     sub.add_parser("docs", help="Write docs/components/*.md and the README gallery.").set_defaults(func=cmd_docs)
     args = parser.parse_args(argv)
     return args.func(args)
+
+
+# Collect
+
+# GPU rasterisers can flip a channel by one on anti-aliased edges between runs; ignore that, so an unchanged
+# component never produces a commit.
+NOISE = 2
+
+
+def same_picture(a: Path, b: Path) -> bool:
+    from PIL import Image, ImageChops
+
+    with Image.open(a) as x, Image.open(b) as y:
+        if x.size != y.size:
+            return False
+        diff = ImageChops.difference(x.convert("RGBA"), y.convert("RGBA"))
+        return max(high for _, high in diff.getextrema()) <= NOISE
+
+
+def cmd_collect(args: argparse.Namespace) -> int:
+    source: Path = args.source
+    new = {p.relative_to(source) for p in source.glob("*/*.png")}
+    if not new:
+        print(f"No screenshots in {source}.", file=sys.stderr)
+        return 1
+    copied = kept = removed = 0
+    for rel in sorted(new):
+        dest = SCREENSHOTS / rel
+        if dest.is_file() and same_picture(source / rel, dest):
+            kept += 1
+            continue
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source / rel, dest)
+        copied += 1
+    for old in SCREENSHOTS.glob("*/*.png"):
+        if old.relative_to(SCREENSHOTS) not in new:
+            old.unlink()
+            removed += 1
+    print(f"{copied} screenshots updated, {kept} unchanged, {removed} removed.")
+    return 0
 
 
 # Docs

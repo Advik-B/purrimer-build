@@ -27,6 +27,9 @@ from PySide6.QtCore import QEventLoop, Qt, QTimer, QtMsgType, qInstallMessageHan
 from PySide6.QtGui import QColor, QFont, QPainter, QPalette  # noqa: E402
 from PySide6.QtWidgets import QApplication, QDialog, QVBoxLayout, QWidget  # noqa: E402
 
+# Longer than the slowest enter animation (duration-sleepy-long, 900ms) with room for slow CI runners.
+SETTLE_MS = 1500
+
 messages: list[str] = []
 
 
@@ -98,12 +101,12 @@ for theme in manifest["themes"]:
             frame.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
             frame.show()
             frame.setFocus()
-            wait(700)  # let enter animations (Snackbar fade, BottomSheet slide) finish
+            wait(SETTLE_MS)  # let enter animations (Snackbar fade, BottomSheet slide) finish
             shot = frame.grab()
             if dialog is not None:
                 # A QDialog is its own window: show it, then draw it over a scrim in the middle of the frame.
                 dialog.show()
-                wait(700)
+                wait(SETTLE_MS)
                 painter = QPainter(shot)
                 painter.fillRect(
                     0, 0, comp["width"], comp["height"], QColor(T.COLORS["overlay-backdrop-bgColor"][theme])

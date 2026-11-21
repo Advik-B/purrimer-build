@@ -27,6 +27,9 @@ from PySide6.QtGui import QCursor, QFont, QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlComponent, QQmlEngine  # noqa: E402
 from PySide6.QtQuick import QQuickWindow, QSGRendererInterface  # noqa: E402
 
+# Longer than the slowest enter animation (duration-sleepy-long, 900ms) with room for slow CI runners.
+SETTLE_MS = 1500
+
 messages: list[str] = []
 
 
@@ -92,7 +95,7 @@ for theme in manifest["themes"]:
             window.setPosition(0, 0)
             QCursor.setPos(window.screen().geometry().bottomRight())
             window.show()
-            wait(700)  # let enter transitions finish
+            wait(SETTLE_MS)  # let enter transitions finish
             api = window.rendererInterface().graphicsApi()
             if api == QSGRendererInterface.GraphicsApi.Software:
                 messages.append("Qt Quick fell back to the software renderer, which drops shadows; use a GPU or Mesa")

@@ -117,13 +117,14 @@ jobs:
         with:
           python-version: "3.12"
           enable-cache: true
-      - name: Replace the screenshots
-        run: rm -rf docs/screenshots
       - uses: actions/download-artifact@v8.0.2
         with:
           pattern: screenshots-*
-          path: docs/screenshots
+          path: new-shots
           merge-multiple: true
+      # Keeps a committed screenshot unless the new one visibly differs, so rendering noise never makes a commit.
+      - name: Update the screenshots
+        run: uv run --with pillow scripts/showcase.py collect new-shots
       - name: Write the docs
         run: uv run scripts/showcase.py docs
       # Pushes made with GITHUB_TOKEN do not start new workflow runs, so this cannot loop.
