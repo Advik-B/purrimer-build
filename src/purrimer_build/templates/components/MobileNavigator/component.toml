@@ -1,0 +1,26 @@
+name = "MobileNavigator"
+group = "Mobile"
+order = 62
+summary = "A stack of phone screens: pushes slide in from the edge, tabs crossfade, and a swipe from the left edge goes back."
+slint_exports = ["MobileNavigator", "NavScreen", "PurrimerNavigator"]
+web_exports = ["useNavigator", "type Navigator", "type NavTab", "type ScreenProps"]
+
+[props.screens]
+type = "map"
+default = ""
+doc = "Screen name to screen; each screen gets nav, params and active."
+
+[props.initial]
+type = "string"
+default = ""
+doc = "The first screen's name, when there are no tabs."
+
+[props.tabs]
+type = "list"
+default = []
+doc = "Sections, each with its own stack: { screen, label, icon, badge? }. The navigator draws the BottomNav."
+
+[props.history]
+type = "bool"
+default = false
+doc = "Ties pushes to browser history, so the browser or Android back button pops."

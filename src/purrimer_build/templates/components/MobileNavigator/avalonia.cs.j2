@@ -1,0 +1,453 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Metadata;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+
+namespace {{ ns }};
+
+// One screen a MobileNavigator can show: its name and a DataTemplate that builds it. The built screen's DataContext
+// is a MobileNavigatorContext with Nav and Params.
+public class MobileNavigatorScreen
+{
+    public string Name { get; set; } = "";
+
+    [Content]
+    public IDataTemplate? Template { get; set; }
+}
+
+// A section of a MobileNavigator with its own stack.
+public class MobileNavigatorTab
+{
+    public string Screen { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string IconName { get; set; } = "";
+    public int Badge { get; set; }
+    public object? Params { get; set; }
+}
+
+public sealed class MobileNavigatorContext
+{
+    public MobileNavigatorContext(MobileNavigator nav, object? @params)
+    {
+        Nav = nav;
+        Params = @params;
+    }
+
+    public MobileNavigator Nav { get; }
+    public object? Params { get; }
+}
+
+// A stack of phone screens. Push slides a screen in from the right while the one under it shifts 30% and dims; Pop
+// reverses it. With Tabs, each section keeps its own stack and the navigator draws the BottomNav; switching tabs
+// crossfades. A swipe from the left edge by finger, pen or mouse drags the top screen back and goes back past 35% of
+// the width or on a flick. An AppBar's back button and Alt+Left go back on their own, and
+// MobileNavigator.PushOnTap="name" on any control pushes that screen when it is tapped (with PushParams). Requests
+// made during a transition wait their turn.
+public class MobileNavigator : Decorator
+{
+    public static readonly AttachedProperty<string?> PushOnTapProperty =
+        AvaloniaProperty.RegisterAttached<MobileNavigator, Control, string?>("PushOnTap");
+
+    public static readonly AttachedProperty<object?> PushParamsProperty =
+        AvaloniaProperty.RegisterAttached<MobileNavigator, Control, object?>("PushParams");
+
+    public static readonly StyledProperty<string> InitialProperty =
+        AvaloniaProperty.Register<MobileNavigator, string>(nameof(Initial), "");
+
+    private const double Edge = {{ px("mobile-edge-width") | num }};
+    private const double Commit = 0.35;
+    private const double Flick = 600;
+
+    private readonly Grid _root = new() { RowDefinitions = new RowDefinitions("*,Auto") };
+    private readonly Panel _stage = new() { ClipToBounds = true };
+    private readonly Border _dim = new() { IsHitTestVisible = false, IsVisible = false };
+    private readonly Border _mark = new() { Width = 32, Height = 32, CornerRadius = new CornerRadius(16), IsHitTestVisible = false, IsVisible = false, HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Left, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
+    private readonly Icon _markIcon = new() { IconName = "arrow-left", HorizontalAlignment = global::Avalonia.Layout.HorizontalAlignment.Center, VerticalAlignment = global::Avalonia.Layout.VerticalAlignment.Center };
+    private readonly BottomNav _nav = new() { ShowLabels = true, IsVisible = false };
+    private readonly List<List<(Control Screen, Control? Opener)>> _stacks = new();
+    private readonly Queue<Func<Task>> _queue = new();
+    private readonly PurrimerVelocityTracker _tracker = new();
+    private bool _busy;
+    private int _tab;
+    private Point? _swipeOrigin;
+    private bool _swipeLive;
+
+    static MobileNavigator()
+    {
+        PushOnTapProperty.Changed.AddClassHandler<Control>((control, e) =>
+        {
+            control.Tapped -= OnPushTapped;
+            if (e.NewValue is string)
+                control.Tapped += OnPushTapped;
+        });
+    }
+
+    public MobileNavigator()
+    {
+        Child = _root;
+        _root.Children.Add(_stage);
+        Grid.SetRow(_nav, 1);
+        _root.Children.Add(_nav);
+        _mark.Child = _markIcon;
+        _stage.SizeChanged += (_, _) => Relayout();
+        _nav.SelectionChanged += (_, _) =>
+        {
+            if (_nav.SelectedIndex >= 0 && _nav.SelectedIndex != _tab)
+                _ = SwitchTab(_nav.SelectedIndex);
+        };
+        _nav.Tapped += (_, _) =>
+        {
+            if (_nav.SelectedIndex == _tab)
+                _ = SwitchTab(_tab);
+        };
+        AddHandler(AppBar.BackRequestedEvent, (_, e) =>
+        {
+            if (Depth > 1)
+            {
+                e.Handled = true;
+                _ = Pop();
+            }
+        });
+        AddHandler(PointerPressedEvent, OnPressed, RoutingStrategies.Tunnel);
+        AddHandler(PointerMovedEvent, OnMoved, RoutingStrategies.Tunnel);
+        AddHandler(PointerReleasedEvent, OnReleased, RoutingStrategies.Tunnel);
+    }
+
+    public static string? GetPushOnTap(Control c) => c.GetValue(PushOnTapProperty);
+    public static void SetPushOnTap(Control c, string? v) => c.SetValue(PushOnTapProperty, v);
+    public static object? GetPushParams(Control c) => c.GetValue(PushParamsProperty);
+    public static void SetPushParams(Control c, object? v) => c.SetValue(PushParamsProperty, v);
+
+    public AvaloniaList<MobileNavigatorScreen> Screens { get; } = new();
+    public AvaloniaList<MobileNavigatorTab> Tabs { get; } = new();
+
+    // The first screen's name, when there are no tabs.
+    public string Initial
+    {
+        get => GetValue(InitialProperty);
+        set => SetValue(InitialProperty, value);
+    }
+
+    public int Depth => _stacks.Count > _tab ? _stacks[_tab].Count : 0;
+    public int Tab => _tab;
+
+    private static void OnPushTapped(object? sender, TappedEventArgs e)
+    {
+        if (sender is Control c && c.FindAncestorOfType<MobileNavigator>() is { } nav && GetPushOnTap(c) is { } name)
+            _ = nav.Push(name, GetPushParams(c));
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (_stacks.Count > 0)
+            return;
+        _dim.Bind(Border.BackgroundProperty, this.GetResourceObservable("PmOverlayBackdropBgColor"));
+        _mark.Bind(Border.BackgroundProperty, this.GetResourceObservable("PmOverlayBgColor"));
+        _markIcon.Bind(Icon.ForegroundProperty, this.GetResourceObservable("PmFgColorDefault"));
+        var tabs = Tabs.Count > 0 ? Tabs.ToList() : new List<MobileNavigatorTab> { new() { Screen = Initial } };
+        foreach (var t in tabs)
+            _stacks.Add(new List<(Control, Control?)> { (Make(t.Screen, t.Params), null) });
+        if (Tabs.Count > 0)
+        {
+            _nav.ItemsSource = Tabs.Select(t => new BottomNavItem { IconName = t.IconName, Label = t.Label, Badge = t.Badge }).ToList();
+            _nav.SelectedIndex = 0;
+            _nav.IsVisible = true;
+        }
+        Relayout();
+    }
+
+    private Control Make(string name, object? @params)
+    {
+        var spec = Screens.FirstOrDefault(s => s.Name == name) ?? throw new ArgumentException($"No screen named {name}");
+        var context = new MobileNavigatorContext(this, @params);
+        var screen = spec.Template?.Build(context) ?? new Panel();
+        screen.DataContext = context;
+        _stage.Children.Add(screen);
+        return screen;
+    }
+
+    private Control Top => _stacks[_tab][^1].Screen;
+    private Control? Below => _stacks[_tab].Count > 1 ? _stacks[_tab][^2].Screen : null;
+
+    private static void Place(Control c, double x) => c.RenderTransform = new TranslateTransform(x, 0);
+
+    private void Relayout()
+    {
+        foreach (var (stack, t) in _stacks.Select((s, i) => (s, i)))
+        {
+            for (var i = 0; i < stack.Count; i++)
+            {
+                var isTop = t == _tab && i == stack.Count - 1;
+                stack[i].Screen.IsVisible = isTop;
+                stack[i].Screen.IsEnabled = isTop;
+                stack[i].Screen.Opacity = 1;
+                Place(stack[i].Screen, 0);
+            }
+        }
+        _dim.IsVisible = false;
+        _mark.IsVisible = false;
+        EnsureOverlays();
+    }
+
+    private void EnsureOverlays()
+    {
+        foreach (var overlay in new Control[] { _dim, _mark })
+        {
+            _stage.Children.Remove(overlay);
+            _stage.Children.Add(overlay);
+        }
+    }
+
+    private Task Enqueue(Func<Task> task)
+    {
+        var done = new TaskCompletionSource();
+        _queue.Enqueue(async () =>
+        {
+            await task();
+            done.TrySetResult();
+        });
+        if (!_busy)
+            _ = Drain();
+        return done.Task;
+    }
+
+    private async Task Drain()
+    {
+        _busy = true;
+        while (_queue.Count > 0)
+            await _queue.Dequeue()();
+        _busy = false;
+    }
+
+    private (TimeSpan Duration, Easing Easing) Timing(double from)
+    {
+        var playful = PurrimerMotion.Kind == "playful";
+        var key = playful ? "PmDurationPlayfulScreen" : "PmDurationSleepyScreen";
+        var ease = playful ? "PmEasingPlayfulSnap" : "PmEasingSleepyEnter";
+        var duration = this.TryFindResource(key, out var d) && d is TimeSpan span ? span : TimeSpan.FromMilliseconds(360);
+        var easing = this.TryFindResource(ease, out var e) && e is Easing found ? found : new CubicEaseOut();
+        return (duration * (1 - from), easing);
+    }
+
+    // Runs step(progress) from `from` to 1 on the render clock.
+    private Task Animate(Action<double> step, double from = 0, TimeSpan? duration = null)
+    {
+        var (span, easing) = Timing(from);
+        if (duration is { } custom)
+            span = custom;
+        var done = new TaskCompletionSource();
+        if (PurrimerMotion.PauseLoops || span <= TimeSpan.Zero)
+        {
+            step(1);
+            done.SetResult();
+            return done.Task;
+        }
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        var timer = new DispatcherTimer(TimeSpan.FromMilliseconds(8), DispatcherPriority.Render, (_, _) => { });
+        timer.Tick += (_, _) =>
+        {
+            var t = Math.Min(1, clock.Elapsed.TotalMilliseconds / span.TotalMilliseconds);
+            step(from + (1 - from) * easing.Ease(t));
+            if (t >= 1)
+            {
+                timer.Stop();
+                done.TrySetResult();
+            }
+        };
+        step(from);
+        timer.Start();
+        return done.Task;
+    }
+
+    private void ShowPair(Control top, Control below)
+    {
+        below.IsVisible = true;
+        top.IsVisible = true;
+        _stage.Children.Remove(_dim);
+        _stage.Children.Insert(_stage.Children.IndexOf(top), _dim);
+        _dim.IsVisible = true;
+        _stage.Children.Remove(_mark);
+        _stage.Children.Add(_mark);
+    }
+
+    private void ApplyPop(Control top, Control below, double p)
+    {
+        var w = _stage.Bounds.Width;
+        Place(top, w * p);
+        Place(below, -0.3 * w * (1 - p));
+        _dim.Opacity = 0.4 * (1 - p);
+    }
+
+    public Task Push(string name, object? @params = null) => Enqueue(async () =>
+    {
+        var below = Top;
+        var opener = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as Control;
+        var screen = Make(name, @params);
+        _stacks[_tab].Add((screen, opener));
+        ShowPair(screen, below);
+        var w = _stage.Bounds.Width;
+        await Animate(p =>
+        {
+            Place(screen, w * (1 - p));
+            Place(below, -0.3 * w * p);
+            _dim.Opacity = 0.4 * p;
+        });
+        Relayout();
+        screen.Focus();
+    });
+
+    public Task Pop() => Enqueue(() => PopNow(0));
+
+    private async Task PopNow(double from)
+    {
+        var stack = _stacks[_tab];
+        if (stack.Count < 2)
+            return;
+        var (top, opener) = stack[^1];
+        var below = stack[^2].Screen;
+        ShowPair(top, below);
+        await Animate(p => ApplyPop(top, below, p), from);
+        stack.RemoveAt(stack.Count - 1);
+        _stage.Children.Remove(top);
+        Relayout();
+        opener?.Focus();
+    }
+
+    public Task Replace(string name, object? @params = null) => Enqueue(async () =>
+    {
+        var stack = _stacks[_tab];
+        var (old, opener) = stack[^1];
+        var screen = Make(name, @params);
+        stack[^1] = (screen, opener);
+        _stage.Children.Remove(old);
+        Relayout();
+        await Fade(screen);
+    });
+
+    public Task PopToRoot() => Enqueue(async () =>
+    {
+        var stack = _stacks[_tab];
+        if (stack.Count < 2)
+            return;
+        foreach (var (s, _) in stack.Skip(1).Take(stack.Count - 2).ToList())
+            _stage.Children.Remove(s);
+        stack.RemoveRange(1, stack.Count - 2);
+        await PopNow(0);
+    });
+
+    public Task SwitchTab(int index) => Enqueue(async () =>
+    {
+        if (index == _tab)
+        {
+            var stack = _stacks[_tab];
+            if (stack.Count > 1)
+            {
+                foreach (var (s, _) in stack.Skip(1).Take(stack.Count - 2).ToList())
+                    _stage.Children.Remove(s);
+                stack.RemoveRange(1, stack.Count - 2);
+                await PopNow(0);
+            }
+            else if (Top is MobileScreen screen)
+            {
+                screen.ScrollToTop();
+            }
+            return;
+        }
+        _tab = index;
+        _nav.SelectedIndex = index;
+        Relayout();
+        await Fade(Top);
+    });
+
+    private Task Fade(Control screen)
+    {
+        var span = this.TryFindResource("PmDurationScreenFade", out var d) && d is TimeSpan s ? s : TimeSpan.FromMilliseconds(200);
+        return Animate(p => screen.Opacity = p, 0, span);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Key == Key.Left && e.KeyModifiers.HasFlag(KeyModifiers.Alt) && Depth > 1)
+        {
+            e.Handled = true;
+            _ = Pop();
+        }
+    }
+
+    private void OnPressed(object? sender, PointerPressedEventArgs e)
+    {
+        var p = e.GetPosition(_stage);
+        if (_busy || Depth < 2 || p.X < 0 || p.X >= Edge || p.Y < 0 || p.Y > _stage.Bounds.Height)
+            return;
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _swipeOrigin = p;
+        _swipeLive = false;
+        _tracker.Reset();
+        _tracker.Add(p);
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+
+    private void OnMoved(object? sender, PointerEventArgs e)
+    {
+        if (_swipeOrigin is not { } origin || Below is not { } below)
+            return;
+        var p = e.GetPosition(_stage);
+        _tracker.Add(p);
+        var dx = p.X - origin.X;
+        if (!_swipeLive)
+        {
+            if (dx < PurrimerMotion.Slop)
+                return;
+            _swipeLive = true;
+            ShowPair(Top, below);
+            _mark.IsVisible = true;
+        }
+        var progress = Math.Clamp(dx / Math.Max(1, _stage.Bounds.Width), 0, 1);
+        ApplyPop(Top, below, progress);
+        var armed = progress >= Commit;
+        _mark.Bind(Border.BackgroundProperty, this.GetResourceObservable(armed ? "PmButtonPrimaryBgColorRest" : "PmOverlayBgColor"));
+        _markIcon.Bind(Icon.ForegroundProperty, this.GetResourceObservable(armed ? "PmFgColorOnEmphasis" : "PmFgColorDefault"));
+        _mark.Margin = new Thickness(4 + Math.Min(progress * _stage.Bounds.Width, 48), 0, 0, 0);
+        e.Handled = true;
+    }
+
+    private void OnReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_swipeOrigin is not { } origin)
+            return;
+        _swipeOrigin = null;
+        e.Pointer.Capture(null);
+        _mark.IsVisible = false;
+        if (!_swipeLive || Below is not { } below)
+            return;
+        var top = Top;
+        var progress = Math.Clamp((e.GetPosition(_stage).X - origin.X) / Math.Max(1, _stage.Bounds.Width), 0, 1);
+        var velocity = _tracker.Velocity().X;
+        if (progress >= Commit || velocity > Flick)
+        {
+            _ = Enqueue(() => PopNow(progress));
+            return;
+        }
+        var spring = new PurrimerSpring(progress, 0.002);
+        spring.Changed += v => ApplyPop(top, below, v);
+        spring.Settled += Relayout;
+        spring.To(0, velocity / Math.Max(1, _stage.Bounds.Width));
+    }
+}

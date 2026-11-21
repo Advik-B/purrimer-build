@@ -1,0 +1,49 @@
+.pm-navigator {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: {{ "bgColor-default" | tok }};
+}
+.pm-navigator__stage { position: relative; flex: 1; min-height: 0; overflow: hidden; }
+.pm-navigator__screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: {{ "bgColor-default" | tok }};
+  box-shadow: -1px 0 0 {{ "borderColor-muted" | tok }};
+}
+.pm-navigator__screen[hidden] { display: none; }
+.pm-navigator__screen > .pm-mobile-screen { flex: 1; height: auto; }
+/* Dims a screen as the next one covers it. */
+.pm-navigator__dim { position: absolute; inset: 0; z-index: 30; background: color-mix(in srgb, {{ "overlay-backdrop-bgColor" | tok }} 40%, transparent); opacity: 0; pointer-events: none; }
+.pm-navigator__screen--under > .pm-navigator__dim { opacity: 1; }
+.pm-navigator__edge { position: absolute; top: 0; bottom: 0; left: 0; z-index: 40; width: {{ "mobile-edge-width" | tok }}; touch-action: pan-y; }
+/* Rides along an edge swipe and fills once the swipe would go back. */
+.pm-navigator__back-mark {
+  position: absolute;
+  top: 50%;
+  left: 4px;
+  z-index: 41;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  background: {{ "overlay-bgColor" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  opacity: 0;
+  pointer-events: none;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-navigator__back-mark .pm-icon { fill: currentColor; }
+.pm-navigator__back-mark--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "button-primary-bgColor-rest" | tok }}; }
+.pm-navigator__nav { flex: none; }
+.pm-navigator__nav .pm-bottomnav { position: relative; }

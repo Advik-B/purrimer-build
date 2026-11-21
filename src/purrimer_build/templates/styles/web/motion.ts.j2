@@ -295,3 +295,167 @@ export function wireKeyboardFooter(footer: HTMLElement): () => void {
     screen?.style.removeProperty("--pm-kb");
   };
 }
+
+// Screen transitions for MobileNavigator. Timing comes from the CSS custom properties, so motion kinds and reduced
+// motion apply without code here.
+function cssMs(el: Element, name: string, fallback: number): number {
+  const raw = getComputedStyle(el).getPropertyValue(name).trim();
+  const n = parseFloat(raw);
+  if (Number.isNaN(n)) return fallback;
+  return raw.endsWith("ms") ? n : raw.endsWith("s") ? n * 1000 : n;
+}
+
+function cssValue(el: Element, name: string, fallback: string): string {
+  return getComputedStyle(el).getPropertyValue(name).trim() || fallback;
+}
+
+export function screenTiming(el: Element): { duration: number; easing: string; reduced: boolean } {
+  const reduced = reducedMotion();
+  const playful = motionKind(el) === "playful";
+  if (reduced) return { duration: cssMs(el, "--duration-reduced", 120), easing: "linear", reduced };
+  return {
+    duration: cssMs(el, playful ? "--duration-playful-screen" : "--duration-sleepy-screen", 360),
+    easing: cssValue(el, playful ? "--easing-playful-snap" : "--easing-sleepy-enter", "ease-out"),
+    reduced,
+  };
+}
+
+// Slides incoming over outgoing (push) or outgoing off over incoming (pop). from is the progress to start at, for a
+// pop that an edge swipe has already carried part of the way.
+export function slideScreens(
+  root: Element,
+  kind: "push" | "pop",
+  incoming: HTMLElement,
+  outgoing: HTMLElement,
+  from = 0,
+): Promise<void> {
+  const { duration, easing, reduced } = screenTiming(root);
+  if (typeof incoming.animate !== "function") return Promise.resolve();
+  const opts: KeyframeAnimationOptions = { duration: duration * (1 - from), easing, fill: "both" };
+  const dim = (el: HTMLElement) => el.querySelector<HTMLElement>(":scope > .pm-navigator__dim");
+  const anims: Animation[] = [];
+  if (reduced) {
+    const fading = kind === "push" ? incoming : outgoing;
+    anims.push(fading.animate([{ opacity: kind === "push" ? 0 : 1 }, { opacity: kind === "push" ? 1 : 0 }], opts));
+  } else if (kind === "push") {
+    anims.push(incoming.animate([{ translate: "100% 0" }, { translate: "0 0" }], opts));
+    anims.push(outgoing.animate([{ translate: "0 0" }, { translate: "-30% 0" }], opts));
+    const d = dim(outgoing);
+    if (d) anims.push(d.animate([{ opacity: 0 }, { opacity: 1 }], opts));
+  } else {
+    const p = from * 100;
+    anims.push(outgoing.animate([{ translate: `${p}% 0` }, { translate: "100% 0" }], opts));
+    anims.push(incoming.animate([{ translate: `${-30 + 30 * from}% 0` }, { translate: "0 0" }], opts));
+    const d = dim(incoming);
+    if (d) anims.push(d.animate([{ opacity: 1 - from }, { opacity: 0 }], opts));
+  }
+  return Promise.all(anims.map((a) => a.finished.catch(() => undefined))).then(() => {
+    for (const a of anims) a.cancel();
+  });
+}
+
+export function fadeScreens(root: Element, incoming: HTMLElement): Promise<void> {
+  if (typeof incoming.animate !== "function") return Promise.resolve();
+  const duration = reducedMotion() ? cssMs(root, "--duration-reduced", 120) : cssMs(root, "--duration-screen-fade", 200);
+  const a = incoming.animate([{ opacity: 0 }, { opacity: 1 }], { duration, easing: "ease-out" });
+  return a.finished.then(() => undefined).catch(() => undefined);
+}
+
+export interface EdgeSwipe {
+  root: HTMLElement;
+  // The pushed screen and the one under it, or null when there is nothing to go back to.
+  screens: () => { top: HTMLElement; below: HTMLElement } | null;
+  onCommit: (progress: number) => void;
+}
+
+// A swipe from the leading edge drags the pushed screen back one to one. Past 35% of the width, or on a flick, it
+// commits; earlier it settles where it was. A vertical drag is left to scrolling.
+export function wireEdgeSwipe(edge: HTMLElement, opts: EdgeSwipe): () => void {
+  type Pair = { top: HTMLElement; below: HTMLElement };
+  let drag: (Pair & { x: number; y: number; id: number; armed: boolean; live: boolean }) | null = null;
+  const tracker = new VelocityTracker();
+  const mark = () => opts.root.querySelector<HTMLElement>(":scope > .pm-navigator__back-mark");
+  const dimOf = (el: HTMLElement) => el.querySelector<HTMLElement>(":scope > .pm-navigator__dim");
+  const apply = (pair: Pair, p: number) => {
+    pair.top.style.translate = `${p * 100}% 0`;
+    pair.below.style.translate = `${-30 + 30 * p}% 0`;
+    const d = dimOf(pair.below);
+    if (d) d.style.opacity = String(1 - p);
+    const m = mark();
+    if (m) {
+      m.style.opacity = String(Math.min(1, p * 4));
+      m.style.translate = `${Math.min(p * opts.root.clientWidth, 48)}px 0`;
+    }
+  };
+  const reset = (pair: Pair, hideBelow: boolean) => {
+    pair.top.style.translate = "";
+    pair.below.style.translate = "";
+    if (hideBelow) pair.below.hidden = true;
+    const d = dimOf(pair.below);
+    if (d) d.style.opacity = "";
+    const m = mark();
+    if (m) {
+      m.style.opacity = "";
+      m.style.translate = "";
+      m.classList.remove("pm-navigator__back-mark--armed");
+    }
+  };
+  const down = (e: PointerEvent) => {
+    const pair = opts.screens();
+    if (!pair || e.button > 0) return;
+    drag = { ...pair, x: e.clientX, y: e.clientY, id: e.pointerId, armed: false, live: false };
+    tracker.reset();
+    tracker.add(e.clientX, e.clientY);
+    edge.setPointerCapture(e.pointerId);
+  };
+  const move = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    tracker.add(e.clientX, e.clientY);
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.live) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+        drag = null;
+        return;
+      }
+      if (dx < 8) return;
+      drag.live = true;
+      drag.below.hidden = false;
+    }
+    const p = Math.min(1, Math.max(0, dx / opts.root.clientWidth));
+    const armed = p >= 0.35;
+    if (armed !== drag.armed) {
+      drag.armed = armed;
+      mark()?.classList.toggle("pm-navigator__back-mark--armed", armed);
+      if (armed) buzz();
+    }
+    apply(drag, p);
+  };
+  const up = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const pair = drag;
+    drag = null;
+    if (!pair.live) return;
+    const p = Math.min(1, Math.max(0, (e.clientX - pair.x) / opts.root.clientWidth));
+    const v = tracker.velocity().x;
+    if (p >= 0.35 || v > 600) {
+      reset(pair, false);
+      opts.onCommit(p);
+    } else {
+      // Settle back under a spring, then hand the screens back to their rest styles.
+      const spring = new Spring(p, (value) => apply(pair, value), springs[motionKind(opts.root)], 0.002);
+      spring.to(0, v / opts.root.clientWidth);
+      spring.onSettleOnce(() => reset(pair, true));
+    }
+  };
+  edge.addEventListener("pointerdown", down);
+  edge.addEventListener("pointermove", move);
+  edge.addEventListener("pointerup", up);
+  edge.addEventListener("pointercancel", up);
+  return () => {
+    edge.removeEventListener("pointerdown", down);
+    edge.removeEventListener("pointermove", move);
+    edge.removeEventListener("pointerup", up);
+    edge.removeEventListener("pointercancel", up);
+  };
+}

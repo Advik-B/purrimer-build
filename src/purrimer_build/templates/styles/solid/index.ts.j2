@@ -5,5 +5,5 @@ export * from "./theme";
 export { octicons, iconPath } from "./icons";
 export * from "./motion";
 {% for c in done %}
-export { {{ c.name }} } from "./components/{{ c.name }}";
+export { {{ c.name }}{% for e in c.spec.get("web_exports", []) %}, {{ e }}{% endfor %} } from "./components/{{ c.name }}";
 {% endfor %}

@@ -1,0 +1,50 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:MobileNavigator>
+    <pm:MobileNavigator.Tabs>
+      <pm:MobileNavigatorTab Screen="inbox" Label="Inbox" IconName="inbox" Badge="3" />
+      <pm:MobileNavigatorTab Screen="settings" Label="Settings" IconName="gear" />
+    </pm:MobileNavigator.Tabs>
+    <pm:MobileNavigator.Screens>
+      <pm:MobileNavigatorScreen Name="inbox">
+        <DataTemplate x:DataType="pm:MobileNavigatorContext">
+          <pm:MobileScreen>
+            <pm:MobileScreen.AppBar>
+              <pm:AppBar Title="Inbox" IsLarge="True" />
+            </pm:MobileScreen.AppBar>
+            <StackPanel>
+              <pm:ListItem IconName="person" Headline="Mira Okafor" Supporting="Lunch on Friday?" ShowChevron="True"
+                           pm:MobileNavigator.PushOnTap="thread" pm:MobileNavigator.PushParams="Mira Okafor" />
+              <pm:ListItem IconName="person" Headline="Design review" Supporting="Notes from today's crit" ShowChevron="True"
+                           pm:MobileNavigator.PushOnTap="thread" pm:MobileNavigator.PushParams="Design review" />
+              <pm:ListItem IconName="person" Headline="Jonas Weber" Supporting="Sent you the photos" ShowChevron="True"
+                           pm:MobileNavigator.PushOnTap="thread" pm:MobileNavigator.PushParams="Jonas Weber" />
+            </StackPanel>
+          </pm:MobileScreen>
+        </DataTemplate>
+      </pm:MobileNavigatorScreen>
+      <pm:MobileNavigatorScreen Name="thread">
+        <DataTemplate x:DataType="pm:MobileNavigatorContext">
+          <pm:MobileScreen>
+            <pm:MobileScreen.AppBar>
+              <!-- The back button pops on its own inside a MobileNavigator. -->
+              <pm:AppBar Title="{Binding Params}" ShowBack="True" />
+            </pm:MobileScreen.AppBar>
+            <TextBlock Margin="16" Text="Thread" />
+          </pm:MobileScreen>
+        </DataTemplate>
+      </pm:MobileNavigatorScreen>
+      <pm:MobileNavigatorScreen Name="settings">
+        <DataTemplate x:DataType="pm:MobileNavigatorContext">
+          <pm:MobileScreen Surface="inset">
+            <pm:MobileScreen.AppBar>
+              <pm:AppBar Title="Settings" IsLarge="True" />
+            </pm:MobileScreen.AppBar>
+            <pm:ListItem IconName="bell" Headline="Notifications" Trailing="On" ShowChevron="True" />
+          </pm:MobileScreen>
+        </DataTemplate>
+      </pm:MobileNavigatorScreen>
+    </pm:MobileNavigator.Screens>
+  </pm:MobileNavigator>
+</UserControl>

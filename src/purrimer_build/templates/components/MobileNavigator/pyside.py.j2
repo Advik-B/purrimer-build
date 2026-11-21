@@ -1,0 +1,409 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from dataclasses import dataclass, field
+
+from PySide6.QtCore import QEvent, QObject, QPointF, Qt, QVariantAnimation
+from PySide6.QtGui import QColor, QKeySequence, QPainter, QShortcut
+from PySide6.QtWidgets import QApplication, QGraphicsOpacityEffect, QVBoxLayout, QWidget
+
+from ..icons import paint_icon
+from ..motion import SLOP, Spring, VelocityTracker
+from ..theme import theme
+from .bottom_nav import BottomNav, BottomNavItem
+
+EDGE = {{ px("mobile-edge-width") | int }}
+COMMIT = 0.35
+FLICK = 600
+
+
+@dataclass
+class NavTab:
+    screen: str
+    label: str
+    icon: str
+    badge: int = 0
+    params: object = None
+
+
+@dataclass
+class _Entry:
+    name: str
+    params: object
+    widget: QWidget
+    opener: QWidget | None = None
+
+
+@dataclass
+class _Stack:
+    entries: list[_Entry] = field(default_factory=list)
+
+
+class _Dim(QWidget):
+    """Darkens a covered screen as the next one slides over it."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.amount = 0.0
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+
+    def paintEvent(self, event) -> None:
+        if self.amount <= 0:
+            return
+        color = QColor(theme.color({{ "overlay-backdrop-bgColor" | tok }}))
+        color.setAlphaF(color.alphaF() * 0.4 * self.amount)
+        QPainter(self).fillRect(self.rect(), color)
+
+
+class _BackMark(QWidget):
+    """Rides along an edge swipe and fills once the swipe would go back."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.armed = False
+        self.setFixedSize(32, 32)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        theme.apply_shadow(self, {{ "shadow-floating-small" | tok }})
+        self.hide()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        fill = {{ "button-primary-bgColor-rest" | tok }} if self.armed else {{ "overlay-bgColor" | tok }}
+        painter.setBrush(theme.color(fill))
+        painter.drawEllipse(self.rect())
+        ink = {{ "fgColor-onEmphasis" | tok }} if self.armed else {{ "fgColor-default" | tok }}
+        paint_icon(painter, self.rect().adjusted(8, 8, -8, -8), "arrow-left", theme.color(ink))
+
+
+class MobileNavigator(QWidget):
+    """A stack of phone screens. `screens` maps a name to a factory, factory(nav, params) -> QWidget, that builds
+    the screen (usually a MobileScreen). push() slides a screen in from the right while the one under it shifts 30%
+    and dims; pop() reverses it. With `tabs`, each section keeps its own stack and the navigator draws the BottomNav;
+    switching tabs crossfades. A swipe from the left edge, by finger or mouse, drags the top screen back and goes
+    back past 35% of the width or on a flick. Alt+Left goes back too. Requests made during a transition wait their
+    turn.
+    """
+
+    def __init__(self, screens: dict[str, Callable[[MobileNavigator, object], QWidget]], initial: str = "",
+                 initial_params: object = None, tabs: list[NavTab] | None = None,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._screens = screens
+        self._tabs = tabs or []
+        self._tab = 0
+        self._queue: list[Callable[[], None]] = []
+        self._busy = False
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        self._stage = QWidget()
+        layout.addWidget(self._stage, 1)
+        self._dims: dict[int, _Dim] = {}
+        self._mark = _BackMark(self._stage)
+        self._anim = QVariantAnimation(self)
+        self._anim.setStartValue(0.0)
+        self._anim.setEndValue(1.0)
+        self._step: Callable[[float], None] = lambda _p: None
+        self._done: Callable[[], None] = lambda: None
+        self._anim.valueChanged.connect(lambda v: self._step(float(v)))
+        self._anim.finished.connect(self._finish)
+        self._stacks: list[_Stack] = []
+        for tab in self._tabs or [NavTab(initial, "", "", params=initial_params)]:
+            stack = _Stack()
+            stack.entries.append(self._make(tab.screen, tab.params))
+            self._stacks.append(stack)
+        self.nav: BottomNav | None = None
+        if self._tabs:
+            self.nav = BottomNav([BottomNavItem(t.icon, t.label, t.badge) for t in self._tabs], 0)
+            self.nav.activated.connect(self.switch_tab)
+            layout.addWidget(self.nav)
+        self._swipe: dict | None = None
+        self._tracker = VelocityTracker()
+        QApplication.instance().installEventFilter(self)
+        QShortcut(QKeySequence(Qt.KeyboardModifier.AltModifier | Qt.Key.Key_Left), self, self.pop)
+        self._show_only_top()
+
+    @property
+    def depth(self) -> int:
+        return len(self._stack().entries)
+
+    @property
+    def tab(self) -> int:
+        return self._tab
+
+    def _stack(self) -> _Stack:
+        return self._stacks[self._tab]
+
+    def _make(self, name: str, params: object, opener: QWidget | None = None) -> _Entry:
+        widget = self._screens[name](self, params)
+        widget.setParent(self._stage)
+        widget.setAutoFillBackground(True)
+        dim = _Dim(widget)
+        self._dims[id(widget)] = dim
+        return _Entry(name, params, widget, opener)
+
+    def _dim(self, entry: _Entry, amount: float) -> None:
+        dim = self._dims[id(entry.widget)]
+        dim.amount = amount
+        dim.setGeometry(entry.widget.rect())
+        dim.setVisible(amount > 0)
+        dim.raise_()
+        dim.update()
+
+    def _place(self, entry: _Entry, x: float) -> None:
+        entry.widget.setGeometry(round(x), 0, self._stage.width(), self._stage.height())
+
+    def _show_only_top(self) -> None:
+        for t, stack in enumerate(self._stacks):
+            for i, entry in enumerate(stack.entries):
+                top = t == self._tab and i == len(stack.entries) - 1
+                entry.widget.setVisible(top)
+                entry.widget.setEnabled(top)
+                if top:
+                    self._place(entry, 0)
+                    self._dim(entry, 0)
+                    entry.widget.raise_()
+        self._mark.raise_()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        if not self._busy:
+            self._show_only_top()
+
+    def _timing(self) -> tuple[int, str]:
+        if theme.motion_kind == "playful":
+            return theme.duration({{ "duration-playful-screen" | tok }}), {{ "easing-playful-snap" | tok }}
+        return theme.duration({{ "duration-sleepy-screen" | tok }}), {{ "easing-sleepy-enter" | tok }}
+
+    def _enqueue(self, task: Callable[[], None]) -> None:
+        self._queue.append(task)
+        if not self._busy:
+            self._next()
+
+    def _next(self) -> None:
+        if self._queue and not self._busy:
+            self._queue.pop(0)()
+
+    def _run(self, step: Callable[[float], None], done: Callable[[], None], start: float = 0.0,
+             duration: int | None = None, easing: str | None = None) -> None:
+        self._busy = True
+        self._step = step
+        self._done = done
+        base_duration, base_easing = self._timing()
+        if theme.pause_loops:
+            step(1.0)
+            self._finish()
+            return
+        self._anim.stop()
+        self._anim.setStartValue(start)
+        self._anim.setDuration(round((duration or base_duration) * (1 - start)))
+        self._anim.setEasingCurve(theme.easing(easing or base_easing))
+        step(start)
+        self._anim.start()
+
+    def _finish(self) -> None:
+        done = self._done
+        self._done = lambda: None
+        done()
+        self._busy = False
+        self._show_only_top()
+        self._next()
+
+    def push(self, name: str, params: object = None) -> None:
+        self._enqueue(lambda: self._push(name, params))
+
+    def _push(self, name: str, params: object) -> None:
+        below = self._stack().entries[-1]
+        entry = self._make(name, params, QApplication.focusWidget())
+        self._stack().entries.append(entry)
+        entry.widget.show()
+        entry.widget.raise_()
+        width = self._stage.width()
+
+        def step(p: float) -> None:
+            self._place(entry, width * (1 - p))
+            self._place(below, -0.3 * width * p)
+            self._dim(below, p)
+
+        def done() -> None:
+            entry.widget.setFocus()
+
+        self._run(step, done)
+
+    def pop(self) -> None:
+        self._enqueue(lambda: self._pop())
+
+    def _pop(self, start: float = 0.0) -> None:
+        entries = self._stack().entries
+        if len(entries) < 2:
+            self._next()
+            return
+        leaving, below = entries[-1], entries[-2]
+        below.widget.show()
+        below.widget.setEnabled(True)
+        leaving.widget.raise_()
+        self._mark.raise_()
+        width = self._stage.width()
+
+        def step(p: float) -> None:
+            self._place(leaving, width * p)
+            self._place(below, -0.3 * width * (1 - p))
+            self._dim(below, 1 - p)
+
+        def done() -> None:
+            entries.remove(leaving)
+            self._dims.pop(id(leaving.widget), None)
+            leaving.widget.deleteLater()
+            if leaving.opener is not None:
+                leaving.opener.setFocus()
+
+        self._run(step, done, start)
+
+    def replace(self, name: str, params: object = None) -> None:
+        def task() -> None:
+            entries = self._stack().entries
+            old = entries[-1]
+            entries[-1] = self._make(name, params, old.opener)
+            self._dims.pop(id(old.widget), None)
+            old.widget.deleteLater()
+            self._fade_in(entries[-1].widget)
+
+        self._enqueue(task)
+
+    def pop_to_root(self) -> None:
+        def task() -> None:
+            entries = self._stack().entries
+            if len(entries) < 2:
+                self._next()
+                return
+            for entry in entries[1:-1]:
+                self._dims.pop(id(entry.widget), None)
+                entry.widget.deleteLater()
+            del entries[1:-1]
+            self._pop()
+
+        self._enqueue(task)
+
+    def switch_tab(self, index: int) -> None:
+        def task() -> None:
+            if index == self._tab:
+                if self.depth > 1:
+                    entries = self._stack().entries
+                    for entry in entries[1:-1]:
+                        entry.widget.deleteLater()
+                    del entries[1:-1]
+                    self._pop()
+                    return
+                top = self._stack().entries[-1].widget
+                if hasattr(top, "scroll_to_top"):
+                    top.scroll_to_top()
+                self._next()
+                return
+            self._tab = index
+            if self.nav is not None:
+                self.nav.set_selected(index)
+            self._show_only_top()
+            self._fade_in(self._stack().entries[-1].widget)
+
+        self._enqueue(task)
+
+    def _fade_in(self, widget: QWidget) -> None:
+        widget.show()
+        widget.raise_()
+        self._place(self._stack().entries[-1], 0)
+        effect = QGraphicsOpacityEffect(widget)
+        widget.setGraphicsEffect(effect)
+
+        def step(p: float) -> None:
+            effect.setOpacity(p)
+
+        def done() -> None:
+            widget.setGraphicsEffect(None)
+
+        self._run(step, done, duration=theme.duration({{ "duration-screen-fade" | tok }}), easing={{ "easing-standard" | tok }})
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        kind = event.type()
+        if kind not in (QEvent.Type.MouseButtonPress, QEvent.Type.MouseMove, QEvent.Type.MouseButtonRelease):
+            return False
+        if not isinstance(watched, QWidget) or not self.isVisible():
+            return False
+        if self._swipe is None:
+            if kind != QEvent.Type.MouseButtonPress or self._busy or self.depth < 2:
+                return False
+            if event.button() != Qt.MouseButton.LeftButton:
+                return False
+            local = self._stage.mapFromGlobal(event.globalPosition())
+            if not (0 <= local.x() < EDGE and 0 <= local.y() < self._stage.height()):
+                return False
+            if not (watched is self._stage or self._stage.isAncestorOf(watched)):
+                return False
+            self._swipe = {"origin": QPointF(local), "live": False, "armed": False}
+            self._tracker.reset()
+            self._tracker.add(local)
+            return True
+        local = self._stage.mapFromGlobal(event.globalPosition())
+        if kind == QEvent.Type.MouseMove:
+            self._swipe_move(local)
+            return True
+        if kind == QEvent.Type.MouseButtonRelease:
+            self._swipe_end(local)
+            return True
+        return False
+
+    def _swipe_pair(self) -> tuple[_Entry, _Entry]:
+        entries = self._stack().entries
+        return entries[-1], entries[-2]
+
+    def _swipe_apply(self, p: float) -> None:
+        top, below = self._swipe_pair()
+        width = self._stage.width()
+        self._place(top, width * p)
+        self._place(below, -0.3 * width * (1 - p))
+        self._dim(below, 1 - p)
+        self._mark.setVisible(p > 0)
+        self._mark.move(4 + round(min(p * width, 48)), self._stage.height() // 2 - 16)
+        self._mark.raise_()
+
+    def _swipe_move(self, local: QPointF) -> None:
+        swipe = self._swipe
+        self._tracker.add(local)
+        dx = local.x() - swipe["origin"].x()
+        if not swipe["live"]:
+            if dx < SLOP:
+                return
+            swipe["live"] = True
+            top, below = self._swipe_pair()
+            below.widget.show()
+            below.widget.stackUnder(top.widget)
+        p = min(max(dx / max(1, self._stage.width()), 0.0), 1.0)
+        armed = p >= COMMIT
+        if armed != swipe["armed"]:
+            swipe["armed"] = armed
+            self._mark.armed = armed
+            self._mark.update()
+        self._swipe_apply(p)
+
+    def _swipe_end(self, local: QPointF) -> None:
+        swipe = self._swipe
+        self._swipe = None
+        self._mark.armed = False
+        self._mark.hide()
+        if not swipe["live"]:
+            return
+        p = min(max((local.x() - swipe["origin"].x()) / max(1, self._stage.width()), 0.0), 1.0)
+        velocity = self._tracker.velocity().x()
+        if p >= COMMIT or velocity > FLICK:
+            self._queue.insert(0, lambda: self._pop(p))
+            self._next()
+            return
+        spring = Spring(p, precision=0.002, parent=self)
+        spring.changed.connect(self._swipe_apply)
+        spring.settled.connect(lambda: (self._mark.hide(), self._show_only_top(), spring.deleteLater()))
+        spring.to(0.0, velocity / max(1, self._stage.width()))
