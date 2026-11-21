@@ -1,0 +1,36 @@
+.pm-timeline { position: relative; display: flex; flex-direction: column; }
+.pm-timeline__item { position: relative; display: flex; gap: 8px; margin-left: 16px; padding: 16px 0; }
+.pm-timeline__item::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 2px; background: {{ "borderColor-muted" | tok }}; }
+.pm-timeline__item--condensed { padding: 4px 0; }
+.pm-timeline__badge {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  box-sizing: border-box;
+  width: 32px;
+  height: 32px;
+  margin-left: -15px;
+  border: 2px solid {{ "bgColor-default" | tok }};
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-muted" | tok }};
+  color: {{ "fgColor-muted" | tok }};
+}
+.pm-timeline__badge svg { width: 16px; height: 16px; fill: currentColor; }
+.pm-timeline__item--condensed .pm-timeline__badge { width: 16px; height: 16px; margin: 2px 0 0 -7px; border: 0; background: {{ "bgColor-default" | tok }}; }
+{% for tone in c.spec.tones %}
+.pm-timeline__badge--{{ tone }} { background: {{ ("bgColor-" ~ tone ~ "-emphasis") | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }
+{% endfor %}
+.pm-timeline__body { flex: 1; min-width: 0; padding-top: 6px; color: {{ "fgColor-muted" | tok }}; font: 400 14px/20px var(--font-sans); }
+.pm-timeline__item--condensed .pm-timeline__body { padding-top: 0; }
+.pm-timeline__body strong { color: {{ "fgColor-default" | tok }}; font-weight: 600; }
+.pm-timeline__break {
+  position: relative;
+  z-index: 1;
+  height: 24px;
+  margin: 0 0 -16px;
+  border-top: 4px solid {{ "borderColor-default" | tok }};
+  background: {{ "bgColor-default" | tok }};
+}

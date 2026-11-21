@@ -1,0 +1,120 @@
+// {{ note }}
+// {{ c.summary }}
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+
+namespace {{ ns }};
+
+// A vertical history of TimelineItem children.
+public class Timeline : ItemsControl
+{
+    protected override bool NeedsContainerOverride(object? item, int index, out object? recycleKey) =>
+        NeedsContainer<TimelineItem>(item, out recycleKey);
+
+    protected override Control CreateContainerForItemOverride(object? item, int index, object? recycleKey) => new TimelineItem();
+
+    protected override void PrepareContainerForItemOverride(Control container, object? item, int index)
+    {
+        base.PrepareContainerForItemOverride(container, item, index);
+        if (container is TimelineItem entry)
+            entry.AfterBreak = index > 0 && (Items[index - 1] as TimelineItem)?.IsBreak == true;
+    }
+}
+
+// One event: an Octicon badge and a line of text with an optional bold actor. IsBreak makes it a gap between eras.
+[PseudoClasses(":condensed", ":break", ":after-break")]
+public class TimelineItem : TemplatedControl
+{
+    public static readonly StyledProperty<string?> ContentProperty =
+        AvaloniaProperty.Register<TimelineItem, string?>(nameof(Content));
+
+    public static readonly StyledProperty<string?> ActorProperty =
+        AvaloniaProperty.Register<TimelineItem, string?>(nameof(Actor));
+
+    public static readonly StyledProperty<string> IconNameProperty =
+        AvaloniaProperty.Register<TimelineItem, string>(nameof(IconName), "git-commit");
+
+    public static readonly StyledProperty<string?> ToneProperty =
+        AvaloniaProperty.Register<TimelineItem, string?>(nameof(Tone));
+
+    public static readonly StyledProperty<bool> IsCondensedProperty =
+        AvaloniaProperty.Register<TimelineItem, bool>(nameof(IsCondensed));
+
+    public static readonly StyledProperty<bool> IsBreakProperty =
+        AvaloniaProperty.Register<TimelineItem, bool>(nameof(IsBreak));
+
+    public static readonly DirectProperty<TimelineItem, string> SpacerProperty =
+        AvaloniaProperty.RegisterDirect<TimelineItem, string>(nameof(Spacer), o => o.Spacer);
+
+    private string _spacer = "";
+    private bool _afterBreak;
+
+    public string? Content
+    {
+        get => GetValue(ContentProperty);
+        set => SetValue(ContentProperty, value);
+    }
+
+    // Who did it, in bold before the content.
+    public string? Actor
+    {
+        get => GetValue(ActorProperty);
+        set => SetValue(ActorProperty, value);
+    }
+
+    public string IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    // accent, success, done or danger fill the badge; leave it unset for most events.
+    public string? Tone
+    {
+        get => GetValue(ToneProperty);
+        set => SetValue(ToneProperty, value);
+    }
+
+    // A bare 16px icon for minor events such as commits.
+    public bool IsCondensed
+    {
+        get => GetValue(IsCondensedProperty);
+        set => SetValue(IsCondensedProperty, value);
+    }
+
+    public bool IsBreak
+    {
+        get => GetValue(IsBreakProperty);
+        set => SetValue(IsBreakProperty, value);
+    }
+
+    // A space between the actor and the content, when there is an actor.
+    public string Spacer
+    {
+        get => _spacer;
+        private set => SetAndRaise(SpacerProperty, ref _spacer, value);
+    }
+
+    internal bool AfterBreak
+    {
+        get => _afterBreak;
+        set
+        {
+            _afterBreak = value;
+            PseudoClasses.Set(":after-break", value);
+        }
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsCondensedProperty)
+            PseudoClasses.Set(":condensed", IsCondensed);
+        else if (change.Property == IsBreakProperty)
+            PseudoClasses.Set(":break", IsBreak);
+        else if (change.Property == ActorProperty)
+            Spacer = string.IsNullOrEmpty(Actor) ? "" : " ";
+    }
+}

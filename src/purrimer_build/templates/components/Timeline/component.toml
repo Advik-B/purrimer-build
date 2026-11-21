@@ -1,0 +1,16 @@
+name = "Timeline"
+group = "Status"
+order = 36
+summary = "A vertical history of events on an item: commits, reviews, state changes."
+slint_exports = ["Timeline", "TimelineEvent"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Events: { content, actor?, icon?, tone?, condensed? }, or { break: true } for a gap between eras."
+
+[tones]
+accent = "accent"
+success = "success"
+done = "done"
+danger = "danger"

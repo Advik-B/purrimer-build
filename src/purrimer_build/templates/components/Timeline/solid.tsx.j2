@@ -1,0 +1,34 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+type Event = { content: string; actor?: string; icon?: string; tone?: {{ c.spec.tones | list | map("tojson") | join(" | ") }}; condensed?: boolean };
+type Entry = Event | { break: true };
+
+export type TimelineProps = { items?: Entry[] };
+
+export function Timeline(props: TimelineProps): JSX.Element {
+  return (
+    <div class="pm-timeline">
+      <For each={props.items ?? []}>
+        {(item) => (
+          <Show when={!("break" in item) && (item as Event)} fallback={<div class="pm-timeline__break" role="separator" />}>
+            {(event) => (
+              <div class={["pm-timeline__item", event().condensed && "pm-timeline__item--condensed"]}>
+                <div class={["pm-timeline__badge", event().tone && `pm-timeline__badge--${event().tone}`]}>
+                  <Icon name={event().icon ?? "git-commit"} />
+                </div>
+                <div class="pm-timeline__body">
+                  <Show when={event().actor}><strong>{event().actor}</strong> </Show>
+                  {event().content}
+                </div>
+              </div>
+            )}
+          </Show>
+        )}
+      </For>
+    </div>
+  );
+}

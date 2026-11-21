@@ -1,0 +1,79 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Column {
+    id: root
+    // Events: [{ content, actor?, icon?, tone?, condensed? }], or { break: true }
+    property var items: []
+    readonly property var fills: ({
+{% for tone in c.spec.tones %}
+        "{{ tone }}": {{ ("bgColor-" ~ tone ~ "-emphasis") | tok }}{{ "," if not loop.last }}
+{% endfor %}
+    })
+
+    width: 320
+
+    Repeater {
+        model: root.items
+        Item {
+            id: entry
+            required property int index
+            required property var modelData
+            readonly property bool isBreak: !!modelData["break"]
+            readonly property bool condensed: !!modelData.condensed
+            readonly property bool afterBreak: index > 0 && !!root.items[index - 1]["break"]
+            readonly property string tone: modelData.tone || ""
+            width: root.width
+            height: isBreak ? 8 : Math.max(condensed ? 24 : 64, body.implicitHeight + (condensed ? 8 : 38))
+
+            Rectangle {
+                visible: !entry.isBreak
+                x: 16
+                y: entry.afterBreak ? 16 : 0
+                width: 2
+                height: parent.height - y
+                color: {{ "borderColor-muted" | tok }}
+            }
+
+            Rectangle {
+                visible: !entry.isBreak
+                x: entry.condensed ? 9 : 1
+                y: entry.condensed ? 6 : 16
+                width: entry.condensed ? 16 : 32
+                height: width
+                radius: width / 2
+                color: entry.condensed ? {{ "bgColor-default" | tok }} : (root.fills[entry.tone] || {{ "bgColor-muted" | tok }})
+                border.width: entry.condensed ? 0 : 2
+                border.color: {{ "bgColor-default" | tok }}
+                Icon {
+                    anchors.centerIn: parent
+                    name: entry.modelData.icon || "git-commit"
+                    color: root.fills[entry.tone] && !entry.condensed ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-muted" | tok }}
+                }
+            }
+
+            Text {
+                id: body
+                visible: !entry.isBreak
+                x: entry.condensed ? 33 : 41
+                y: entry.condensed ? 4 : 22
+                width: parent.width - x
+                wrapMode: Text.Wrap
+                textFormat: Text.StyledText
+                text: (entry.modelData.actor ? "<b><font color='" + {{ "fgColor-default" | tok }} + "'>" + entry.modelData.actor + "</font></b> " : "") + (entry.modelData.content || "")
+                font: {{ "text-body-medium" | tok }}
+                color: {{ "fgColor-muted" | tok }}
+            }
+
+            Rectangle {
+                visible: entry.isBreak
+                width: parent.width
+                height: 8
+                color: {{ "bgColor-default" | tok }}
+                Rectangle { width: parent.width; height: 4; color: {{ "borderColor-default" | tok }} }
+            }
+        }
+    }
+}

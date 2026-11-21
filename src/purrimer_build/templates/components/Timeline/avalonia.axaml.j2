@@ -1,0 +1,69 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Timeline}" TargetType="pm:Timeline">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:Timeline">
+        <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:TimelineItem}" TargetType="pm:TimelineItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:TimelineItem">
+        <Panel>
+          <Panel Name="event">
+            <Border Name="line" Width="2" Margin="16,0,0,0" HorizontalAlignment="Left" Background="{{ "borderColor-muted" | tok }}" />
+            <Border Name="badge" Width="32" Height="32" Margin="1,16,0,16" HorizontalAlignment="Left" VerticalAlignment="Top"
+                    CornerRadius="16" BorderThickness="2" BorderBrush="{{ "bgColor-default" | tok }}" Background="{{ "bgColor-muted" | tok }}">
+              <pm:Icon Name="icon" IconName="{TemplateBinding IconName}" Foreground="{{ "fgColor-muted" | tok }}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Name="body" Margin="41,22,0,16" TextWrapping="Wrap" LineHeight="20">
+              <Run Text="{TemplateBinding Actor}" FontWeight="SemiBold" Foreground="{{ "fgColor-default" | tok }}" /><Run Text="{TemplateBinding Spacer}" /><Run Text="{TemplateBinding Content}" />
+            </TextBlock>
+          </Panel>
+          <Border Name="gap" Height="8" IsVisible="False" Background="{{ "bgColor-default" | tok }}"
+                  BorderBrush="{{ "borderColor-default" | tok }}" BorderThickness="0,4,0,0" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:condensed /template/ Border#badge">
+      <Setter Property="Width" Value="16" />
+      <Setter Property="Height" Value="16" />
+      <Setter Property="Margin" Value="9,6,0,4" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    </Style>
+    <Style Selector="^:condensed /template/ TextBlock#body">
+      <Setter Property="Margin" Value="33,4,0,4" />
+    </Style>
+    <Style Selector="^:after-break /template/ Border#line">
+      <Setter Property="Margin" Value="16,16,0,0" />
+    </Style>
+    <Style Selector="^:break /template/ Panel#event">
+      <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="^:break /template/ Border#gap">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+{% for tone in c.spec.tones %}
+    <Style Selector="^[Tone={{ tone }}]:not(:condensed) /template/ Border#badge">
+      <Setter Property="Background" Value="{{ ("bgColor-" ~ tone ~ "-emphasis") | tok }}" />
+    </Style>
+    <Style Selector="^[Tone={{ tone }}]:not(:condensed) /template/ pm|Icon#icon">
+      <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    </Style>
+{% endfor %}
+  </ControlTheme>
+</ResourceDictionary>
