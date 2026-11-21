@@ -1,0 +1,63 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import Icon from "./Icon.svelte";
+  import { wireMobileScreen } from "../motion";
+
+  let {
+    surface = "default",
+    onrefresh,
+    appBar,
+    bottomNav,
+    fab,
+    footer,
+    overlays,
+    children,
+  }: {
+    surface?: "default" | "inset";
+    // Turns on pull to refresh. Resolve the promise when the refresh ends.
+    onrefresh?: () => Promise<unknown> | void;
+    appBar?: Snippet;
+    bottomNav?: Snippet;
+    fab?: Snippet;
+    // A KeyboardFooter for the screen's primary action.
+    footer?: Snippet;
+    // BottomSheets and Snackbars.
+    overlays?: Snippet;
+    children?: Snippet;
+  } = $props();
+
+  let screen: HTMLElement | undefined = $state();
+  let body: HTMLElement | undefined = $state();
+  let content: HTMLElement | undefined = $state();
+  let pull: HTMLElement | undefined = $state();
+
+  $effect(() => {
+    if (!screen || !body || !content) return;
+    return wireMobileScreen({ screen, body, content, pull, onRefresh: onrefresh ? () => onrefresh() : undefined });
+  });
+</script>
+
+<div
+  bind:this={screen}
+  class={[
+    "pm-mobile-screen",
+    surface === "inset" && "pm-mobile-screen--inset",
+    bottomNav && "pm-mobile-screen--has-nav",
+    footer && "pm-mobile-screen--has-footer",
+  ]}
+  data-density="touch"
+>
+  {#if appBar}<div class="pm-mobile-screen__bar">{@render appBar()}</div>{/if}
+  <div bind:this={body} class="pm-mobile-screen__body">
+    {#if onrefresh}
+      <div bind:this={pull} class="pm-mobile-screen__pull" aria-hidden="true"><Icon name="arrow-down" /></div>
+    {/if}
+    <div bind:this={content} class="pm-mobile-screen__content">{@render children?.()}</div>
+  </div>
+  {@render footer?.()}
+  {#if fab}<div class="pm-mobile-screen__fab">{@render fab()}</div>{/if}
+  {#if bottomNav}<div class="pm-mobile-screen__nav">{@render bottomNav()}</div>{/if}
+  {@render overlays?.()}
+</div>

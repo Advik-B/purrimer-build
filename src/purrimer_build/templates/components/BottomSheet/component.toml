@@ -1,6 +1,6 @@
 name = "BottomSheet"
 group = "Mobile"
-order = 52
+order = 55
 summary = "A sheet that rises from the bottom over a scrim; drag it down, tap the scrim or press Escape to close."
 slint_exports = ["BottomSheet", "BottomSheetAction"]
 

@@ -1,0 +1,12 @@
+.pm-keyboard-footer {
+  flex: none;
+  position: relative;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px {{ "mobile-gutter" | tok }} calc(12px + env(safe-area-inset-bottom, 0px));
+  background: {{ "bgColor-default" | tok }};
+  border-top: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+}
+.pm-keyboard-footer > * { width: 100%; }

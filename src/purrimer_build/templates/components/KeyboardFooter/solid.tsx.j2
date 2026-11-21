@@ -1,0 +1,15 @@
+// {{ note }}
+// {{ c.summary }}
+import { onCleanup, onSettled } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { wireKeyboardFooter } from "../motion";
+
+export function KeyboardFooter(props: { children?: JSX.Element }): JSX.Element {
+  let footer: HTMLDivElement | undefined;
+  let unwire: (() => void) | undefined;
+  onSettled(() => {
+    if (footer) unwire = wireKeyboardFooter(footer);
+  });
+  onCleanup(() => unwire?.());
+  return <div ref={footer} class="pm-keyboard-footer">{props.children}</div>;
+}

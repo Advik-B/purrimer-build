@@ -9,13 +9,15 @@ Rectangle {
     property bool back: false
     property bool large: false
     property bool elevated: false
+    // Shrinks a large title toward the bar's title size, from 0 (full) to 1; MobileScreen sets it as the body scrolls.
+    property real collapse: 0
     // Up to two actions: [{ icon: "search", label: "Search" }]
     property var actions: []
     signal backClicked()
     signal actionClicked(int index)
 
     implicitWidth: 360
-    implicitHeight: bar.height + (large ? bigTitle.implicitHeight + 12 : 0)
+    implicitHeight: bar.height + (large ? bigTitle.implicitHeight + 12 - 4 * collapse : 0)
     color: {{ "bgColor-default" | tok }}
 
     Item {
@@ -86,7 +88,9 @@ Rectangle {
         anchors.top: bar.bottom
         x: {{ "mobile-gutter" | tok }}
         text: root.title
-        font: {{ "text-mobile-largeTitle" | tok }}
+        font.family: {{ "text-mobile-largeTitle" | tok }}.family
+        font.weight: {{ "text-mobile-largeTitle" | tok }}.weight
+        font.pixelSize: 28 - 10 * root.collapse
         color: {{ "fgColor-default" | tok }}
     }
 }

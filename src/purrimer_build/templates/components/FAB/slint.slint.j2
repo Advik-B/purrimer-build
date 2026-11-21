@@ -9,10 +9,15 @@ export component FAB inherits Rectangle {
     in property <string> icon: PurrimerIcons.plus-24;
     in property <string> label;
     in property <bool> extended;
+    // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
+    in property <bool> folded;
     callback clicked();
+    property <float> fold: root.folded && root.extended ? 1 : 0;
+    animate fold { duration: PurrimerMotion.pause-loops ? 0ms : {{ "duration-base" | tok }}; }
 
     height: {{ "mobile-fab-size" | tok }};
-    width: root.extended ? max(self.height, row.preferred-width) : self.height;
+    width: root.extended ? max(self.height, row.preferred-width + (self.height - row.preferred-width) * root.fold) : self.height;
+    clip: true;
     border-radius: {{ "borderRadius-large" | tok }};
     background: touch.pressed ? {{ "button-primary-bgColor-active" | tok }} : touch.has-hover ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }};
     drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
@@ -25,6 +30,8 @@ export component FAB inherits Rectangle {
     touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
 
     row := HorizontalLayout {
+        x: 0;
+        width: max(parent.width, self.preferred-width);
         padding-left: 16px;
         padding-right: root.extended ? 20px : 16px;
         spacing: 8px;
@@ -35,6 +42,7 @@ export component FAB inherits Rectangle {
         }
         if root.extended: Text {
             text: root.label;
+            opacity: 1 - root.fold;
             vertical-alignment: center;
             color: {{ "fgColor-onEmphasis" | tok }};
             font-family: {{ "text-mobile-body" | tok }}.font-family;

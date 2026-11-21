@@ -1,6 +1,6 @@
 name = "AlertSheet"
 group = "Mobile"
-order = 53
+order = 56
 summary = "A short decision in a bottom sheet: a title with a status icon, a message and stacked buttons, the accepting one last."
 slint_exports = ["AlertSheet"]
 

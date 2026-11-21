@@ -14,6 +14,8 @@ export component AppBar inherits Rectangle {
     in property <bool> back;
     in property <bool> large;
     in property <bool> elevated;
+    // Shrinks a large title toward the bar's title size, from 0 (full) to 1; MobileScreen sets it as the body scrolls.
+    in property <float> collapse;
     // Up to two, with 24px icons: { icon: PurrimerIcons.search-24, label: "Search" }
     in property <[AppBarAction]> actions;
     callback back-clicked();
@@ -50,11 +52,12 @@ export component AppBar inherits Rectangle {
         }
         if root.large: HorizontalLayout {
             padding-left: {{ "mobile-gutter" | tok }};
+            padding-bottom: 8px - 4px * Math.clamp(root.collapse, 0, 1);
             Text {
                 text: root.title;
                 color: {{ "fgColor-default" | tok }};
                 font-family: {{ "text-mobile-largeTitle" | tok }}.font-family;
-                font-size: {{ "text-mobile-largeTitle" | tok }}.font-size;
+                font-size: {{ "text-mobile-largeTitle" | tok }}.font-size - 10px * Math.clamp(root.collapse, 0, 1);
                 font-weight: {{ "text-mobile-largeTitle" | tok }}.font-weight;
             }
         }

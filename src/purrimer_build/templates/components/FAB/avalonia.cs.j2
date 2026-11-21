@@ -23,6 +23,16 @@ public class FAB : Button
     public static readonly StyledProperty<bool> IsExtendedProperty =
         AvaloniaProperty.Register<FAB, bool>(nameof(IsExtended));
 
+    // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
+    public static readonly StyledProperty<bool> IsFoldedProperty =
+        AvaloniaProperty.Register<FAB, bool>(nameof(IsFolded));
+
+    public bool IsFolded
+    {
+        get => GetValue(IsFoldedProperty);
+        set => SetValue(IsFoldedProperty, value);
+    }
+
     static FAB()
     {
         LabelProperty.Changed.AddClassHandler<FAB>((b, e) => global::Avalonia.Automation.AutomationProperties.SetName(b, e.NewValue as string));

@@ -1,6 +1,6 @@
 name = "InfoButton"
 group = "Mobile"
-order = 55
+order = 58
 summary = "An info button that opens a short explanation in a bottom sheet, where a desktop would use a tooltip."
 
 [props.title]

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt
+from PySide6.QtCore import QRectF, QSize, Qt, QVariantAnimation
 from PySide6.QtGui import QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
@@ -22,6 +22,12 @@ class FAB(QAbstractButton):
         super().__init__(parent)
         self._icon = icon
         self._extended = extended
+        # 0 shows an extended FAB's label; 1 folds it to its icon.
+        self._fold = 0.0
+        self._fold_anim = QVariantAnimation(self)
+        self._fold_anim.setDuration(theme.duration({{ "duration-base" | tok }}))
+        self._fold_anim.setEasingCurve(theme.easing({{ "easing-standard" | tok }}))
+        self._fold_anim.valueChanged.connect(self._set_fold)
         self.setText(label)
         self.setAccessibleName(label)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -34,6 +40,24 @@ class FAB(QAbstractButton):
         theme.changed.connect(self._restyle)
         self._restyle()
 
+    def set_folded(self, folded: bool) -> None:
+        """Folds an extended FAB to its icon, or opens it again; MobileScreen folds it while the body scrolls down."""
+        target = 1.0 if folded and self._extended else 0.0
+        if self._fold_anim.endValue() == target and self._fold_anim.state() == QVariantAnimation.State.Running:
+            return
+        self._fold_anim.stop()
+        if theme.pause_loops:
+            self._set_fold(target)
+            return
+        self._fold_anim.setStartValue(self._fold)
+        self._fold_anim.setEndValue(target)
+        self._fold_anim.start()
+
+    def _set_fold(self, value: float) -> None:
+        self._fold = float(value)
+        self.setFixedSize(self.sizeHint())
+        self.update()
+
     def _restyle(self) -> None:
         theme.apply_shadow(self, {{ "shadow-floating-small" | tok }})
         self.update()
@@ -41,7 +65,8 @@ class FAB(QAbstractButton):
     def sizeHint(self) -> QSize:
         if not self._extended:
             return QSize(SIZE, SIZE)
-        return QSize(16 + 24 + 8 + QFontMetrics(self._font).horizontalAdvance(self.text()) + 20, SIZE)
+        open_width = 16 + 24 + 8 + QFontMetrics(self._font).horizontalAdvance(self.text()) + 20
+        return QSize(round(open_width + (SIZE - open_width) * self._fold), SIZE)
 
     def enterEvent(self, event) -> None:
         self.update()
@@ -64,9 +89,11 @@ class FAB(QAbstractButton):
         radius = {{ px("borderRadius-large") | num }}
         painter.drawRoundedRect(QRectF(self.rect()), radius, radius)
         ink = theme.color({{ "fgColor-onEmphasis" | tok }})
-        x = 16.0 if self._extended else (self.width() - 24) / 2
+        x = 16.0 + ((SIZE - 24) / 2 - 16) * self._fold if self._extended else (self.width() - 24) / 2
         paint_icon(painter, QRectF(x, (self.height() - 24) / 2, 24, 24), self._icon, ink)
-        if self._extended:
+        if self._extended and self._fold < 1:
+            painter.setClipRect(self.rect())
+            painter.setOpacity(1 - self._fold)
             painter.setPen(ink)
             painter.drawText(QRectF(x + 32, 0, self.width() - x - 32, self.height()), Qt.AlignmentFlag.AlignVCenter,
                              self.text())

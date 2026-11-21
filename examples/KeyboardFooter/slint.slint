@@ -1,0 +1,17 @@
+import { MobileScreen, TextField } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    MobileScreen {
+        title: "New task";
+        back: true;
+        footer-label: "Add task";
+        footer-clicked => { debug("add task"); }
+        VerticalLayout {
+            padding: 16px;
+            TextField {
+                label: "Title";
+                text: "Water the plants";
+            }
+        }
+    }
+}

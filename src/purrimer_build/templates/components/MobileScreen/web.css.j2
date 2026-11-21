@@ -1,0 +1,77 @@
+/* One phone screen. Only the body scrolls; its scroll drives --pm-scroll-p (0 to 1 over the first 48px) and the
+   --scrolled and --down modifiers, which the AppBar, a large title and an extended FAB react to. */
+.pm-mobile-screen {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  color: {{ "fgColor-default" | tok }};
+  background: {{ "bgColor-default" | tok }};
+}
+.pm-mobile-screen--inset { background: {{ "bgColor-inset" | tok }}; }
+.pm-mobile-screen__bar {
+  flex: none;
+  position: relative;
+  z-index: 5;
+  background: {{ "bgColor-default" | tok }};
+  transition: box-shadow {{ "duration-base" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-mobile-screen__bar .pm-appbar { position: relative; box-shadow: none; }
+.pm-mobile-screen--scrolled .pm-mobile-screen__bar { box-shadow: inset 0 -1px 0 {{ "borderColor-default" | tok }}, {{ "shadow-resting-xsmall" | tok }}; }
+/* A large title shrinks toward the bar's title size as the body scrolls. */
+.pm-mobile-screen__bar .pm-appbar-large {
+  font-size: calc(28px - 10px * var(--pm-scroll-p, 0));
+  line-height: calc(36px - 12px * var(--pm-scroll-p, 0));
+  padding-bottom: calc(8px - 4px * var(--pm-scroll-p, 0));
+}
+.pm-mobile-screen__body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: calc(var(--pm-kb, 0px) + 96px);
+}
+.pm-mobile-screen--has-nav .pm-mobile-screen__body, .pm-mobile-screen--has-footer .pm-mobile-screen__body { padding-bottom: calc(var(--pm-kb, 0px) + 16px); }
+.pm-mobile-screen:not(.pm-mobile-screen--has-nav):not(.pm-mobile-screen--has-footer) .pm-mobile-screen__body { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+.pm-mobile-screen__content { will-change: transform; }
+.pm-mobile-screen__fab { position: absolute; right: {{ "mobile-gutter" | tok }}; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 10; }
+.pm-mobile-screen--has-nav .pm-mobile-screen__fab { bottom: calc({{ "mobile-bottomNav-height" | tok }} + 16px + env(safe-area-inset-bottom, 0px)); }
+.pm-mobile-screen__fab .pm-fab--extended > span { max-width: 12em; overflow: hidden; white-space: nowrap; transition: max-width {{ "duration-base" | tok }} {{ "easing-standard" | tok }}, opacity {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+.pm-mobile-screen__fab .pm-fab--extended { transition: padding {{ "duration-base" | tok }} {{ "easing-standard" | tok }}, gap {{ "duration-base" | tok }} {{ "easing-standard" | tok }}; }
+/* An extended FAB folds to its icon while the body scrolls down and opens again on the way up. */
+.pm-mobile-screen--down .pm-mobile-screen__fab .pm-fab--extended { gap: 0; padding: 0 16px; }
+.pm-mobile-screen--down .pm-mobile-screen__fab .pm-fab--extended > span { max-width: 0; opacity: 0; }
+.pm-mobile-screen__nav { flex: none; }
+.pm-mobile-screen__nav .pm-bottomnav { position: relative; }
+.pm-mobile-screen:not(.pm-mobile-screen--has-nav) .pm-snackbar { bottom: calc(16px + env(safe-area-inset-bottom, 0px)); }
+/* Pull to refresh: an arrow under the bar that follows the finger at half speed, turns over at 64px and spins
+   while the refresh runs. */
+.pm-mobile-screen__pull {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-left: -18px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  color: {{ "fgColor-accent" | tok }};
+  background: {{ "overlay-bgColor" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  translate: 0 calc(var(--pm-pull, 0px) - 44px);
+  opacity: min(1, calc(var(--pm-pull, 0px) / 32px));
+  pointer-events: none;
+}
+.pm-mobile-screen__pull .pm-icon { fill: currentColor; transition: rotate {{ "duration-base" | tok }} {{ "easing-standard" | tok }}; }
+.pm-mobile-screen__pull--armed .pm-icon { rotate: 180deg; }
+.pm-mobile-screen__pull--busy .pm-icon { animation: pm-chase var(--pm-m-spin-dur, 1600ms) linear infinite; }
+.pm-mobile-screen__body--pulling { touch-action: none; }

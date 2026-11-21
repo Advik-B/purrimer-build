@@ -1,0 +1,15 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { wireKeyboardFooter } from "../motion";
+
+  let { children }: { children?: Snippet } = $props();
+  let footer: HTMLElement | undefined = $state();
+
+  $effect(() => {
+    if (footer) return wireKeyboardFooter(footer);
+  });
+</script>
+
+<div bind:this={footer} class="pm-keyboard-footer">{@render children?.()}</div>

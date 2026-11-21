@@ -1,6 +1,6 @@
 name = "ChipGroup"
 group = "Mobile"
-order = 58
+order = 60
 summary = "A row of filter chips that narrow what a screen shows; one or several can be on."
 slint_exports = ["ChipGroup", "ChipGroupOption"]
 

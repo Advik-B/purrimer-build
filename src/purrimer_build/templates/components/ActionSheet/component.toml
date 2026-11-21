@@ -1,6 +1,6 @@
 name = "ActionSheet"
 group = "Mobile"
-order = 54
+order = 57
 summary = "A menu in a bottom sheet: 48px rows with icon tiles, submenus one level in, and Cancel within thumb reach."
 slint_exports = ["ActionSheet", "ActionSheetItem"]
 

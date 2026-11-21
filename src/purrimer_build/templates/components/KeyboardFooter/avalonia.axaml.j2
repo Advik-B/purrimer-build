@@ -1,0 +1,22 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:KeyboardFooter}" TargetType="pm:KeyboardFooter">
+    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+    <Setter Property="BorderThickness" Value="0,1,0,0" />
+    <Setter Property="Padding" Value="{{ px("mobile-gutter") | num }},12" />
+    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:KeyboardFooter">
+        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}"
+                            HorizontalContentAlignment="Stretch" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+</ResourceDictionary>

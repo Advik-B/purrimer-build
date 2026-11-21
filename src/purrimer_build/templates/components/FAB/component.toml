@@ -1,6 +1,6 @@
 name = "FAB"
 group = "Mobile"
-order = 55
+order = 54
 summary = "The floating action button: one squircle for the main thing people create."
 
 [props.icon]

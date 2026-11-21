@@ -1,0 +1,233 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// One phone screen. Content goes into the scrolling body; set AppBar, BottomNav, Fab and Footer. Only the body
+// scrolls; a finger, pen or dragged mouse scrolls it with momentum. Its scroll elevates the AppBar, shrinks a large
+// title over the first 48px and folds an extended FAB while scrolling down. With IsRefreshable, pulling down at the
+// top raises RefreshRequested; call FinishRefresh() when it is done.
+[PseudoClasses(":scrolled", ":inset", ":refreshing", ":armed")]
+[TemplatePart("PART_Scroll", typeof(ScrollViewer))]
+[TemplatePart("PART_Pull", typeof(Control))]
+public class MobileScreen : ContentControl
+{
+    public static readonly StyledProperty<object?> AppBarProperty =
+        AvaloniaProperty.Register<MobileScreen, object?>(nameof(AppBar));
+
+    public static readonly StyledProperty<object?> BottomNavProperty =
+        AvaloniaProperty.Register<MobileScreen, object?>(nameof(BottomNav));
+
+    public static readonly StyledProperty<object?> FabProperty =
+        AvaloniaProperty.Register<MobileScreen, object?>(nameof(Fab));
+
+    public static readonly StyledProperty<object?> FooterProperty =
+        AvaloniaProperty.Register<MobileScreen, object?>(nameof(Footer));
+
+    public static readonly StyledProperty<string> SurfaceProperty =
+        AvaloniaProperty.Register<MobileScreen, string>(nameof(Surface), "default");
+
+    public static readonly StyledProperty<bool> IsRefreshableProperty =
+        AvaloniaProperty.Register<MobileScreen, bool>(nameof(IsRefreshable));
+
+    public static readonly StyledProperty<double> PullProperty =
+        AvaloniaProperty.Register<MobileScreen, double>(nameof(Pull));
+
+    public static readonly RoutedEvent<RoutedEventArgs> RefreshRequestedEvent =
+        RoutedEvent.Register<MobileScreen, RoutedEventArgs>(nameof(RefreshRequested), RoutingStrategies.Bubble);
+
+    private const double PullArm = 64;
+    private const double PullHold = 48;
+
+    private readonly PurrimerSpring _pull = new(0, 0.5);
+    private readonly PurrimerSpring _fling = new(0, 0.5);
+    private readonly PurrimerVelocityTracker _tracker = new();
+    private ScrollViewer? _scroll;
+    private Control? _pullDisc;
+    private Point? _grab;
+    private double _grabOffset;
+    private bool _pulling;
+    private bool _refreshing;
+    private double _last;
+
+    public MobileScreen()
+    {
+        _pull.Changed += v => SetCurrentValue(PullProperty, v);
+        _fling.Changed += v =>
+        {
+            if (_scroll != null)
+                _scroll.Offset = new Vector(_scroll.Offset.X, Math.Clamp(v, 0, ScrollMax()));
+        };
+    }
+
+    public object? AppBar { get => GetValue(AppBarProperty); set => SetValue(AppBarProperty, value); }
+    public object? BottomNav { get => GetValue(BottomNavProperty); set => SetValue(BottomNavProperty, value); }
+    public object? Fab { get => GetValue(FabProperty); set => SetValue(FabProperty, value); }
+    // A KeyboardFooter for the screen's primary action.
+    public object? Footer { get => GetValue(FooterProperty); set => SetValue(FooterProperty, value); }
+
+    // "inset" paints the body bgColor-inset, for settings and forms.
+    public string Surface { get => GetValue(SurfaceProperty); set => SetValue(SurfaceProperty, value); }
+
+    public bool IsRefreshable { get => GetValue(IsRefreshableProperty); set => SetValue(IsRefreshableProperty, value); }
+
+    // How far the pull-to-refresh disc has come down, in pixels.
+    public double Pull { get => GetValue(PullProperty); private set => SetValue(PullProperty, value); }
+
+    public event EventHandler<RoutedEventArgs>? RefreshRequested
+    {
+        add => AddHandler(RefreshRequestedEvent, value);
+        remove => RemoveHandler(RefreshRequestedEvent, value);
+    }
+
+    public void FinishRefresh()
+    {
+        _refreshing = false;
+        PseudoClasses.Set(":refreshing", false);
+        _pull.To(0);
+    }
+
+    public void ScrollToTop() => _fling.To(0);
+
+    private double ScrollMax() => _scroll == null ? 0 : Math.Max(0, _scroll.Extent.Height - _scroll.Viewport.Height);
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_scroll != null)
+        {
+            _scroll.ScrollChanged -= OnScrollChanged;
+            _scroll.RemoveHandler(PointerPressedEvent, OnBodyPressed);
+            _scroll.RemoveHandler(PointerMovedEvent, OnBodyMoved);
+            _scroll.RemoveHandler(PointerReleasedEvent, OnBodyReleased);
+        }
+        base.OnApplyTemplate(e);
+        _scroll = e.NameScope.Find<ScrollViewer>("PART_Scroll");
+        _pullDisc = e.NameScope.Find<Control>("PART_Pull");
+        PlacePull();
+        if (_scroll != null)
+        {
+            _scroll.ScrollChanged += OnScrollChanged;
+            _scroll.AddHandler(PointerPressedEvent, OnBodyPressed, RoutingStrategies.Tunnel);
+            _scroll.AddHandler(PointerMovedEvent, OnBodyMoved, RoutingStrategies.Tunnel);
+            _scroll.AddHandler(PointerReleasedEvent, OnBodyReleased, RoutingStrategies.Tunnel);
+        }
+        PseudoClasses.Set(":inset", Surface == "inset");
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SurfaceProperty)
+            PseudoClasses.Set(":inset", Surface == "inset");
+        else if (change.Property == PullProperty)
+            PlacePull();
+    }
+
+    private void PlacePull()
+    {
+        if (_pullDisc == null)
+            return;
+        _pullDisc.IsVisible = IsRefreshable && Pull > 1;
+        _pullDisc.Opacity = Math.Min(1, Pull / 32);
+        _pullDisc.RenderTransform = new global::Avalonia.Media.TranslateTransform(0, Pull - 44);
+    }
+
+    private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (_scroll == null)
+            return;
+        var y = _scroll.Offset.Y;
+        PseudoClasses.Set(":scrolled", y > 0);
+        if (AppBar is {{ ns }}.AppBar bar)
+        {
+            bar.IsElevated = y > 0;
+            bar.Collapse = Math.Clamp(y / 48, 0, 1);
+        }
+        if (Math.Abs(y - _last) > 4)
+        {
+            if (Fab is {{ ns }}.FAB fab)
+                fab.IsFolded = y > _last && y > 0;
+            _last = y;
+        }
+    }
+
+    // Touch and pen pan the ScrollViewer themselves; a mouse drag gets the same treatment here.
+    private void OnBodyPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_scroll == null || _refreshing)
+            return;
+        var point = e.GetCurrentPoint(this);
+        var mouse = e.Pointer.Type == PointerType.Mouse;
+        if (!point.Properties.IsLeftButtonPressed || (!mouse && !(IsRefreshable && _scroll.Offset.Y <= 0)))
+            return;
+        _fling.Stop();
+        _grab = point.Position;
+        _grabOffset = _scroll.Offset.Y;
+        _pulling = false;
+        _tracker.Reset();
+        _tracker.Add(point.Position);
+    }
+
+    private void OnBodyMoved(object? sender, PointerEventArgs e)
+    {
+        if (_grab is not { } grab || _scroll == null)
+            return;
+        var p = e.GetPosition(this);
+        _tracker.Add(p);
+        var dy = p.Y - grab.Y;
+        if (IsRefreshable && _grabOffset <= 0 && dy > 0)
+        {
+            _pulling = true;
+            var pulled = dy / 2;
+            PseudoClasses.Set(":armed", pulled >= PullArm);
+            _pull.Set(pulled);
+            e.Handled = true;
+            return;
+        }
+        if (e.Pointer.Type != PointerType.Mouse)
+            return;
+        if (Math.Abs(dy) > PurrimerMotion.Slop)
+            e.Pointer.Capture(_scroll);
+        _scroll.Offset = new Vector(_scroll.Offset.X, Math.Clamp(_grabOffset - dy, 0, ScrollMax()));
+    }
+
+    private void OnBodyReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_grab == null || _scroll == null)
+            return;
+        _grab = null;
+        e.Pointer.Capture(null);
+        if (_pulling)
+        {
+            _pulling = false;
+            PseudoClasses.Set(":armed", false);
+            if (Pull >= PullArm)
+            {
+                _refreshing = true;
+                PseudoClasses.Set(":refreshing", true);
+                _pull.To(PullHold);
+                RaiseEvent(new RoutedEventArgs(RefreshRequestedEvent, this));
+            }
+            else
+            {
+                _pull.To(0);
+            }
+            return;
+        }
+        if (e.Pointer.Type == PointerType.Mouse)
+        {
+            var velocity = -_tracker.Velocity().Y;
+            var rest = Math.Clamp(_scroll.Offset.Y + PurrimerMotion.Project(velocity), 0, ScrollMax());
+            _fling.Set(_scroll.Offset.Y);
+            _fling.To(rest, velocity);
+        }
+    }
+}

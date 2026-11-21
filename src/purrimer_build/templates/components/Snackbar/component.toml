@@ -1,6 +1,6 @@
 name = "Snackbar"
 group = "Mobile"
-order = 56
+order = 59
 summary = "A short message on an inverse surface above the bottom bar, with one optional action."
 
 [props.open]

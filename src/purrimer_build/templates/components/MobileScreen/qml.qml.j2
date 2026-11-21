@@ -1,0 +1,146 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+
+// One phone screen. Children go into the scrolling body; assign appBar, bottomNav, fab and footer. Only the body
+// scrolls, with momentum and overshoot under a finger or a dragged mouse. Its scroll elevates the AppBar, shrinks a
+// large title over the first 48px and folds an extended FAB while scrolling down. With refreshable, pulling down at
+// the top emits refreshRequested; call finishRefresh() when it is done.
+Rectangle {
+    id: root
+    property AppBar appBar
+    property Item bottomNav
+    property FAB fab
+    // A KeyboardFooter for the screen's primary action.
+    property Item footer
+    // "inset" paints the body bgColor-inset, for settings and forms.
+    property string surface: "default"
+    property bool refreshable: false
+    property bool refreshing: false
+    default property alias content: column.data
+    readonly property real scrollProgress: Math.min(1, Math.max(0, flick.contentY / 48))
+    readonly property real pulled: refreshing ? 48 : Math.max(0, -flick.contentY / 2)
+    property real lastY: 0
+    signal refreshRequested()
+
+    function finishRefresh() {
+        refreshing = false
+    }
+
+    function scrollToTop() {
+        flick.contentY = 0
+    }
+
+    color: surface === "inset" ? {{ "bgColor-inset" | tok }} : {{ "bgColor-default" | tok }}
+    clip: true
+
+    Binding { target: root.appBar; property: "elevated"; value: flick.contentY > 0; when: root.appBar !== null }
+    Binding { target: root.appBar; property: "collapse"; value: root.scrollProgress; when: root.appBar !== null }
+
+    Item {
+        id: barHolder
+        z: 5
+        width: parent.width
+        height: root.appBar ? root.appBar.implicitHeight : 0
+        children: root.appBar ? [root.appBar] : []
+        onChildrenChanged: if (root.appBar) root.appBar.width = Qt.binding(() => barHolder.width)
+
+        RectangularShadow {
+            anchors.fill: parent
+            z: -1
+            visible: flick.contentY > 0
+            readonly property var key: {{ "shadow-resting-xsmall" | tok }}[0]
+            offset.y: key ? key.y : 1
+            blur: key ? key.blur : 2
+            color: key ? key.color : "transparent"
+        }
+    }
+
+    Flickable {
+        id: flick
+        anchors.top: barHolder.bottom
+        anchors.bottom: footerHolder.top
+        width: parent.width
+        contentWidth: width
+        contentHeight: column.implicitHeight + (root.bottomNav || root.footer ? 16 : 96)
+        boundsBehavior: Flickable.DragAndOvershootBounds
+        flickableDirection: Flickable.VerticalFlick
+        onContentYChanged: {
+            if (Math.abs(contentY - root.lastY) > 4) {
+                if (root.fab)
+                    root.fab.folded = contentY > root.lastY && contentY > 0
+                root.lastY = contentY
+            }
+        }
+        onDraggingChanged: {
+            if (!dragging && root.refreshable && !root.refreshing && -contentY / 2 >= 64) {
+                root.refreshing = true
+                root.refreshRequested()
+            }
+        }
+
+        Column {
+            id: column
+            width: flick.width
+        }
+    }
+
+    Rectangle {
+        id: pull
+        visible: root.refreshable && root.pulled > 1
+        z: 4
+        width: 36
+        height: 36
+        radius: 18
+        x: (parent.width - width) / 2
+        y: barHolder.height + root.pulled - 44
+        opacity: Math.min(1, root.pulled / 32)
+        color: {{ "overlay-bgColor" | tok }}
+        Icon {
+            anchors.centerIn: parent
+            name: root.refreshing ? "sync" : "arrow-down"
+            color: {{ "fgColor-accent" | tok }}
+            rotation: root.refreshing ? 0 : root.pulled >= 64 ? 180 : 0
+            Behavior on rotation { NumberAnimation { duration: {{ "duration-base" | tok }} } }
+            RotationAnimation on rotation {
+                running: root.refreshing && !Purrimer.pauseLoops
+                from: 0
+                to: 360
+                duration: 1600
+                loops: Animation.Infinite
+            }
+        }
+    }
+
+    Item {
+        id: footerHolder
+        anchors.bottom: navHolder.top
+        width: parent.width
+        height: root.footer ? root.footer.implicitHeight : 0
+        children: root.footer ? [root.footer] : []
+        onChildrenChanged: if (root.footer) root.footer.width = Qt.binding(() => footerHolder.width)
+    }
+
+    Item {
+        id: navHolder
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: root.bottomNav ? root.bottomNav.implicitHeight : 0
+        children: root.bottomNav ? [root.bottomNav] : []
+        onChildrenChanged: if (root.bottomNav) root.bottomNav.width = Qt.binding(() => navHolder.width)
+    }
+
+    Item {
+        id: fabHolder
+        z: 10
+        anchors.right: parent.right
+        anchors.rightMargin: {{ "mobile-gutter" | tok }}
+        anchors.bottom: footerHolder.top
+        anchors.bottomMargin: 16
+        width: root.fab ? root.fab.width : 0
+        height: root.fab ? root.fab.height : 0
+        children: root.fab ? [root.fab] : []
+    }
+}

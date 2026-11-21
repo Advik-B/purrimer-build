@@ -1,0 +1,45 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QRectF
+from PySide6.QtGui import QGuiApplication, QPainter
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+from ..theme import theme
+
+
+class KeyboardFooter(QWidget):
+    """A footer for a screen's primary action: pass it to MobileScreen as `footer` and add one or two full-width
+    Buttons, the primary one last. While the on-screen keyboard is up it gains the height the keyboard covers, so its
+    buttons ride above the keyboard and the screen body shrinks to match.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._layout = QVBoxLayout(self)
+        self._layout.setContentsMargins({{ px("mobile-gutter") | int }}, 12, {{ px("mobile-gutter") | int }}, 12)
+        self._layout.setSpacing(8)
+        method = QGuiApplication.inputMethod()
+        method.keyboardRectangleChanged.connect(self._follow_keyboard)
+        method.visibleChanged.connect(self._follow_keyboard)
+        theme.changed.connect(self.update)
+
+    def add_button(self, button: QWidget) -> None:
+        self._layout.addWidget(button)
+
+    def _follow_keyboard(self) -> None:
+        method = QGuiApplication.inputMethod()
+        cover = 0
+        if method.isVisible() and self.window() is not None:
+            keyboard = method.keyboardRectangle()
+            window = self.window().geometry()
+            cover = max(0, round(window.bottom() - keyboard.top())) if keyboard.height() > 0 else 0
+        self._layout.setContentsMargins({{ px("mobile-gutter") | int }}, 12, {{ px("mobile-gutter") | int }}, 12 + cover)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
+        painter.fillRect(QRectF(0, 0, self.width(), {{ px("borderWidth-thin") | num }}), theme.color({{ "borderColor-default" | tok }}))

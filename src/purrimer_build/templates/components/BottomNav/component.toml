@@ -1,6 +1,6 @@
 name = "BottomNav"
 group = "Mobile"
-order = 51
+order = 52
 summary = "Three to five destinations at the bottom of the screen, marked by a bar on top."
 
 [props.items]

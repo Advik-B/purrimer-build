@@ -1,0 +1,24 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer } from "../purrimer.slint";
+
+// A footer for a screen's primary action, with one or two Buttons as children, the primary one last. Slint offers no
+// keyboard geometry, so on a phone build let the window resize for the keyboard; the footer then sits above it.
+export component KeyboardFooter inherits Rectangle {
+    background: {{ "bgColor-default" | tok }};
+
+    Rectangle {
+        y: 0;
+        height: {{ "borderWidth-thin" | tok }};
+        background: {{ "borderColor-default" | tok }};
+    }
+
+    VerticalLayout {
+        padding-left: {{ "mobile-gutter" | tok }};
+        padding-right: {{ "mobile-gutter" | tok }};
+        padding-top: 12px;
+        padding-bottom: 12px;
+        spacing: 8px;
+        @children
+    }
+}

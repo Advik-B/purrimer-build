@@ -10,21 +10,28 @@ T.Button {
     property string iconName: "plus"
     property string label
     property bool extended: false
+    // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
+    property bool folded: false
+    property real fold: folded && extended ? 1 : 0
+    Behavior on fold { NumberAnimation { duration: Purrimer.pauseLoops ? 0 : {{ "duration-base" | tok }}; easing.type: Easing.InOutQuad } }
 
-    implicitWidth: extended ? row.implicitWidth + 32 : {{ "mobile-fab-size" | tok }}
+    implicitWidth: extended ? row.implicitWidth + 32 + ({{ "mobile-fab-size" | tok }} - row.implicitWidth - 32) * fold : {{ "mobile-fab-size" | tok }}
     implicitHeight: {{ "mobile-fab-size" | tok }}
     Accessible.name: label
     scale: down ? 0.96 : 1
     Behavior on scale { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
 
     contentItem: Item {
+        clip: true
         Row {
             id: row
-            anchors.centerIn: parent
+            x: control.extended ? 16 + ({{ "mobile-fab-size" | tok }} / 2 - 12 - 16) * control.fold : (parent.width - width) / 2
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 8
             Icon { name: control.iconName; size: 24; color: {{ "fgColor-onEmphasis" | tok }}; anchors.verticalCenter: parent.verticalCenter }
             Text {
                 visible: control.extended
+                opacity: 1 - control.fold
                 text: control.label
                 font.family: {{ "text-mobile-body" | tok }}.family
                 font.pixelSize: 16

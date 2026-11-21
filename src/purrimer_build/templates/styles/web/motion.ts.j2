@@ -158,3 +158,140 @@ export function buzz(ms = 8): void {
     }
   }
 }
+
+export interface ScreenParts {
+  screen: HTMLElement;
+  body: HTMLElement;
+  content: HTMLElement;
+  pull?: HTMLElement | null;
+  // Turns on pull to refresh. Resolve the promise when the refresh ends.
+  onRefresh?: () => Promise<unknown> | void;
+}
+
+const PULL_ARM = 64;
+const PULL_HOLD = 48;
+
+// Wires a MobileScreen: the body's scroll sets --pm-scroll-p and the --scrolled and --down modifiers on the screen
+// without re-rendering it, and a pull down at the top of the body refreshes. Returns a cleanup function.
+export function wireMobileScreen(parts: ScreenParts): () => void {
+  const { screen, body, content } = parts;
+  let last = body.scrollTop;
+  let frame = 0;
+  const onScroll = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const top = body.scrollTop;
+      screen.style.setProperty("--pm-scroll-p", String(Math.min(1, Math.max(0, top / 48))));
+      screen.classList.toggle("pm-mobile-screen--scrolled", top > 0);
+      if (Math.abs(top - last) > 4) {
+        screen.classList.toggle("pm-mobile-screen--down", top > last && top > 0);
+        last = top;
+      }
+    });
+  };
+  body.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  let pulled = 0;
+  let busy = false;
+  let start: { y: number; armed: boolean } | null = null;
+  const show = (v: number) => {
+    pulled = v;
+    content.style.transform = v ? `translateY(${v}px)` : "";
+    parts.pull?.style.setProperty("--pm-pull", `${v}px`);
+  };
+  const spring = new Spring(0, show, springs.sleepy, 0.5);
+  const begin = (y: number) => {
+    if (!parts.onRefresh || busy || body.scrollTop > 0) return;
+    spring.stop();
+    start = { y: y - pulled * 2, armed: pulled >= PULL_ARM };
+  };
+  const move = (y: number, e: Event) => {
+    if (!start) return;
+    const dy = y - start.y;
+    if (dy <= 0 && pulled === 0) {
+      start = null;
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    body.classList.add("pm-mobile-screen__body--pulling");
+    const next = Math.max(0, dy / 2);
+    const armed = next >= PULL_ARM;
+    if (armed !== start.armed) {
+      start.armed = armed;
+      parts.pull?.classList.toggle("pm-mobile-screen__pull--armed", armed);
+      if (armed) buzz();
+    }
+    show(next);
+  };
+  const end = () => {
+    if (!start) return;
+    start = null;
+    body.classList.remove("pm-mobile-screen__body--pulling");
+    spring.config = springs[motionKind(screen)];
+    if (pulled >= PULL_ARM && parts.onRefresh) {
+      busy = true;
+      parts.pull?.classList.remove("pm-mobile-screen__pull--armed");
+      parts.pull?.classList.add("pm-mobile-screen__pull--busy");
+      spring.to(PULL_HOLD);
+      Promise.resolve(parts.onRefresh()).finally(() => {
+        busy = false;
+        parts.pull?.classList.remove("pm-mobile-screen__pull--busy");
+        spring.to(0);
+      });
+    } else {
+      parts.pull?.classList.remove("pm-mobile-screen__pull--armed");
+      spring.to(0);
+    }
+  };
+  const touchStart = (e: TouchEvent) => begin(e.touches[0].clientY);
+  const touchMove = (e: TouchEvent) => move(e.touches[0].clientY, e);
+  // A mouse drags like a finger, so the gesture works the same at a desk.
+  const mouseDown = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.button > 0) return;
+    begin(e.clientY);
+  };
+  const mouseMove = (e: PointerEvent) => e.pointerType === "mouse" && move(e.clientY, e);
+  body.addEventListener("touchstart", touchStart, { passive: true });
+  body.addEventListener("touchmove", touchMove, { passive: false });
+  body.addEventListener("touchend", end);
+  body.addEventListener("touchcancel", end);
+  body.addEventListener("pointerdown", mouseDown);
+  window.addEventListener("pointermove", mouseMove);
+  window.addEventListener("pointerup", end);
+
+  return () => {
+    cancelAnimationFrame(frame);
+    spring.stop();
+    body.removeEventListener("scroll", onScroll);
+    body.removeEventListener("touchstart", touchStart);
+    body.removeEventListener("touchmove", touchMove);
+    body.removeEventListener("touchend", end);
+    body.removeEventListener("touchcancel", end);
+    body.removeEventListener("pointerdown", mouseDown);
+    window.removeEventListener("pointermove", mouseMove);
+    window.removeEventListener("pointerup", end);
+  };
+}
+
+// Keeps a KeyboardFooter above the on-screen keyboard: it moves up by exactly the height the keyboard covers, and the
+// enclosing MobileScreen's body gains the same room (--pm-kb) so the focused field can scroll into view.
+export function wireKeyboardFooter(footer: HTMLElement): () => void {
+  const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+  if (!viewport) return () => {};
+  const screen = footer.closest<HTMLElement>(".pm-mobile-screen");
+  const update = () => {
+    const cover = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+    footer.style.translate = cover ? `0 ${-cover}px` : "";
+    screen?.style.setProperty("--pm-kb", `${cover}px`);
+  };
+  viewport.addEventListener("resize", update);
+  viewport.addEventListener("scroll", update);
+  update();
+  return () => {
+    viewport.removeEventListener("resize", update);
+    viewport.removeEventListener("scroll", update);
+    screen?.style.removeProperty("--pm-kb");
+  };
+}

@@ -1,0 +1,61 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:MobileScreen}" TargetType="pm:MobileScreen">
+    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="ClipToBounds" Value="True" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:MobileScreen">
+        <Panel Background="{TemplateBinding Background}">
+          <Grid RowDefinitions="Auto,*,Auto,Auto">
+            <Border Name="bar" Grid.Row="0" ZIndex="5" Background="{{ "bgColor-default" | tok }}"
+                    IsVisible="{TemplateBinding AppBar, Converter={x:Static ObjectConverters.IsNotNull}}">
+              <Border.Transitions>
+                <Transitions>
+                  <BoxShadowsTransition Property="BoxShadow" Duration="{{ "duration-base" | tok }}" />
+                </Transitions>
+              </Border.Transitions>
+              <ContentPresenter Content="{TemplateBinding AppBar}" />
+            </Border>
+            <ScrollViewer Name="PART_Scroll" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                          VerticalScrollBarVisibility="Hidden" IsScrollInertiaEnabled="True">
+              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" Margin="0,0,0,16" />
+            </ScrollViewer>
+            <Border Name="PART_Pull" Width="36" Height="36" CornerRadius="18" IsVisible="False"
+                    Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Top" IsHitTestVisible="False" ZIndex="4"
+                    Background="{{ "overlay-bgColor" | tok }}" BoxShadow="{{ "shadow-floating-small" | tok }}">
+              <pm:Icon Name="pullIcon" IconName="arrow-down" Foreground="{{ "fgColor-accent" | tok }}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="50%,50%">
+                <pm:Icon.Transitions>
+                  <Transitions>
+                    <TransformOperationsTransition Property="RenderTransform" Duration="{{ "duration-base" | tok }}" />
+                  </Transitions>
+                </pm:Icon.Transitions>
+              </pm:Icon>
+            </Border>
+            <ContentPresenter Name="fab" Grid.Row="1" Content="{TemplateBinding Fab}" ZIndex="10"
+                              HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,{{ px("mobile-gutter") | num }},16" />
+            <ContentPresenter Grid.Row="2" Content="{TemplateBinding Footer}" />
+            <ContentPresenter Grid.Row="3" Content="{TemplateBinding BottomNav}" />
+          </Grid>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:inset">
+      <Setter Property="Background" Value="{{ "bgColor-inset" | tok }}" />
+    </Style>
+    <Style Selector="^:scrolled /template/ Border#bar">
+      <Setter Property="BoxShadow" Value="{{ "shadow-resting-xsmall" | tok }}" />
+    </Style>
+    <Style Selector="^:armed /template/ pm|Icon#pullIcon">
+      <Setter Property="RenderTransform" Value="rotate(180deg)" />
+    </Style>
+    <Style Selector="^:refreshing /template/ pm|Icon#pullIcon">
+      <Setter Property="IconName" Value="sync" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>
