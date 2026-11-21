@@ -1,0 +1,82 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { ActionList, type ActionListItem } from "./ActionList";
+import { Icon } from "./Icon";
+
+export type ActionMenuProps = {
+  label: string;
+  icon?: string;
+  variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+  items?: ActionListItem[];
+  closeOnSelect?: boolean;
+  open?: boolean;
+  onSelect?: (item: ActionListItem, index: number) => void;
+};
+
+export function ActionMenu(props: ActionMenuProps): JSX.Element {
+  const [open, setOpen] = createSignal(() => props.open ?? false);
+  let root!: HTMLDivElement;
+  let anchor!: HTMLButtonElement;
+
+  createEffect(open, (isOpen) => {
+    if (!isOpen) return;
+    const onDown = (e: PointerEvent) => {
+      if (!root.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        anchor.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
+  const menuItems = () =>
+    (props.items ?? []).map((item): ActionListItem =>
+      item.divider || item.group ? item : { role: item.selected != null ? "menuitemcheckbox" : "menuitem", ...item },
+    );
+  const variant = () => props.variant ?? "default";
+
+  return (
+    <div class={["pm-action-menu", open() && "pm-action-menu--open"]} ref={root}>
+      <button
+        ref={anchor}
+        type="button"
+        class={["pm-action-menu__anchor", props.icon && "pm-action-menu__anchor--icon", variant() !== "default" && `pm-action-menu__anchor--${variant()}`]}
+        aria-haspopup="menu"
+        aria-expanded={open() ? "true" : "false"}
+        aria-label={props.icon ? props.label : undefined}
+        onClick={() => {
+          setOpen(!open());
+        }}
+      >
+        <Show when={props.icon} fallback={<>{props.label}<Icon name="triangle-down" /></>}>
+          {(name) => <Icon name={name()} />}
+        </Show>
+      </button>
+      <Show when={open()}>
+        <div class="pm-action-menu__overlay">
+          <ActionList
+            role="menu"
+            items={menuItems()}
+            onSelect={(item, i) => {
+              props.onSelect?.(item, i);
+              if (props.closeOnSelect ?? true) {
+                setOpen(false);
+                anchor.focus();
+              }
+            }}
+          />
+        </div>
+      </Show>
+    </div>
+  );
+}

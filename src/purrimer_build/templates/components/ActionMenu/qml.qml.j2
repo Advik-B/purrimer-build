@@ -1,0 +1,152 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+import QtQuick.Shapes
+import QtQuick.Templates as T
+
+Item {
+    id: root
+    property string label
+    property string icon
+    property string variant: "default"
+    // Rows in ActionList's shape.
+    property var items: []
+    property bool closeOnSelect: true
+    property alias open: menu.visible
+    signal triggered(int index, var item)
+
+    readonly property real r: {{ "borderRadius-medium" | tok }}
+    readonly property real big: {{ "borderRadius-large" | tok }}
+
+    implicitWidth: icon ? {{ "control-medium-size" | tok }} : face.implicitWidth + 24
+    implicitHeight: {{ "control-medium-size" | tok }}
+    activeFocusOnTab: true
+    Accessible.role: Accessible.ButtonMenu
+    Accessible.name: label
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space || event.key === Qt.Key_Down) {
+            menu.open()
+            event.accepted = true
+        }
+    }
+
+    // The open shape: the anchor's top, a concave fillet where it meets the menu, and the menu's body.
+    function outline(aw, ah, w, h) {
+        const top = ah - 1, l = 0.5, rt = w - 0.5, b = h - 0.5, a = aw - 0.5
+        return "M " + l + " " + (0.5 + r) + " A " + r + " " + r + " 0 0 1 " + (l + r) + " 0.5"
+            + " L " + (a - r) + " 0.5 A " + r + " " + r + " 0 0 1 " + a + " " + (0.5 + r)
+            + " L " + a + " " + (top - r) + " A " + r + " " + r + " 0 0 0 " + (a + r) + " " + top
+            + " L " + (rt - big) + " " + top + " A " + big + " " + big + " 0 0 1 " + rt + " " + (top + big)
+            + " L " + rt + " " + (b - big) + " A " + big + " " + big + " 0 0 1 " + (rt - big) + " " + b
+            + " L " + (l + big) + " " + b + " A " + big + " " + big + " 0 0 1 " + l + " " + (b - big) + " Z"
+    }
+
+    component Face: Row {
+        property color ink
+        spacing: 8
+        Text {
+            visible: !root.icon
+            text: root.label
+            font.family: {{ "text-body-medium" | tok }}.family
+            font.pixelSize: 14
+            font.weight: Font.DemiBold
+            color: parent.ink
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Icon { name: root.icon || "triangle-down"; color: parent.ink; anchors.verticalCenter: parent.verticalCenter }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        radius: root.r
+        color: root.variant === "primary" ? (hover.hovered ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }})
+             : root.variant === "invisible" ? (hover.hovered ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent")
+             : (hover.hovered ? {{ "button-default-bgColor-hover" | tok }} : {{ "button-default-bgColor-rest" | tok }})
+        border.width: root.variant === "invisible" ? 0 : {{ "borderWidth-thin" | tok }}
+        border.color: root.variant === "primary" ? color : {{ "button-default-borderColor-rest" | tok }}
+        Face {
+            id: face
+            anchors.centerIn: parent
+            ink: root.variant === "primary" ? {{ "fgColor-onEmphasis" | tok }} : root.icon ? {{ "fgColor-muted" | tok }} : {{ "fgColor-default" | tok }}
+        }
+        Rectangle {
+            anchors.fill: parent
+            anchors.margins: -4
+            radius: root.r + 4
+            color: "transparent"
+            border.width: {{ "borderWidth-thick" | tok }}
+            border.color: {{ "focus-outlineColor" | tok }}
+            visible: root.activeFocus && !menu.visible
+        }
+    }
+
+    HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+    TapHandler { onTapped: menu.open() }
+
+    T.Popup {
+        id: menu
+        readonly property real fullHeight: root.height - 1 + list.implicitHeight + 1
+        property real reveal: 0
+        width: Math.min(320, Math.max(192, root.width + 2 * root.r))
+        height: root.height + (fullHeight - root.height) * reveal
+        padding: 0
+        closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
+        onAboutToShow: list.forceActiveFocus()
+        onClosed: root.forceActiveFocus()
+
+        enter: Transition {
+            NumberAnimation { property: "reveal"; from: 0; to: 1; duration: {{ "duration-base" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-standard" | tok }} }
+        }
+        exit: Transition {
+            NumberAnimation { property: "reveal"; to: 0; duration: {{ "duration-fast" | tok }} }
+        }
+
+        background: Item {
+            Shape {
+                id: shape
+                width: menu.width
+                height: menu.fullHeight
+                preferredRendererType: Shape.CurveRenderer
+                layer.enabled: true
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: {{ "overlay-backdrop-bgColor" | tok }}
+                    shadowVerticalOffset: 6
+                    shadowBlur: 0.6
+                }
+                ShapePath {
+                    fillColor: {{ "overlay-bgColor" | tok }}
+                    strokeColor: {{ "borderColor-default" | tok }}
+                    strokeWidth: {{ "borderWidth-thin" | tok }}
+                    PathSvg { path: root.outline(root.width, root.height, menu.width, menu.fullHeight) }
+                }
+            }
+        }
+
+        contentItem: Item {
+            clip: true
+            Face {
+                x: (root.width - width) / 2
+                height: root.height
+                ink: {{ "fgColor-default" | tok }}
+            }
+            TapHandler {
+                // The top of the open shape is the anchor: tapping it again closes the menu.
+                onTapped: (point) => { if (point.position.y < root.height) menu.close() }
+            }
+            ActionList {
+                id: list
+                x: 1
+                y: root.height - 1
+                width: menu.width - 2
+                items: root.items
+                onTriggered: (index, item) => {
+                    root.triggered(index, item)
+                    if (root.closeOnSelect) menu.close()
+                }
+            }
+        }
+    }
+}

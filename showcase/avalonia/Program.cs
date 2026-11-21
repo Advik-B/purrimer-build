@@ -4,6 +4,8 @@
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.VisualTree;
 using Avalonia.Headless;
 using Avalonia.Layout;
 using Avalonia.Logging;
@@ -84,6 +86,14 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
                 AvaloniaHeadlessPlatform.ForceRenderTimerTick();
                 Thread.Sleep(16);
             }
+            // Popups (ActionMenu, ToolTip) are hosted outside the layout transform above: placed at the scaled position but
+            // drawn at scale 1. Scale each popup host about its own corner to match.
+            foreach (var host in window.GetVisualDescendants().OfType<OverlayPopupHost>())
+            {
+                host.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Absolute);
+                host.RenderTransform = new ScaleTransform(scale, scale);
+            }
+            AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             var shot = window.CaptureRenderedFrame();
             if (shot is null) sink.Messages.Add("no frame was rendered");
             else shot.Save(Path.Combine(outDir, $"{name}-{theme}.png"), new PngBitmapEncoderOptions());

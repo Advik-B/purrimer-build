@@ -1,0 +1,69 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import ActionList, { type ActionListItem } from "./ActionList.svelte";
+  import Icon from "./Icon.svelte";
+
+  let { label, icon = "", variant = "default", items = [], closeOnSelect = true, open = $bindable(false), onselect }: {
+    label: string;
+    icon?: string;
+    variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+    items?: ActionListItem[];
+    closeOnSelect?: boolean;
+    open?: boolean;
+    onselect?: (item: ActionListItem, index: number) => void;
+  } = $props();
+
+  let root: HTMLDivElement;
+  let anchor: HTMLButtonElement;
+
+  $effect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!root.contains(e.target as Node)) open = false;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        open = false;
+        anchor.focus();
+      }
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  });
+
+  const menuItems = $derived(items.map((item) => (item.divider || item.group ? item : { role: item.selected != null ? "menuitemcheckbox" : "menuitem", ...item })));
+</script>
+
+<div class={["pm-action-menu", open && "pm-action-menu--open"]} bind:this={root}>
+  <button
+    bind:this={anchor}
+    type="button"
+    class={["pm-action-menu__anchor", icon && "pm-action-menu__anchor--icon", variant !== "default" && `pm-action-menu__anchor--${variant}`]}
+    aria-haspopup="menu"
+    aria-expanded={open}
+    aria-label={icon ? label : undefined}
+    onclick={() => (open = !open)}
+  >
+    {#if icon}<Icon name={icon} />{:else}{label}<Icon name="triangle-down" />{/if}
+  </button>
+  {#if open}
+    <div class="pm-action-menu__overlay">
+      <ActionList
+        role="menu"
+        items={menuItems}
+        onselect={(item, i) => {
+          onselect?.(item, i);
+          if (closeOnSelect) {
+            open = false;
+            anchor.focus();
+          }
+        }}
+      />
+    </div>
+  {/if}
+</div>

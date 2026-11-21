@@ -1,0 +1,20 @@
+import { ActionMenu, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    alignment: start;
+    VerticalLayout {
+        alignment: start;
+        ActionMenu {
+            label: "File";
+            open-on-start: true;
+            items: [
+                { label: "Edit file", leading-icon: PurrimerIcons.pencil-16, trailing-text: "E" },
+                { label: "Copy permalink", leading-icon: PurrimerIcons.link-16, trailing-text: "Y" },
+                { label: "View history", leading-icon: PurrimerIcons.history-16 },
+                { divider: true },
+                { label: "Delete file", leading-icon: PurrimerIcons.trash-16, danger: true },
+            ];
+            triggered(index) => { debug("picked", index); }
+        }
+    }
+}

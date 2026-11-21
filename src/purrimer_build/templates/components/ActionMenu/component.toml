@@ -1,0 +1,35 @@
+name = "ActionMenu"
+group = "Actions"
+order = 13
+summary = "A button that opens a menu of actions; open, the button and the menu are one shape."
+
+[props.label]
+type = "string"
+default = ""
+doc = "The button's text, or the accessible name of an icon-only anchor."
+
+[props.icon]
+type = "icon"
+default = ""
+doc = "Octicon for an icon-only anchor, such as kebab-horizontal for row overflow menus."
+
+[props.variant]
+type = "enum"
+default = "default"
+doc = "Anchor style when closed; open, it always takes the overlay's fill."
+values = ["default", "primary", "invisible"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Rows in ActionList's shape."
+
+[props.closeOnSelect]
+type = "bool"
+default = true
+doc = "Close after a pick."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Open state; set it to show the menu from the start."

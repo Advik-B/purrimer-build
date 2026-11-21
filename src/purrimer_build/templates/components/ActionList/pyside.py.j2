@@ -62,6 +62,8 @@ class ActionList(QWidget):
         self._hover = -1
         self._pressed = -1
         self._focus = next((i for i, e in enumerate(self._items) if self._pickable(i)), -1)
+        # The focus ring shows once the keyboard is in use, not after a click.
+        self._keyboard = False
         self.setMouseTracking(True)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
@@ -139,7 +141,12 @@ class ActionList(QWidget):
         if index == pressed and index >= 0:
             self.triggered.emit(index)
 
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self._keyboard = event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason)
+
     def keyPressEvent(self, event) -> None:
+        self._keyboard = True
         key = event.key()
         if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
             step = -1 if key == Qt.Key.Key_Up else 1
@@ -187,7 +194,7 @@ class ActionList(QWidget):
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }}))
             painter.drawRoundedRect(QRectF(0, rect.center().y() - 12, 4, 24), 2, 2)
-        if self.hasFocus() and i == self._focus:
+        if self.hasFocus() and self._keyboard and i == self._focus:
             painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), RADIUS - 1, RADIUS - 1)
