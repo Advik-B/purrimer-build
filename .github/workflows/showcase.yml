@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           - group: web
-            targets: css,svelte,solid
+            targets: css,classless,svelte,solid
           - group: qtwidgets
             targets: qtwidgets
           - group: qtquick
@@ -79,7 +79,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # The prebuilt viewer also links the libraries of its KMS backend.
+          sudo apt-get install -y --no-install-recommends libinput10 libgbm1 libdrm2 libudev1 libseat1
           gh release download v1.18.1 -R slint-ui/slint -p slint-viewer-linux.tar.gz -O - | tar xz -C "$RUNNER_TEMP"
+          if ldd "$RUNNER_TEMP/slint-viewer/slint-viewer" | grep "not found"; then exit 1; fi
           echo "$RUNNER_TEMP/slint-viewer" >> "$GITHUB_PATH"
 
       - name: Build every target
