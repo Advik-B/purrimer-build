@@ -1,0 +1,14 @@
+import { UnderlineNav, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    UnderlineNav {
+        items: [
+            { label: "Code", icon: PurrimerIcons.code-16 },
+            { label: "Issues", icon: PurrimerIcons.issue-opened-16, count: "12" },
+            { label: "Pull requests", icon: PurrimerIcons.git-pull-request-16, count: "3" },
+            { label: "Actions", icon: PurrimerIcons.play-16 },
+        ];
+        selected(index) => { debug("page", index); }
+    }
+}

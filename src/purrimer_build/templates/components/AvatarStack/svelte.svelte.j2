@@ -1,0 +1,29 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  type Person = string | { name: string; src?: string };
+
+  let { people = [], max = {{ c.spec.props.max.default }}, size = {{ c.spec.props.size.default }} }: { people?: Person[]; max?: number; size?: number } = $props();
+
+  const shown = $derived(people.slice(0, max).map((p) => (typeof p === "string" ? { name: p } : p)));
+  const extra = $derived(people.length - shown.length);
+  const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+</script>
+
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (focus spreads the stack so every face can be read) -->
+<span class="pm-avatar-stack" role="group" tabindex="0" aria-label="{people.length} people" style:--pm-av="{size}px">
+  {#each shown as person, i}
+    <span
+      class="pm-avatar-stack__person"
+      role="img"
+      aria-label={person.name}
+      style:width="{size}px"
+      style:height="{size}px"
+      style:font-size="{Math.round(size * 0.4)}px"
+      style:z-index={shown.length - i + 1}
+    >{#if person.src}<img src={person.src} alt="" />{:else}{initials(person.name)}{/if}</span>
+  {/each}
+  {#if extra > 0}
+    <span class="pm-avatar-stack__person pm-avatar-stack__more" aria-label="{extra} more" style:height="{size}px" style:font-size="{Math.max(10, Math.round(size * 0.42))}px">+{extra}</span>
+  {/if}
+</span>

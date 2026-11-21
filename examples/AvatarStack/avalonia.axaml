@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="32">
+    <pm:AvatarStack Names="Mona Lisa, Hubot, Ada Lovelace, Octo Cat, Grace Hopper, Linus Torvalds" />
+    <pm:AvatarStack Names="Mona Lisa, Hubot, Ada Lovelace" Size="32" />
+  </StackPanel>
+</UserControl>

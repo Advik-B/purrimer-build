@@ -1,0 +1,63 @@
+.pm-underline-nav {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  box-sizing: border-box;
+  height: {{ "control-xlarge-size" | tok }};
+  padding: 0 16px;
+  border-bottom: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.pm-underline-nav__item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.pm-underline-nav__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: {{ "borderRadius-medium" | tok }};
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-underline-nav__item:hover .pm-underline-nav__label { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+.pm-underline-nav__item svg { width: 16px; height: 16px; fill: {{ "fgColor-muted" | tok }}; flex: none; }
+.pm-underline-nav__item[aria-current="page"] { font-weight: 600; }
+.pm-underline-nav__item[aria-current="page"] svg { fill: {{ "fgColor-default" | tok }}; }
+.pm-underline-nav__item[aria-current="page"]::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: {{ "borderWidth-thick" | tok }};
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-accent-emphasis" | tok }};
+}
+.pm-underline-nav__item:focus-visible { outline: none; }
+.pm-underline-nav__item:focus-visible .pm-underline-nav__label { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; }
+.pm-underline-nav__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-neutral-muted" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 600 12px/18px var(--font-sans);
+}
+[data-density="touch"] .pm-underline-nav__label { height: 36px; }

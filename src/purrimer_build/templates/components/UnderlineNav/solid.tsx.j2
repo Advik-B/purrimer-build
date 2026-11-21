@@ -1,0 +1,37 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+type Item = { label: string; href?: string; icon?: string; count?: number | string };
+
+export type UnderlineNavProps = { items?: Item[]; current?: number; ariaLabel?: string; onSelect?: (index: number) => void };
+
+export function UnderlineNav(props: UnderlineNavProps): JSX.Element {
+  const [current, setCurrent] = createSignal(() => props.current ?? 0);
+  return (
+    <nav class="pm-underline-nav" aria-label={props.ariaLabel || undefined}>
+      <For each={props.items ?? []}>
+        {(item, i) => (
+          <a
+            class="pm-underline-nav__item"
+            href={item.href ?? "#"}
+            aria-current={i() === current() ? "page" : undefined}
+            onClick={(e) => {
+              if (!item.href) e.preventDefault();
+              setCurrent(i());
+              props.onSelect?.(i());
+            }}
+          >
+            <span class="pm-underline-nav__label">
+              <Show when={item.icon}>{(name) => <Icon name={name()} />}</Show>
+              {item.label}
+              <Show when={item.count != null}><span class="pm-underline-nav__count">{item.count}</span></Show>
+            </span>
+          </a>
+        )}
+      </For>
+    </nav>
+  );
+}

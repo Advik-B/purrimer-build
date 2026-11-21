@@ -1,0 +1,109 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Icon } from "icon.slint";
+
+// One page: a label, optional icon path commands (PurrimerIcons.code-16) and an optional count.
+export struct UnderlineNavItem {
+    label: string,
+    icon: string,
+    count: string,
+}
+
+export component UnderlineNav inherits Rectangle {
+    in property <[UnderlineNavItem]> items;
+    in-out property <int> current: 0;
+    callback selected(int);
+
+    height: {{ "control-xlarge-size" | tok }};
+    accessible-role: tab-list;
+
+    Rectangle {
+        y: parent.height - 1px;
+        height: {{ "borderWidth-thin" | tok }};
+        background: {{ "borderColor-default" | tok }};
+    }
+
+    HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        spacing: 8px;
+        alignment: start;
+        for item[i] in root.items: Rectangle {
+            property <bool> is-current: i == root.current;
+            min-width: label.min-width;
+            preferred-width: label.preferred-width;
+            horizontal-stretch: 0;
+            accessible-role: tab;
+            accessible-label: item.label;
+            accessible-item-selected: self.is-current;
+            accessible-action-default => { root.current = i; root.selected(i); }
+
+            label := Rectangle {
+                y: (parent.height - self.height) / 2;
+                width: parent.width;
+                height: 28px;
+                border-radius: {{ "borderRadius-medium" | tok }};
+                background: touch.has-hover ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+                border-width: focus.has-focus ? {{ "borderWidth-thick" | tok }} : 0px;
+                border-color: {{ "focus-outlineColor" | tok }};
+                animate background { duration: {{ "duration-fast" | tok }}; }
+                HorizontalLayout {
+                    padding-left: 8px;
+                    padding-right: 8px;
+                    spacing: 8px;
+                    if item.icon != "": Icon {
+                        path: item.icon;
+                        color: is-current ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }};
+                        y: (parent.height - self.height) / 2;
+                    }
+                    Text {
+                        text: item.label;
+                        color: {{ "fgColor-default" | tok }};
+                        font-family: {{ "text-body-medium" | tok }}.font-family;
+                        font-size: 14px;
+                        font-weight: is-current ? 600 : 400;
+                        vertical-alignment: center;
+                    }
+                    if item.count != "": Rectangle {
+                        y: (parent.height - self.height) / 2;
+                        height: 18px;
+                        min-width: 20px;
+                        preferred-width: count.preferred-width + 12px;
+                        border-radius: 9px;
+                        background: {{ "bgColor-neutral-muted" | tok }};
+                        count := Text {
+                            text: item.count;
+                            color: {{ "fgColor-default" | tok }};
+                            font-family: {{ "text-caption" | tok }}.font-family;
+                            font-size: 12px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+                }
+            }
+            if is-current: Rectangle {
+                y: parent.height - self.height;
+                height: {{ "borderWidth-thick" | tok }};
+                border-radius: 1px;
+                background: {{ "bgColor-accent-emphasis" | tok }};
+            }
+            touch := TouchArea {
+                mouse-cursor: pointer;
+                clicked => { root.current = i; root.selected(i); }
+            }
+            focus := FocusScope {
+                key-pressed(event) => {
+                    if (event.text == "\n" || event.text == " ") {
+                        root.current = i;
+                        root.selected(i);
+                        return accept;
+                    }
+                    reject
+                }
+            }
+        }
+    }
+}

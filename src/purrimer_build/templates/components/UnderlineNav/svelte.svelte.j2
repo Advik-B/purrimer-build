@@ -1,0 +1,30 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  type Item = { label: string; href?: string; icon?: string; count?: number | string };
+
+  let { items = [], current = $bindable(0), ariaLabel = "", onselect }: {
+    items?: Item[];
+    current?: number;
+    ariaLabel?: string;
+    onselect?: (index: number) => void;
+  } = $props();
+
+  function pick(e: MouseEvent, i: number, item: Item) {
+    if (!item.href) e.preventDefault();
+    current = i;
+    onselect?.(i);
+  }
+</script>
+
+<nav class="pm-underline-nav" aria-label={ariaLabel || undefined}>
+  {#each items as item, i}
+    <a class="pm-underline-nav__item" href={item.href ?? "#"} aria-current={i === current ? "page" : undefined} onclick={(e) => pick(e, i, item)}>
+      <span class="pm-underline-nav__label">
+        {#if item.icon}<Icon name={item.icon} />{/if}{item.label}{#if item.count != null}<span class="pm-underline-nav__count">{item.count}</span>{/if}
+      </span>
+    </a>
+  {/each}
+</nav>
