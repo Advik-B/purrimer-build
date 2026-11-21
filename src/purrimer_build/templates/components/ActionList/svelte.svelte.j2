@@ -1,0 +1,72 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type ActionListItem = {
+    label?: string;
+    description?: string;
+    leadingIcon?: string;
+    trailingIcon?: string;
+    trailingText?: string;
+    current?: boolean;
+    selected?: boolean;
+    variant?: "default" | "danger";
+    disabled?: boolean;
+    group?: string;
+    divider?: boolean;
+    role?: string;
+    onselect?: () => void;
+  };
+</script>
+
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  let { items = [], ariaLabel = "", role, onselect }: {
+    items?: ActionListItem[];
+    ariaLabel?: string;
+    role?: string;
+    onselect?: (item: ActionListItem, index: number) => void;
+  } = $props();
+
+  function pick(item: ActionListItem, i: number) {
+    if (item.disabled) return;
+    item.onselect?.();
+    onselect?.(item, i);
+  }
+</script>
+
+<ul class="pm-action-list" {role} aria-label={ariaLabel || undefined}>
+  {#each items as item, i}
+    {#if item.divider}
+      <li class="pm-action-list__divider" role="separator"></li>
+    {:else if item.group}
+      <li class="pm-action-list__group" role="presentation">{item.group}</li>
+    {:else}
+      <!-- svelte-ignore a11y_no_noninteractive_element_interactions, a11y_no_noninteractive_tabindex (rows are interactive; role comes from the list's use) -->
+      <li
+        class={["pm-action-list__item", item.variant === "danger" && "pm-action-list__item--danger"]}
+        role={item.role ?? (item.selected != null ? "menuitemcheckbox" : undefined)}
+        tabindex={item.disabled ? -1 : 0}
+        aria-current={item.current ? "page" : undefined}
+        aria-checked={item.selected != null ? (item.selected ? "true" : "false") : undefined}
+        aria-disabled={item.disabled ? "true" : undefined}
+        onclick={() => pick(item, i)}
+        onkeydown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            pick(item, i);
+          }
+        }}
+      >
+        {#if item.selected != null}<span class="pm-action-list__leading pm-action-list__check">{#if item.selected}<Icon name="check" />{/if}</span>{/if}
+        {#if item.leadingIcon}<span class="pm-action-list__leading"><Icon name={item.leadingIcon} /></span>{/if}
+        <span class="pm-action-list__content">
+          {item.label}
+          {#if item.description}<span class="pm-action-list__description">{item.description}</span>{/if}
+        </span>
+        {#if item.trailingIcon}<span class="pm-action-list__trailing"><Icon name={item.trailingIcon} /></span>
+        {:else if item.trailingText}<span class="pm-action-list__trailing">{item.trailingText}</span>{/if}
+      </li>
+    {/if}
+  {/each}
+</ul>

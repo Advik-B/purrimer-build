@@ -1,0 +1,46 @@
+.pm-action-list { display: flex; flex-direction: column; gap: 2px; margin: 0; padding: 8px; list-style: none; }
+.pm-action-list__group { padding: 6px 8px 4px; color: {{ "fgColor-muted" | tok }}; font: 600 12px/20px var(--font-sans); }
+.pm-action-list__divider { height: 1px; margin: 6px -8px; background: {{ "borderColor-muted" | tok }}; }
+.pm-action-list__item {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: {{ "control-medium-size" | tok }};
+  padding: 6px 8px;
+  border-radius: {{ "borderRadius-medium" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+  cursor: pointer;
+  user-select: none;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-action-list__item:hover { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+.pm-action-list__item:active { background: {{ "control-transparent-bgColor-selected" | tok }}; }
+.pm-action-list__item:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -2px; }
+.pm-action-list__item[aria-current] { background: {{ "control-transparent-bgColor-selected" | tok }}; font-weight: 600; }
+.pm-action-list__item[aria-current]::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: -8px;
+  width: 4px;
+  height: 24px;
+  margin-top: -12px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-accent-emphasis" | tok }};
+}
+.pm-action-list__leading,
+.pm-action-list__trailing { display: flex; align-items: center; flex: none; height: 20px; color: {{ "fgColor-muted" | tok }}; }
+.pm-action-list__leading svg,
+.pm-action-list__trailing svg { width: 16px; height: 16px; fill: currentColor; }
+.pm-action-list__check { width: 16px; color: {{ "fgColor-default" | tok }}; }
+.pm-action-list__content { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.pm-action-list__description { color: {{ "fgColor-muted" | tok }}; font: 400 12px/16px var(--font-sans); }
+.pm-action-list__trailing { font-size: 12px; }
+.pm-action-list__item--danger,
+.pm-action-list__item--danger .pm-action-list__leading { color: {{ "fgColor-danger" | tok }}; }
+.pm-action-list__item--danger:hover { background: {{ "bgColor-danger-muted" | tok }}; }
+.pm-action-list__item[aria-disabled="true"],
+.pm-action-list__item[aria-disabled="true"] .pm-action-list__leading { background: transparent; color: {{ "fgColor-disabled" | tok }}; cursor: not-allowed; }

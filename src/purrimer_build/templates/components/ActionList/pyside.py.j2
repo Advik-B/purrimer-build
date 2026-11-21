@@ -1,0 +1,231 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+PAD = 8
+GAP = 2
+RADIUS = {{ px("borderRadius-medium") | num }}
+
+
+@dataclass
+class ActionItem:
+    label: str
+    description: str = ""
+    leading_icon: str | None = None
+    trailing_icon: str | None = None
+    trailing_text: str = ""
+    current: bool = False
+    selected: bool | None = None
+    danger: bool = False
+    disabled: bool = False
+
+
+@dataclass
+class ActionGroup:
+    title: str
+
+
+class ActionDivider:
+    """A rule between groups of items."""
+
+
+Entry = ActionItem | ActionGroup | ActionDivider
+
+
+def entry_height(entry: Entry) -> int:
+    if isinstance(entry, ActionDivider):
+        return 13
+    if isinstance(entry, ActionGroup):
+        return 30
+    return 48 if entry.description else 32
+
+
+class ActionList(QWidget):
+    """Rows for navigation, selection and menus. Up and Down move, Enter or Space picks."""
+
+    triggered = Signal(int)
+
+    def __init__(self, items: list[Entry], parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._items = list(items)
+        self._hover = -1
+        self._pressed = -1
+        self._focus = next((i for i, e in enumerate(self._items) if self._pickable(i)), -1)
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        theme.changed.connect(self.update)
+
+    def items(self) -> list[Entry]:
+        return self._items
+
+    def set_items(self, items: list[Entry]) -> None:
+        self._items = list(items)
+        self.updateGeometry()
+        self.update()
+
+    def _pickable(self, i: int) -> bool:
+        entry = self._items[i]
+        return isinstance(entry, ActionItem) and not entry.disabled
+
+    def _rects(self) -> list[QRectF]:
+        rects, y = [], float(PAD)
+        for entry in self._items:
+            h = entry_height(entry)
+            rects.append(QRectF(PAD, y, self.width() - 2 * PAD, h))
+            y += h + GAP
+        return rects
+
+    def _font(self, size_style: str, weight: QFont.Weight) -> QFont:
+        font = theme.font(size_style)
+        font.setWeight(weight)
+        return font
+
+    def sizeHint(self) -> QSize:
+        height = PAD * 2 + sum(entry_height(e) for e in self._items) + GAP * max(0, len(self._items) - 1)
+        body = QFontMetrics(self._font({{ "text-body-medium" | tok }}, QFont.Weight.DemiBold))
+        width = 192
+        for entry in self._items:
+            if isinstance(entry, ActionItem):
+                text = max(body.horizontalAdvance(entry.label), body.horizontalAdvance(entry.description))
+                extra = (24 if entry.leading_icon else 0) + (24 if entry.selected is not None else 0)
+                extra += 24 if entry.trailing_icon else (body.horizontalAdvance(entry.trailing_text) + 8 if entry.trailing_text else 0)
+                width = max(width, text + extra + 2 * PAD + 16)
+        return QSize(min(width, 320), height)
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(160, self.sizeHint().height())
+
+    def _at(self, y: float) -> int:
+        for i, rect in enumerate(self._rects()):
+            if rect.top() <= y <= rect.bottom():
+                return i
+        return -1
+
+    def mouseMoveEvent(self, event) -> None:
+        index = self._at(event.position().y())
+        hover = index if index >= 0 and self._pickable(index) else -1
+        if hover != self._hover:
+            self._hover = hover
+            self.setCursor(Qt.CursorShape.PointingHandCursor if hover >= 0 else Qt.CursorShape.ArrowCursor)
+            self.update()
+
+    def leaveEvent(self, event: QEvent) -> None:
+        self._hover = -1
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        index = self._at(event.position().y())
+        if index >= 0 and self._pickable(index):
+            self._pressed = index
+            self._focus = index
+            self.update()
+
+    def mouseReleaseEvent(self, event) -> None:
+        index = self._at(event.position().y())
+        pressed, self._pressed = self._pressed, -1
+        self.update()
+        if index == pressed and index >= 0:
+            self.triggered.emit(index)
+
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Up, Qt.Key.Key_Down):
+            step = -1 if key == Qt.Key.Key_Up else 1
+            i = self._focus
+            for _ in range(len(self._items)):
+                i = (i + step) % len(self._items)
+                if self._pickable(i):
+                    self._focus = i
+                    break
+            self.update()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self._focus >= 0:
+            self.triggered.emit(self._focus)
+        else:
+            super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        for i, (entry, rect) in enumerate(zip(self._items, self._rects(), strict=True)):
+            if isinstance(entry, ActionDivider):
+                painter.fillRect(QRectF(0, rect.top() + 6, self.width(), 1), theme.color({{ "borderColor-muted" | tok }}))
+                continue
+            if isinstance(entry, ActionGroup):
+                painter.setFont(self._font({{ "text-caption" | tok }}, QFont.Weight.DemiBold))
+                painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+                painter.drawText(rect.adjusted(8, 6, -8, -4), Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                                 entry.title)
+                continue
+            self._paint_item(painter, i, entry, rect)
+
+    def _paint_item(self, painter: QPainter, i: int, item: ActionItem, rect: QRectF) -> None:
+        if item.disabled:
+            fill = None
+        elif i == self._pressed or item.current:
+            fill = {{ "control-transparent-bgColor-selected" | tok }}
+        elif i == self._hover:
+            fill = {{ "bgColor-danger-muted" | tok }} if item.danger else {{ "control-transparent-bgColor-hover" | tok }}
+        else:
+            fill = None
+        if fill:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color(fill))
+            painter.drawRoundedRect(rect, RADIUS, RADIUS)
+        if item.current:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }}))
+            painter.drawRoundedRect(QRectF(0, rect.center().y() - 12, 4, 24), 2, 2)
+        if self.hasFocus() and i == self._focus:
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), RADIUS - 1, RADIUS - 1)
+        if item.disabled:
+            ink, muted = {{ "fgColor-disabled" | tok }}, {{ "fgColor-disabled" | tok }}
+        elif item.danger:
+            ink, muted = {{ "fgColor-danger" | tok }}, {{ "fgColor-danger" | tok }}
+        else:
+            ink, muted = {{ "fgColor-default" | tok }}, {{ "fgColor-muted" | tok }}
+        x = rect.left() + 8
+        top = rect.top() + 6
+        if item.selected is not None:
+            if item.selected:
+                paint_icon(painter, QRectF(x, top + 2, 16, 16), "check", theme.color(ink))
+            x += 24
+        if item.leading_icon:
+            paint_icon(painter, QRectF(x, top + 2, 16, 16), item.leading_icon, theme.color(muted))
+            x += 24
+        right = rect.right() - 8
+        if item.trailing_icon:
+            paint_icon(painter, QRectF(right - 16, top + 2, 16, 16), item.trailing_icon,
+                       theme.color({{ "fgColor-disabled" | tok }} if item.disabled else {{ "fgColor-muted" | tok }}))
+            right -= 24
+        elif item.trailing_text:
+            font = self._font({{ "text-caption" | tok }}, QFont.Weight.Normal)
+            painter.setFont(font)
+            painter.setPen(theme.color({{ "fgColor-disabled" | tok }} if item.disabled else {{ "fgColor-muted" | tok }}))
+            width = QFontMetrics(font).horizontalAdvance(item.trailing_text)
+            painter.drawText(QRectF(right - width, top, width, 20), Qt.AlignmentFlag.AlignVCenter, item.trailing_text)
+            right -= width + 8
+        font = self._font({{ "text-body-medium" | tok }}, QFont.Weight.DemiBold if item.current else QFont.Weight.Normal)
+        painter.setFont(font)
+        painter.setPen(theme.color(ink))
+        painter.drawText(QRectF(x, top, right - x, 20), Qt.AlignmentFlag.AlignVCenter,
+                         QFontMetrics(font).elidedText(item.label, Qt.TextElideMode.ElideRight, int(right - x)))
+        if item.description:
+            font = self._font({{ "text-caption" | tok }}, QFont.Weight.Normal)
+            painter.setFont(font)
+            painter.setPen(QColor(theme.color({{ "fgColor-muted" | tok }} if not item.disabled else {{ "fgColor-disabled" | tok }})))
+            painter.drawText(QRectF(x, top + 20, right - x, 16), Qt.AlignmentFlag.AlignVCenter,
+                             QFontMetrics(font).elidedText(item.description, Qt.TextElideMode.ElideRight, int(right - x)))

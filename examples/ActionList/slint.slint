@@ -1,0 +1,17 @@
+import { ActionList, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    ActionList {
+        items: [
+            { group: "Repository" },
+            { label: "Code", leading-icon: PurrimerIcons.code-16, current: true },
+            { label: "Issues", leading-icon: PurrimerIcons.issue-opened-16, trailing-text: "12" },
+            { label: "Settings", leading-icon: PurrimerIcons.gear-16, description: "Branches, collaborators, webhooks" },
+            { divider: true },
+            { label: "Archive repository", leading-icon: PurrimerIcons.archive-16, disabled: true },
+            { label: "Delete repository", leading-icon: PurrimerIcons.trash-16, danger: true },
+        ];
+        triggered(index) => { debug("picked", index); }
+    }
+}

@@ -1,0 +1,15 @@
+name = "ActionList"
+group = "Actions"
+order = 12
+summary = "A vertical list of interactive rows for navigation, selection and menus."
+slint_exports = ["ActionList", "ActionListEntry"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Rows: { label, description?, leadingIcon?, trailingIcon?, trailingText?, current?, selected?, variant?, disabled? }, plus { group } headings and { divider: true } rules."
+
+[props.ariaLabel]
+type = "string"
+default = ""
+doc = "Accessible name of the list."
