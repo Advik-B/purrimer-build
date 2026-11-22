@@ -1311,3 +1311,82 @@ export function wireScrub(bar: HTMLElement, count: () => number, onScrub: (index
     bar.removeEventListener("click", click, true);
   };
 }
+
+export interface SwipeParts {
+  row: HTMLElement;
+  canStart: () => boolean;
+  canEnd: () => boolean;
+  onMove: (dx: number, armed: boolean, dragging: boolean) => void;
+  onCommit: (side: "start" | "end") => void;
+}
+
+// Drag a row sideways to reveal its swipe actions. Past `commit` of the row's width the row follows at a third of the
+// speed, the action arms with a tick, and a release commits it; an earlier release springs back. A vertical drag is
+// left to scrolling, and the click a swipe ends with is swallowed. Positive dx is toward the end of the line.
+export function wireSwipe(parts: SwipeParts, commit = 0.4): () => void {
+  const { row } = parts;
+  let d: { x: number; y: number; id: number; axis: "x" | "y" | null; w: number; armed: boolean; dx: number } | null = null;
+  let swallow = false;
+  const rtl = () => getComputedStyle(row).direction === "rtl";
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || (!parts.canStart() && !parts.canEnd())) return;
+    swallow = false;
+    d = { x: e.clientX, y: e.clientY, id: e.pointerId, axis: null, w: row.offsetWidth, armed: false, dx: 0 };
+  };
+  const move = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    const my = e.clientY - d.y;
+    if (!d.axis) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      d.axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (d.axis === "x") {
+        try {
+          row.setPointerCapture(e.pointerId);
+        } catch {
+          // Without capture the swipe still tracks while the finger stays on the row.
+        }
+      }
+    }
+    if (d.axis !== "x") return;
+    const toEnd = rtl() ? mx < 0 : mx > 0;
+    let v = (toEnd && !parts.canStart()) || (!toEnd && !parts.canEnd()) ? 0 : mx;
+    const limit = d.w * commit;
+    if (Math.abs(v) > limit) v = Math.sign(v) * (limit + (Math.abs(v) - limit) * 0.35);
+    const armed = Math.abs(v) >= limit;
+    if (armed !== d.armed) {
+      d.armed = armed;
+      if (armed) buzz();
+    }
+    d.dx = v;
+    parts.onMove(v, armed, true);
+  };
+  const up = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const done = d;
+    d = null;
+    if (done.axis !== "x") return;
+    swallow = true;
+    parts.onMove(0, false, false);
+    const toEnd = rtl() ? done.dx < 0 : done.dx > 0;
+    if (done.armed && done.dx !== 0) parts.onCommit(toEnd ? "start" : "end");
+  };
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  row.addEventListener("pointerdown", down);
+  row.addEventListener("pointermove", move);
+  row.addEventListener("pointerup", up);
+  row.addEventListener("pointercancel", up);
+  row.addEventListener("click", click, true);
+  return () => {
+    row.removeEventListener("pointerdown", down);
+    row.removeEventListener("pointermove", move);
+    row.removeEventListener("pointerup", up);
+    row.removeEventListener("pointercancel", up);
+    row.removeEventListener("click", click, true);
+  };
+}

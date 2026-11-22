@@ -1,24 +1,89 @@
 <!-- {{ note }} -->
 <!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type SwipeAction = {
+    label: string;
+    icon: string;
+    tone?: "neutral" | "accent" | "success" | "attention" | "danger" | "done" | "info";
+    onswipe: () => void;
+  };
+</script>
+
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { wireSwipe } from "../motion";
 
-  let { headline, supporting = "", icon = "", trailing = "", chevron = false, onclick }: {
+  let {
+    headline,
+    supporting = "",
+    icon = "",
+    trailing = "",
+    chevron = false,
+    swipeStart,
+    swipeEnd,
+    onclick,
+  }: {
     headline: string;
     supporting?: string;
     icon?: string;
     trailing?: string;
     chevron?: boolean;
+    // Revealed by dragging toward the end of the line.
+    swipeStart?: SwipeAction;
+    // Revealed by dragging toward the start of the line.
+    swipeEnd?: SwipeAction;
     onclick?: () => void;
   } = $props();
+
+  let slide: HTMLElement | undefined = $state();
+  let dx = $state(0);
+  let armed = $state(false);
+  let dragging = $state(false);
+  const swipeable = $derived(!!(swipeStart || swipeEnd));
+  const shown = $derived(dx > 0 ? swipeStart : dx < 0 ? swipeEnd : undefined);
+
+  $effect(() => {
+    if (!slide) return;
+    return wireSwipe({
+      row: slide,
+      canStart: () => !!swipeStart,
+      canEnd: () => !!swipeEnd,
+      onMove: (v, a, d) => {
+        dx = v;
+        armed = a;
+        dragging = d;
+      },
+      onCommit: (side) => (side === "start" ? swipeStart : swipeEnd)?.onswipe(),
+    });
+  });
 </script>
 
-<svelte:element this={onclick ? "button" : "div"} type={onclick ? "button" : undefined} class={["pm-list-item", supporting && "pm-list-item--two-line"]} {onclick} role={onclick ? undefined : "listitem"}>
-  {#if icon}<span class="pm-list-item__tile"><Icon name={icon} /></span>{/if}
-  <span class="pm-list-item__text">
-    <span class="pm-list-item__headline">{headline}</span>
-    {#if supporting}<span class="pm-list-item__supporting">{supporting}</span>{/if}
-  </span>
-  {#if trailing}<span class="pm-list-item__trailing">{trailing}</span>{/if}
-  {#if chevron}<Icon name="chevron-right" class="pm-list-item__chevron" />{/if}
-</svelte:element>
+{#snippet row(role: string | undefined)}
+  <svelte:element this={onclick ? "button" : "div"} type={onclick ? "button" : undefined} class={["pm-list-item", supporting && "pm-list-item--two-line"]} {onclick} {role}>
+    {#if icon}<span class="pm-list-item__tile"><Icon name={icon} /></span>{/if}
+    <span class="pm-list-item__text">
+      <span class="pm-list-item__headline">{headline}</span>
+      {#if supporting}<span class="pm-list-item__supporting">{supporting}</span>{/if}
+    </span>
+    {#if trailing}<span class="pm-list-item__trailing">{trailing}</span>{/if}
+    {#if chevron}<Icon name="chevron-right" class="pm-list-item__chevron" />{/if}
+  </svelte:element>
+{/snippet}
+
+{#if swipeable}
+  <div class="pm-list-item-swipe" role="listitem">
+    {#if shown}
+      <div class={["pm-list-item__swipe-bg", dx < 0 && "pm-list-item__swipe-bg--end", `pm-list-item__swipe-bg--${shown.tone ?? "neutral"}`, armed && "pm-list-item__swipe-bg--armed"]} aria-hidden="true">
+        <span class="pm-list-item__swipe-mark"><Icon name={shown.icon} size={24} /><span>{shown.label}</span></span>
+      </div>
+    {/if}
+    <div bind:this={slide} class={["pm-list-item__slide", dragging && "pm-list-item__slide--dragging"]} style={dx ? `transform: translateX(${dx}px)` : undefined}>
+      {@render row(undefined)}
+    </div>
+    {#each [swipeStart, swipeEnd] as action, i (i)}
+      {#if action}<button type="button" class="pm-list-item__swipe-alt" onclick={() => action.onswipe()}>{action.label}</button>{/if}
+    {/each}
+  </div>
+{:else}
+  {@render row(onclick ? undefined : "listitem")}
+{/if}

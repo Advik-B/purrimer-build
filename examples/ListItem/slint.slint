@@ -12,4 +12,12 @@ export component Example inherits VerticalLayout {
         clicked => { debug("open notifications"); }
     }
     ListItem { icon: PurrimerIcons.globe-16; headline: "Language"; trailing: "English"; }
+    ListItem {
+        icon: PurrimerIcons.mail-16;
+        headline: "Weekly digest";
+        trailing: "Mon";
+        swipe-start: { label: "Mark as read", icon: PurrimerIcons.check-24, tone: "accent" };
+        swipe-end: { label: "Archive", icon: PurrimerIcons.archive-24, tone: "success" };
+        swiped(side) => { debug(side == "start" ? "read" : "archive"); }
+    }
 }

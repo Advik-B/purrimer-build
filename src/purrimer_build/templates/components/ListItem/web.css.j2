@@ -23,3 +23,80 @@ button.pm-list-item:focus-visible { outline: {{ "borderWidth-thick" | tok }} sol
 .pm-list-item__supporting { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; line-height: 20px; color: {{ "fgColor-muted" | tok }}; }
 .pm-list-item__trailing { flex: none; font-size: 14px; line-height: 20px; color: {{ "fgColor-muted" | tok }}; }
 .pm-list-item__chevron { width: 16px; height: 16px; flex: none; fill: {{ "fgColor-muted" | tok }}; }
+
+/* Swipe actions: the row slides over a panel naming the action, which fills once a release would commit it. */
+.pm-list-item-swipe { position: relative; overflow: hidden; }
+.pm-list-item__slide {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  background: {{ "bgColor-default" | tok }};
+  touch-action: pan-y;
+  transition: transform var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease);
+}
+.pm-list-item__slide > .pm-list-item { flex: 1; min-width: 0; }
+.pm-list-item__slide--dragging { transition: none; }
+.pm-list-item__swipe-bg {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 {{ "base-size-20" | tok }};
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-list-item__swipe-bg--end { justify-content: flex-end; }
+.pm-list-item__swipe-mark { display: flex; align-items: center; gap: {{ "base-size-8" | tok }}; transition: scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease); }
+.pm-list-item__swipe-mark .pm-icon { fill: currentColor; }
+.pm-list-item__swipe-bg--armed .pm-list-item__swipe-mark { scale: 1.1; }
+.pm-list-item__swipe-bg--neutral { color: {{ "fgColor-default" | tok }}; background: {{ "bgColor-neutral-muted" | tok }}; }
+.pm-list-item__swipe-bg--accent { color: {{ "fgColor-accent" | tok }}; background: {{ "bgColor-accent-muted" | tok }}; }
+.pm-list-item__swipe-bg--success { color: {{ "fgColor-success" | tok }}; background: {{ "bgColor-success-muted" | tok }}; }
+.pm-list-item__swipe-bg--attention { color: {{ "fgColor-attention" | tok }}; background: {{ "bgColor-attention-muted" | tok }}; }
+.pm-list-item__swipe-bg--danger { color: {{ "fgColor-danger" | tok }}; background: {{ "bgColor-danger-muted" | tok }}; }
+.pm-list-item__swipe-bg--done { color: {{ "fgColor-done" | tok }}; background: {{ "bgColor-done-muted" | tok }}; }
+.pm-list-item__swipe-bg--info { color: {{ "fgColor-info" | tok }}; background: {{ "bgColor-info-muted" | tok }}; }
+.pm-list-item__swipe-bg--neutral.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-neutral-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--accent.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-accent-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--success.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-success-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--attention.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-attention-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--danger.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-danger-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--done.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-done-emphasis" | tok }}; }
+.pm-list-item__swipe-bg--info.pm-list-item__swipe-bg--armed { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-info-emphasis" | tok }}; }
+/* The keyboard and screen-reader twin of a swipe action, shown only while focused. */
+.pm-list-item__swipe-alt {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+.pm-list-item__swipe-alt:focus-visible {
+  z-index: 2;
+  top: 50%;
+  right: {{ "mobile-gutter" | tok }};
+  width: auto;
+  height: 32px;
+  margin-top: -16px;
+  padding: 0 {{ "base-size-12" | tok }};
+  clip-path: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  color: {{ "fgColor-accent" | tok }};
+  background: {{ "bgColor-accent-muted" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }};
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-list-item__swipe-bg--armed .pm-list-item__swipe-mark { scale: none; }
+  .pm-list-item__slide { transition-duration: {{ "duration-reduced" | tok }}; transition-timing-function: {{ "easing-standard" | tok }}; }
+}

@@ -4,22 +4,73 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QPainter
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QAction, QFont, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..icons import paint_icon
+from ..motion import Spring
 from ..theme import theme
+
+COMMIT = 0.4
+TONES = {
+    "neutral": ({{ "fgColor-default" | tok }}, {{ "bgColor-neutral-muted" | tok }}, {{ "bgColor-neutral-emphasis" | tok }}),
+    "accent": ({{ "fgColor-accent" | tok }}, {{ "bgColor-accent-muted" | tok }}, {{ "bgColor-accent-emphasis" | tok }}),
+    "success": ({{ "fgColor-success" | tok }}, {{ "bgColor-success-muted" | tok }}, {{ "bgColor-success-emphasis" | tok }}),
+    "attention": ({{ "fgColor-attention" | tok }}, {{ "bgColor-attention-muted" | tok }}, {{ "bgColor-attention-emphasis" | tok }}),
+    "danger": ({{ "fgColor-danger" | tok }}, {{ "bgColor-danger-muted" | tok }}, {{ "bgColor-danger-emphasis" | tok }}),
+    "done": ({{ "fgColor-done" | tok }}, {{ "bgColor-done-muted" | tok }}, {{ "bgColor-done-emphasis" | tok }}),
+    "info": ({{ "fgColor-info" | tok }}, {{ "bgColor-info-muted" | tok }}, {{ "bgColor-info-emphasis" | tok }}),
+}
+
+
+@dataclass
+class SwipeAction:
+    label: str
+    icon: str
+    tone: str = "neutral"
+    on_swipe: Callable[[], None] | None = None
 
 
 class ListItem(QWidget):
-    """A row in a ListSection: headline, optional supporting line, leading icon and trailing text or chevron."""
+    """A row in a ListSection: headline, optional supporting line, leading icon and trailing text or chevron.
+
+    swipe_start (revealed by dragging toward the end of the line) and swipe_end (toward the start) each take a
+    SwipeAction. The row follows the pointer over a panel naming the action; past 40% of the row the panel fills and a
+    release commits it, calling on_swipe and emitting `swiped("start" | "end")`. An earlier release springs back. A
+    swipe never also counts as a click. The actions are also on the row's context menu, for keyboards and screen
+    readers.
+    """
 
     clicked = Signal()
+    swiped = Signal(str)
 
     def __init__(self, headline: str, supporting: str = "", icon: str | None = None, trailing: str = "",
-                 chevron: bool = False, clickable: bool = False, parent: QWidget | None = None) -> None:
+                 chevron: bool = False, clickable: bool = False, swipe_start: SwipeAction | None = None,
+                 swipe_end: SwipeAction | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._swipe_start = swipe_start
+        self._swipe_end = swipe_end
+        self._dx = Spring(0.0, precision=0.5, parent=self)
+        self._dx.changed.connect(lambda _v: self.update())
+        self._mark = Spring(1.0, precision=0.001, parent=self)
+        self._mark.changed.connect(lambda _v: self.update())
+        self._origin: QPointF | None = None
+        self._axis: str | None = None
+        self._armed = False
+        self._mark_font = QFont(theme.font({{ "text-body-medium" | tok }}))
+        self._mark_font.setPixelSize(14)
+        self._mark_font.setWeight(QFont.Weight.DemiBold)
+        for side, action in (("start", swipe_start), ("end", swipe_end)):
+            if action is not None:
+                twin = QAction(action.label, self)
+                twin.triggered.connect(lambda _checked=False, side=side: self._commit(side))
+                self.addAction(twin)
+        if swipe_start or swipe_end:
+            self.setContextMenuPolicy(Qt.ContextMenuPolicy.ActionsContextMenu)
         self._headline = headline
         self._supporting = supporting
         self._icon = icon
@@ -38,21 +89,98 @@ class ListItem(QWidget):
     def sizeHint(self) -> QSize:
         return QSize(320, self.height())
 
+    def _commit(self, side: str) -> None:
+        action = self._swipe_start if side == "start" else self._swipe_end
+        if action is None:
+            return
+        if action.on_swipe is not None:
+            action.on_swipe()
+        self.swiped.emit(side)
+
     def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._origin = event.position()
+        self._axis = None
+        self._armed = False
         if self._clickable:
             self._pressed = True
             self.update()
 
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None or not (self._swipe_start or self._swipe_end):
+            return
+        delta = event.position() - self._origin
+        if self._axis is None:
+            if abs(delta.x()) < 10 and abs(delta.y()) < 10:
+                return
+            self._axis = "x" if abs(delta.x()) > abs(delta.y()) else "y"
+            if self._axis == "x":
+                self._pressed = False
+        if self._axis != "x":
+            return
+        to_end = delta.x() > 0 if self.layoutDirection() == Qt.LayoutDirection.LeftToRight else delta.x() < 0
+        v = 0.0 if (to_end and not self._swipe_start) or (not to_end and not self._swipe_end) else delta.x()
+        limit = self.width() * COMMIT
+        if abs(v) > limit:
+            v = (1 if v > 0 else -1) * (limit + (abs(v) - limit) * 0.35)
+        armed = abs(v) >= limit
+        if armed != self._armed:
+            self._armed = armed
+            self._mark.to(1.1 if armed and not theme.pause_loops else 1.0)
+        self._dx.set(v)
+
     def mouseReleaseEvent(self, event) -> None:
+        if self._axis == "x":
+            dx, armed = self._dx.value, self._armed
+            self._origin = None
+            self._axis = None
+            self._armed = False
+            self._mark.set(1.0)
+            self._dx.to(0.0)
+            if armed and dx:
+                to_end = dx > 0 if self.layoutDirection() == Qt.LayoutDirection.LeftToRight else dx < 0
+                self._commit("start" if to_end else "end")
+            return
+        self._origin = None
         if self._pressed:
             self._pressed = False
             self.update()
             if self.rect().contains(event.position().toPoint()):
                 self.clicked.emit()
 
+    def _paint_swipe(self, painter: QPainter, dx: float) -> None:
+        start = dx > 0 if self.layoutDirection() == Qt.LayoutDirection.LeftToRight else dx < 0
+        action = self._swipe_start if start else self._swipe_end
+        if action is None:
+            return
+        fg, muted, emphasis = TONES.get(action.tone, TONES["neutral"])
+        painter.fillRect(self.rect(), theme.color(emphasis if self._armed else muted))
+        ink = theme.color({{ "fgColor-onEmphasis" | tok }} if self._armed else fg)
+        painter.setFont(self._mark_font)
+        text_w = painter.fontMetrics().horizontalAdvance(action.label)
+        width = 24 + 8 + text_w
+        pad = {{ px("base-size-20") | num }}
+        x = pad if dx > 0 else self.width() - pad - width
+        cy = self.height() / 2
+        painter.save()
+        scale = self._mark.value
+        painter.translate(x + width / 2, cy)
+        painter.scale(scale, scale)
+        painter.translate(-(x + width / 2), -cy)
+        paint_icon(painter, QRectF(x, cy - 12, 24, 24), action.icon, ink)
+        painter.setPen(ink)
+        painter.drawText(QRectF(x + 32, cy - 10, text_w + 2, 20), Qt.AlignmentFlag.AlignVCenter, action.label)
+        painter.restore()
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        dx = self._dx.value
+        if abs(dx) >= 0.5:
+            self._paint_swipe(painter, dx)
+            painter.translate(dx, 0)
+            painter.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
         if self._pressed:
             painter.fillRect(self.rect(), theme.color({{ "control-transparent-bgColor-hover" | tok }}))
         gutter = {{ px("mobile-gutter") | int }}

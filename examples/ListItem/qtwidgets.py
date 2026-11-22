@@ -1,4 +1,5 @@
 from purrimer_qt.components import ListItem
+from purrimer_qt.components.list_item import SwipeAction
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
@@ -13,4 +14,13 @@ def example() -> QWidget:
     notifications.clicked.connect(lambda: print("open notifications"))
     layout.addWidget(notifications)
     layout.addWidget(ListItem("Language", icon="globe", trailing="English"))
+    layout.addWidget(
+        ListItem(
+            "Weekly digest",
+            icon="mail",
+            trailing="Mon",
+            swipe_start=SwipeAction("Mark as read", "check", "accent", lambda: print("read")),
+            swipe_end=SwipeAction("Archive", "archive", "success", lambda: print("archive")),
+        )
+    )
     return rows

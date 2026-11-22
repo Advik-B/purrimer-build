@@ -1,6 +1,8 @@
 // {{ note }}
 // {{ c.summary }}
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
@@ -8,11 +10,96 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 
 namespace {{ ns }};
 
+// One swipe action of a ListItem. Tone is neutral, accent, success, attention, danger, done or info.
+public class ListItemSwipeAction
+{
+    public string Label { get; set; } = "";
+    public string IconName { get; set; } = "";
+    public string Tone { get; set; } = "neutral";
+}
+
+public class ListItemSwipedEventArgs : RoutedEventArgs
+{
+    public ListItemSwipedEventArgs(RoutedEvent routedEvent, string side) : base(routedEvent) => Side = side;
+
+    // start or end.
+    public string Side { get; }
+}
+
+// The panel under a swiping ListItem: the action's tone, its icon and label, filled once a release would commit it.
+public class ListItemSwipePanel : Control
+{
+    private static readonly Dictionary<string, (string Fg, string Muted, string Emphasis)> Tones = new()
+    {
+        ["neutral"] = ("PmFgColorDefault", "PmBgColorNeutralMuted", "PmBgColorNeutralEmphasis"),
+        ["accent"] = ("PmFgColorAccent", "PmBgColorAccentMuted", "PmBgColorAccentEmphasis"),
+        ["success"] = ("PmFgColorSuccess", "PmBgColorSuccessMuted", "PmBgColorSuccessEmphasis"),
+        ["attention"] = ("PmFgColorAttention", "PmBgColorAttentionMuted", "PmBgColorAttentionEmphasis"),
+        ["danger"] = ("PmFgColorDanger", "PmBgColorDangerMuted", "PmBgColorDangerEmphasis"),
+        ["done"] = ("PmFgColorDone", "PmBgColorDoneMuted", "PmBgColorDoneEmphasis"),
+        ["info"] = ("PmFgColorInfo", "PmBgColorInfoMuted", "PmBgColorInfoEmphasis"),
+    };
+
+    private readonly PurrimerSpring _mark = new(1, 0.001);
+
+    public ListItemSwipePanel()
+    {
+        _mark.Changed += _ => InvalidateVisual();
+        IsHitTestVisible = false;
+    }
+
+    internal ListItemSwipeAction? Action { get; private set; }
+    internal bool FromStart { get; private set; }
+    internal bool Armed { get; private set; }
+
+    internal void Show(ListItemSwipeAction? action, bool fromStart, bool armed)
+    {
+        if (armed != Armed)
+            _mark.To(armed && !PurrimerMotion.PauseLoops ? 1.1 : 1);
+        Action = action;
+        FromStart = fromStart;
+        Armed = armed;
+        InvalidateVisual();
+    }
+
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    public override void Render(DrawingContext context)
+    {
+        if (Action is not { } action)
+            return;
+        var tone = Tones.TryGetValue(action.Tone, out var t) ? t : Tones["neutral"];
+        context.FillRectangle(Brush(Armed ? tone.Emphasis : tone.Muted)!, new Rect(Bounds.Size));
+        var ink = Brush(Armed ? "PmFgColorOnEmphasis" : tone.Fg);
+        var family = this.FindAncestorOfType<ListItem>()?.FontFamily ?? FontFamily.Default;
+        var text = new FormattedText(action.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(family, FontStyle.Normal, FontWeight.SemiBold), 14, ink);
+        var width = 24 + 8 + text.Width;
+        var pad = {{ px("base-size-20") | num }};
+        var x = FromStart ? pad : Bounds.Width - pad - width;
+        var cy = Bounds.Height / 2;
+        var c = new Point(x + width / 2, cy);
+        var scale = _mark.Value;
+        using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
+        {
+            if (this.TryFindResource(global::{{ ns }}.Icon.ResourceKey(action.IconName, 24), out var found) && found is Geometry geometry)
+                using (context.PushTransform(Matrix.CreateTranslation(x, cy - 12)))
+                    context.DrawGeometry(ink, null, geometry);
+            context.DrawText(text, new Point(x + 32, cy - text.Height / 2));
+        }
+    }
+}
+
 // A row in a ListSection: headline, optional supporting line, leading icon and trailing text or chevron.
-[PseudoClasses(":two-line")]
+// SwipeStart (revealed by dragging toward the end of the line) and SwipeEnd (toward the start) each take a
+// ListItemSwipeAction: the row follows the pointer over a panel naming the action, and past 40% of the row the panel
+// fills and a release raises Swiped. An earlier release springs back, and a swipe never also counts as a click. The
+// actions are also on the row's context menu, for keyboards and screen readers.
+[PseudoClasses(":two-line", ":sliding")]
 public class ListItem : Button
 {
     public static readonly StyledProperty<string?> HeadlineProperty =
@@ -29,6 +116,43 @@ public class ListItem : Button
 
     public static readonly StyledProperty<bool> ShowChevronProperty =
         AvaloniaProperty.Register<ListItem, bool>(nameof(ShowChevron));
+
+    public static readonly StyledProperty<ListItemSwipeAction?> SwipeStartProperty =
+        AvaloniaProperty.Register<ListItem, ListItemSwipeAction?>(nameof(SwipeStart));
+
+    public static readonly StyledProperty<ListItemSwipeAction?> SwipeEndProperty =
+        AvaloniaProperty.Register<ListItem, ListItemSwipeAction?>(nameof(SwipeEnd));
+
+    public static readonly RoutedEvent<ListItemSwipedEventArgs> SwipedEvent =
+        RoutedEvent.Register<ListItem, ListItemSwipedEventArgs>(nameof(Swiped), RoutingStrategies.Bubble);
+
+    private readonly PurrimerSpring _dx = new(0, 0.5);
+    private ListItemSwipePanel? _panel;
+    private Border? _slide;
+    private readonly TranslateTransform _shift = new();
+    private Point? _origin;
+    private char _axis;
+    private bool _armed;
+    private bool _swiped;
+
+    public ListItem()
+    {
+        _dx.Changed += v =>
+        {
+            _shift.X = v;
+            PseudoClasses.Set(":sliding", Math.Abs(v) >= 0.5);
+            ShowPanel();
+        };
+    }
+
+    public ListItemSwipeAction? SwipeStart { get => GetValue(SwipeStartProperty); set => SetValue(SwipeStartProperty, value); }
+    public ListItemSwipeAction? SwipeEnd { get => GetValue(SwipeEndProperty); set => SetValue(SwipeEndProperty, value); }
+
+    public event EventHandler<ListItemSwipedEventArgs>? Swiped
+    {
+        add => AddHandler(SwipedEvent, value);
+        remove => RemoveHandler(SwipedEvent, value);
+    }
 
     public string? Headline
     {
@@ -67,5 +191,107 @@ public class ListItem : Button
         base.OnPropertyChanged(change);
         if (change.Property == SupportingProperty)
             PseudoClasses.Set(":two-line", !string.IsNullOrEmpty(Supporting));
+        if (change.Property == SwipeStartProperty || change.Property == SwipeEndProperty)
+            BuildMenu();
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        _panel = e.NameScope.Find<ListItemSwipePanel>("PART_Swipe");
+        _slide = e.NameScope.Find<Border>("PART_Slide");
+        if (_slide != null)
+            _slide.RenderTransform = _shift;
+    }
+
+    private bool FromStart(double dx) => FlowDirection == FlowDirection.LeftToRight ? dx > 0 : dx < 0;
+
+    private void ShowPanel()
+    {
+        var dx = _dx.Value;
+        if (Math.Abs(dx) < 0.5)
+            _panel?.Show(null, true, false);
+        else
+            _panel?.Show(FromStart(dx) ? SwipeStart : SwipeEnd, dx > 0, _armed);
+    }
+
+    private void BuildMenu()
+    {
+        var items = new List<MenuItem>();
+        foreach (var (side, action) in new[] { ("start", SwipeStart), ("end", SwipeEnd) })
+        {
+            if (action is null)
+                continue;
+            var item = new MenuItem { Header = action.Label };
+            item.Click += (_, _) => Commit(side);
+            items.Add(item);
+        }
+        ContextMenu = items.Count > 0 ? new ContextMenu { ItemsSource = items } : null;
+    }
+
+    // A swipe never also counts as a click.
+    protected override void OnClick()
+    {
+        if (_swiped)
+        {
+            _swiped = false;
+            return;
+        }
+        base.OnClick();
+    }
+
+    private void Commit(string side) => RaiseEvent(new ListItemSwipedEventArgs(SwipedEvent, side));
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            _origin = e.GetPosition(this);
+            _axis = '\0';
+            _armed = false;
+            _swiped = false;
+        }
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin || (SwipeStart is null && SwipeEnd is null))
+            return;
+        var p = e.GetPosition(this);
+        var mx = p.X - origin.X;
+        var my = p.Y - origin.Y;
+        if (_axis == '\0')
+        {
+            if (Math.Abs(mx) < 10 && Math.Abs(my) < 10)
+                return;
+            _axis = Math.Abs(mx) > Math.Abs(my) ? 'x' : 'y';
+            _swiped = _axis == 'x';
+        }
+        if (_axis != 'x')
+            return;
+        var toEnd = FromStart(mx);
+        var v = (toEnd && SwipeStart is null) || (!toEnd && SwipeEnd is null) ? 0 : mx;
+        var limit = Bounds.Width * 0.4;
+        if (Math.Abs(v) > limit)
+            v = Math.Sign(v) * (limit + (Math.Abs(v) - limit) * 0.35);
+        _armed = Math.Abs(v) >= limit;
+        _dx.Set(v);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        _origin = null;
+        if (_axis != 'x')
+            return;
+        _axis = '\0';
+        var dx = _dx.Value;
+        var armed = _armed;
+        _armed = false;
+        _dx.To(0);
+        if (armed && dx != 0)
+            Commit(FromStart(dx) ? "start" : "end");
     }
 }
