@@ -1,0 +1,482 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// One option of a HoldMenu.
+public class HoldMenuItem
+{
+    public string Label { get; set; } = "";
+    public string IconName { get; set; } = "";
+    // default or danger.
+    public string Variant { get; set; } = "default";
+    public bool IsDisabled { get; set; }
+}
+
+public class HoldMenuSelectedEventArgs : RoutedEventArgs
+{
+    public HoldMenuSelectedEventArgs(RoutedEvent routedEvent, int index, HoldMenuItem item) : base(routedEvent)
+    {
+        Index = index;
+        Item = item;
+    }
+
+    public int Index { get; }
+    public HoldMenuItem Item { get; }
+}
+
+// Press and hold the button inside to open more options around it, slide onto one and release to choose it; a plain
+// tap still does the button's own job, or opens the menu with TapOpens. Moving 10px before the hold completes gives
+// the press back. Releasing on the button keeps the menu open for tapping. Right-click, the Menu key, Shift+F10 and the
+// arrow towards the menu open it for the keyboard; arrows move between options, Enter chooses and Escape closes.
+public class HoldMenu : ContentControl
+{
+    public static readonly StyledProperty<string> LayoutProperty =
+        AvaloniaProperty.Register<HoldMenu, string>(nameof(Layout), "stack");
+
+    public static readonly StyledProperty<string> DirectionProperty =
+        AvaloniaProperty.Register<HoldMenu, string>(nameof(Direction), "up");
+
+    public static readonly StyledProperty<string> AlignProperty =
+        AvaloniaProperty.Register<HoldMenu, string>(nameof(Align), "end");
+
+    public static readonly StyledProperty<bool> TapOpensProperty =
+        AvaloniaProperty.Register<HoldMenu, bool>(nameof(TapOpens));
+
+    public static readonly StyledProperty<int> HoldDelayProperty =
+        AvaloniaProperty.Register<HoldMenu, int>(nameof(HoldDelay), {{ ms("duration-hold") }});
+
+    public static readonly StyledProperty<double> RadiusProperty =
+        AvaloniaProperty.Register<HoldMenu, double>(nameof(Radius));
+
+    public static readonly StyledProperty<string> HintProperty =
+        AvaloniaProperty.Register<HoldMenu, string>(nameof(Hint), "Slide to choose");
+
+    public static readonly StyledProperty<bool> IsDefaultOpenProperty =
+        AvaloniaProperty.Register<HoldMenu, bool>(nameof(IsDefaultOpen));
+
+    public static readonly StyledProperty<BoxShadows> OptionShadowProperty =
+        AvaloniaProperty.Register<HoldMenu, BoxShadows>(nameof(OptionShadow));
+
+    public static readonly RoutedEvent<HoldMenuSelectedEventArgs> SelectedEvent =
+        RoutedEvent.Register<HoldMenu, HoldMenuSelectedEventArgs>(nameof(Selected), RoutingStrategies.Bubble);
+
+    private readonly DispatcherTimer _hold;
+    private HoldMenuLayer? _layer;
+    private IPointer? _pointer;
+    private Point _origin;
+    private bool _pressing;
+
+    public HoldMenu()
+    {
+        _hold = new DispatcherTimer(DispatcherPriority.Input);
+        _hold.Tick += (_, _) => Held();
+        AddHandler(PointerPressedEvent, OnPressed, RoutingStrategies.Tunnel, true);
+        AddHandler(PointerMovedEvent, OnMoved, RoutingStrategies.Tunnel, true);
+        AddHandler(PointerReleasedEvent, OnReleased, RoutingStrategies.Tunnel, true);
+        AddHandler(PointerCaptureLostEvent, (_, _) => { _hold.Stop(); _pressing = false; }, RoutingStrategies.Bubble, true);
+        AddHandler(KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
+        AddHandler(ContextRequestedEvent, (_, e) =>
+        {
+            Open(false);
+            e.Handled = true;
+        });
+        Loaded += (_, _) =>
+        {
+            if (IsDefaultOpen)
+                Dispatcher.UIThread.Post(() => Open(false), DispatcherPriority.Background);
+        };
+    }
+
+    // Two to six options; item 0 sits nearest the button.
+    public AvaloniaList<HoldMenuItem> Items { get; } = new();
+
+    // stack: labelled options in a column. arc: two to four icon-only options fanned around a corner button.
+    public string Layout { get => GetValue(LayoutProperty); set => SetValue(LayoutProperty, value); }
+    // up or down: which side of the button the options open on.
+    public string Direction { get => GetValue(DirectionProperty); set => SetValue(DirectionProperty, value); }
+    // end or start: the button edge the options line up with.
+    public string Align { get => GetValue(AlignProperty); set => SetValue(AlignProperty, value); }
+    public bool TapOpens { get => GetValue(TapOpensProperty); set => SetValue(TapOpensProperty, value); }
+    public int HoldDelay { get => GetValue(HoldDelayProperty); set => SetValue(HoldDelayProperty, value); }
+    public double Radius { get => GetValue(RadiusProperty); set => SetValue(RadiusProperty, value); }
+    public string Hint { get => GetValue(HintProperty); set => SetValue(HintProperty, value); }
+    public bool IsDefaultOpen { get => GetValue(IsDefaultOpenProperty); set => SetValue(IsDefaultOpenProperty, value); }
+    public BoxShadows OptionShadow { get => GetValue(OptionShadowProperty); set => SetValue(OptionShadowProperty, value); }
+    public bool IsOpen => _layer != null;
+
+    public event EventHandler<HoldMenuSelectedEventArgs>? Selected
+    {
+        add => AddHandler(SelectedEvent, value);
+        remove => RemoveHandler(SelectedEvent, value);
+    }
+
+    internal Control? Trigger => Content as Control;
+
+    public void Open(bool held)
+    {
+        if (_layer != null || Items.Count == 0 || !IsEffectivelyEnabled || OverlayLayer.GetOverlayLayer(this) is not { } overlay)
+            return;
+        _layer = new HoldMenuLayer(this, held);
+        overlay.Children.Add(_layer);
+        if (!held)
+            _layer.Sticky();
+    }
+
+    public void Close(bool refocus = false)
+    {
+        if (_layer == null)
+            return;
+        if (_layer.Parent is Panel panel)
+            panel.Children.Remove(_layer);
+        _layer = null;
+        if (refocus)
+            Trigger?.Focus(NavigationMethod.Tab);
+    }
+
+    internal void Choose(int index)
+    {
+        if (index < 0 || index >= Items.Count || Items[index].IsDisabled)
+            return;
+        Close(true);
+        RaiseEvent(new HoldMenuSelectedEventArgs(SelectedEvent, index, Items[index]));
+    }
+
+    private void Held()
+    {
+        _hold.Stop();
+        Open(true);
+        // Taking the pointer drops the button's press, so releasing over it won't click it.
+        if (_layer != null)
+            _pointer?.Capture(_layer);
+    }
+
+    private void OnPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (_layer != null || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _pointer = e.Pointer;
+        _origin = e.GetPosition(this);
+        _pressing = true;
+        _hold.Interval = TimeSpan.FromMilliseconds(HoldDelay);
+        _hold.Start();
+    }
+
+    private void OnMoved(object? sender, PointerEventArgs e)
+    {
+        if (!_pressing || !_hold.IsEnabled)
+            return;
+        var p = e.GetPosition(this);
+        if (Math.Abs(p.X - _origin.X) > 10 || Math.Abs(p.Y - _origin.Y) > 10)
+        {
+            _hold.Stop();
+            _pressing = false;
+        }
+    }
+
+    private void OnReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (!_pressing)
+            return;
+        _pressing = false;
+        if (!_hold.IsEnabled)
+            return;
+        _hold.Stop();
+        if (TapOpens && _layer == null)
+        {
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            Open(false);
+        }
+    }
+
+    private void OnKey(object? sender, KeyEventArgs e)
+    {
+        if (_layer != null)
+            return;
+        var towards = Direction == "up" ? Key.Up : Key.Down;
+        if (e.Key == towards)
+        {
+            Open(false);
+            e.Handled = true;
+        }
+    }
+}
+
+// Covers the window while a HoldMenu is open: the scrim, the button above it, and the options.
+public class HoldMenuLayer : Control
+{
+    private const double Icon = 48;
+    private readonly HoldMenu _menu;
+    private readonly List<PurrimerSpring> _scales = new();
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly int _enterMs;
+    private int _active = -1;
+
+    internal HoldMenuLayer(HoldMenu menu, bool held)
+    {
+        _menu = menu;
+        IsHeld = held;
+        Focusable = true;
+        // The layer draws its own ring on the chosen option.
+        FocusAdorner = null;
+        AutomationProperties.SetName(this, AutomationProperties.GetName(menu) is { Length: > 0 } name ? name : "More options");
+        foreach (var _ in menu.Items)
+        {
+            var spring = new PurrimerSpring(1, 0.0005);
+            spring.Changed += _ => InvalidateVisual();
+            _scales.Add(spring);
+        }
+        _enterMs = PurrimerMotion.PauseLoops ? 0 : {{ ms("duration-base") }} + 30 * menu.Items.Count;
+        if (_enterMs > 0)
+            DispatcherTimer.Run(() =>
+            {
+                InvalidateVisual();
+                return _clock.ElapsedMilliseconds < _enterMs + 16;
+            }, TimeSpan.FromMilliseconds(16));
+    }
+
+    internal bool IsHeld { get; private set; }
+    private bool Arc => _menu.Layout == "arc";
+    private double ArcRadius => _menu.Radius > 0 ? _menu.Radius : Math.Max(96, 72 + _menu.Items.Count * 12);
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    // Maps through the window and undoes this layer's own render transform, which TranslatePoint into the layer
+    // leaves out, so the options stay beside the button when the overlay is scaled.
+    private Rect TriggerRect()
+    {
+        var trigger = _menu.Trigger ?? _menu;
+        if (TopLevel.GetTopLevel(this) is not { } top
+            || trigger.TranslatePoint(new Point(0, 0), top) is not { } a
+            || trigger.TranslatePoint(new Point(trigger.Bounds.Width, trigger.Bounds.Height), top) is not { } b)
+            return default;
+        var origin = this.TranslatePoint(new Point(0, 0), top) ?? default;
+        var rect = new Rect(a - origin, b - origin);
+        return RenderTransform?.Value is { HasInverse: true } m ? rect.TransformToAABB(m.Invert()) : rect;
+    }
+
+    private static double[] Angles(int n, string direction, string align)
+    {
+        var from = direction == "down" ? 270.0 : 90.0;
+        var to = direction == "down" ? (align == "end" ? 180.0 : 360.0) : (align == "end" ? 180.0 : 0.0);
+        return Enumerable.Range(0, n).Select(i => n == 1 ? from : from + (to - from) * i / (n - 1)).ToArray();
+    }
+
+    private FormattedText Text(string text, IBrush? brush) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(_menu.FontFamily, FontStyle.Normal, FontWeight.SemiBold), 14, brush);
+
+    private List<Rect> Layout()
+    {
+        var t = TriggerRect();
+        var rects = new List<Rect>();
+        if (Arc)
+        {
+            foreach (var angle in Angles(_menu.Items.Count, _menu.Direction, _menu.Align))
+            {
+                var a = angle * Math.PI / 180;
+                var c = t.Center + new Point(Math.Cos(a) * ArcRadius, -Math.Sin(a) * ArcRadius);
+                rects.Add(new Rect(c.X - Icon / 2, c.Y - Icon / 2, Icon, Icon));
+            }
+            return rects;
+        }
+        var y = _menu.Direction == "up" ? t.Top - 12 - Icon : t.Bottom + 12;
+        foreach (var item in _menu.Items)
+        {
+            var width = Text(item.Label, null).Width + 24 + 12 + Icon;
+            var x = _menu.Align == "end" ? t.Right - width : t.Left;
+            x = Math.Max(8, Math.Min(x, Bounds.Width - width - 8));
+            rects.Add(new Rect(x, Math.Max(8, Math.Min(y, Bounds.Height - Icon - 8)), width, Icon));
+            y += _menu.Direction == "up" ? -(Icon + 8) : Icon + 8;
+        }
+        return rects;
+    }
+
+    private Rect IconRect(Rect rect) =>
+        Arc || _menu.Align == "end" ? new Rect(rect.Right - Icon, rect.Top, Icon, Icon) : new Rect(rect.Left, rect.Top, Icon, Icon);
+
+    internal int ItemAt(Point p)
+    {
+        var rects = Layout();
+        var best = -1;
+        var bestDist = double.MaxValue;
+        for (var i = 0; i < rects.Count; i++)
+        {
+            if (_menu.Items[i].IsDisabled)
+                continue;
+            var r = rects[i];
+            var dist = Math.Sqrt(Math.Pow(Math.Max(Math.Max(r.Left - p.X, 0), p.X - r.Right), 2) + Math.Pow(Math.Max(Math.Max(r.Top - p.Y, 0), p.Y - r.Bottom), 2));
+            if (dist < bestDist)
+            {
+                best = i;
+                bestDist = dist;
+            }
+        }
+        return bestDist <= 24 ? best : -1;
+    }
+
+    private void SetActive(int index)
+    {
+        if (index == _active)
+            return;
+        var lift = Arc ? 1.14 : 1.08;
+        for (var i = 0; i < _scales.Count; i++)
+            _scales[i].To(i == index && !PurrimerMotion.PauseLoops ? lift : 1);
+        _active = index;
+        InvalidateVisual();
+    }
+
+    internal void Sticky()
+    {
+        IsHeld = false;
+        SetActive(_menu.Items.Select((item, i) => item.IsDisabled ? -1 : i).FirstOrDefault(i => i >= 0, -1));
+        Dispatcher.UIThread.Post(() => Focus(NavigationMethod.Tab));
+    }
+
+    protected override Size MeasureOverride(Size availableSize) => availableSize;
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (IsHeld)
+            SetActive(ItemAt(e.GetPosition(this)));
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        e.Handled = true;
+        var i = ItemAt(e.GetPosition(this));
+        if (i >= 0)
+            _menu.Choose(i);
+        else
+            _menu.Close(true);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (!IsHeld)
+            return;
+        e.Pointer.Capture(null);
+        var p = e.GetPosition(this);
+        var i = ItemAt(p);
+        if (i >= 0)
+            _menu.Choose(i);
+        else if (TriggerRect().Contains(p))
+            Sticky();
+        else
+            _menu.Close();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        var outward = _menu.Direction == "up" ? Key.Up : Key.Down;
+        var inward = _menu.Direction == "up" ? Key.Down : Key.Up;
+        var away = _menu.Align == "end" ? Key.Left : Key.Right;
+        var back = _menu.Align == "end" ? Key.Right : Key.Left;
+        var step = e.Key == outward || (Arc && e.Key == away) ? 1 : e.Key == inward || (Arc && e.Key == back) ? -1 : 0;
+        var enabled = Enumerable.Range(0, _menu.Items.Count).Where(i => !_menu.Items[i].IsDisabled).ToList();
+        if (step != 0 && enabled.Count > 0)
+        {
+            var at = enabled.IndexOf(_active);
+            SetActive(enabled[((at + step) % enabled.Count + enabled.Count) % enabled.Count]);
+        }
+        else if (e.Key is Key.Enter or Key.Space && _active >= 0)
+            _menu.Choose(_active);
+        else if (e.Key == Key.Escape)
+            _menu.Close(true);
+        else if (e.Key == Key.Tab)
+            _menu.Close();
+        else
+            return;
+        e.Handled = true;
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var elapsed = _enterMs == 0 ? double.MaxValue : _clock.ElapsedMilliseconds;
+        using (context.PushOpacity(Math.Min(1, elapsed / {{ ms("duration-base") }})))
+            context.FillRectangle(Brush("PmOverlayBackdropBgColor")!, new Rect(Bounds.Size));
+        var t = TriggerRect();
+        if (_menu.Trigger is { } trigger)
+            context.DrawRectangle(new VisualBrush(trigger) { Stretch = Stretch.None, AlignmentX = AlignmentX.Left, AlignmentY = AlignmentY.Top }, null, t);
+        var rects = Layout();
+        for (var i = 0; i < rects.Count; i++)
+        {
+            var local = Math.Clamp((elapsed - 30 * i) / {{ ms("duration-base") }}, 0, 1);
+            var eased = 1 - Math.Pow(1 - local, 3);
+            var rect = rects[i];
+            var shift = Arc ? (t.Center - rect.Center) * (1 - eased) : new Point(0, 8 * (1 - eased));
+            using (context.PushOpacity(eased))
+            using (context.PushTransform(Matrix.CreateTranslation(shift.X, shift.Y)))
+                PaintItem(context, i, rect);
+        }
+        if (Arc)
+            PaintHint(context, t);
+    }
+
+    private void PaintItem(DrawingContext context, int i, Rect rect)
+    {
+        var item = _menu.Items[i];
+        var active = i == _active;
+        var danger = item.Variant == "danger";
+        var medium = {{ px("borderRadius-medium") | num }};
+        var thin = {{ px("borderWidth-thin") | num }};
+        if (!Arc)
+        {
+            var text = Text(item.Label, Brush(item.IsDisabled ? "PmFgColorDisabled" : "PmFgColorDefault"));
+            var width = text.Width + 24;
+            var x = _menu.Align == "end" ? rect.Left : rect.Right - width;
+            var pill = new Rect(x, rect.Center.Y - 16, width, 32);
+            context.DrawRectangle(Brush("PmOverlayBgColor"), new Pen(Brush(active ? "PmBorderColorAccentEmphasis" : "PmBorderColorDefault"), thin),
+                new RoundedRect(pill.Deflate(thin / 2), medium), _menu.OptionShadow);
+            context.DrawText(text, new Point(pill.X + 12, pill.Y + (32 - text.Height) / 2));
+        }
+        var icon = IconRect(rect);
+        var scale = _scales[i].Value;
+        var c = icon.Center;
+        // A rounded rect a little tighter than the web squircle reads the same at this size.
+        var radius = {{ px("borderRadius-large") | num }} * 1.2;
+        using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
+        {
+            if (active)
+                context.DrawRectangle(Brush(danger ? "PmBgColorDangerEmphasis" : "PmButtonPrimaryBgColorRest"), null, new RoundedRect(icon, radius));
+            else
+                context.DrawRectangle(Brush("PmOverlayBgColor"), new Pen(Brush("PmBorderColorDefault"), thin), new RoundedRect(icon.Deflate(thin / 2), radius), _menu.OptionShadow);
+            var ink = item.IsDisabled ? "PmFgColorDisabled" : active ? "PmFgColorOnEmphasis" : danger ? "PmFgColorDanger" : "PmFgColorAccent";
+            if (this.TryFindResource(global::{{ ns }}.Icon.ResourceKey(item.IconName, 24), out var found) && found is Geometry geometry)
+                using (context.PushTransform(Matrix.CreateTranslation(c.X - 12, c.Y - 12)))
+                    context.DrawGeometry(Brush(ink), null, geometry);
+            if (active && IsFocused && !IsHeld)
+                context.DrawRectangle(null, new Pen(Brush("PmFocusOutlineColor"), {{ px("borderWidth-thick") | num }}), new RoundedRect(icon.Inflate(4), radius + 4));
+        }
+    }
+
+    private void PaintHint(DrawingContext context, Rect t)
+    {
+        var label = _active >= 0 ? _menu.Items[_active].Label : _menu.Hint;
+        var text = Text(label, Brush("PmFgColorOnEmphasis"));
+        var width = text.Width + 24;
+        var x = _menu.Align == "end" ? t.Right - width : t.Left;
+        var y = _menu.Direction == "up" ? t.Center.Y - ArcRadius - 36 - 32 : t.Center.Y + ArcRadius + 36;
+        var pill = new Rect(Math.Max(8, Math.Min(x, Bounds.Width - width - 8)), y, width, 32);
+        context.DrawRectangle(Brush("PmBgColorEmphasis"), null, new RoundedRect(pill, {{ px("borderRadius-medium") | num }}));
+        context.DrawText(text, new Point(pill.X + 12, pill.Y + (32 - text.Height) / 2));
+    }
+}

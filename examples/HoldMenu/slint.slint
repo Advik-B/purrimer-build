@@ -1,0 +1,37 @@
+import { FAB, HoldMenu, PurrimerIcons, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    width: 390px;
+    height: 420px;
+
+    Text {
+        x: 16px;
+        y: 16px;
+        text: "Hold the button for more ways to start a note.";
+        font-family: Purrimer.text-body-medium.font-family;
+        font-size: Purrimer.text-body-medium.font-size;
+        color: Purrimer.fg-color-default;
+    }
+
+    HoldMenu {
+        width: self.preferred-width;
+        height: self.preferred-height;
+        x: parent.width - self.width - 16px;
+        y: parent.height - self.height - 16px;
+        default-open: true;
+        accessible-name: "Start something";
+        screen-width: root.width;
+        screen-height: root.height;
+        items: [
+            { label: "New note", icon: PurrimerIcons.note-24 },
+            { label: "Take photo", icon: PurrimerIcons.device-camera-24 },
+            { label: "Checklist", icon: PurrimerIcons.checklist-24 },
+        ];
+        clicked => { debug("new note"); }
+        selected(index) => { debug("chose", index); }
+
+        FAB {
+            label: "New note";
+        }
+    }
+}

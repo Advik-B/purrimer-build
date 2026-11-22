@@ -767,3 +767,192 @@ export function wireReorder(parts: ReorderParts): () => void {
     list.removeEventListener("touchmove", touchMove);
   };
 }
+
+export type HoldMode = "held" | "sticky";
+
+export interface HoldParts {
+  wrap: HTMLElement;
+  delay: () => number;
+  tapOpens: () => boolean;
+  enabled: () => boolean;
+  direction: () => "up" | "down";
+  mode: () => HoldMode | null;
+  open: (mode: HoldMode) => void;
+  close: (refocus: boolean) => void;
+  choose: (index: number) => void;
+  setActive: (index: number) => void;
+  layer: () => HTMLElement | null;
+}
+
+// Angles in degrees for an arc of n options fanning out from the trigger; item 0 is nearest the vertical.
+export function arcAngles(n: number, direction: "up" | "down", align: "end" | "start"): number[] {
+  const from = direction === "down" ? 270 : 90;
+  const to = direction === "down" ? (align === "end" ? 180 : 360) : align === "end" ? 180 : 0;
+  return Array.from({ length: n }, (_, i) => (n === 1 ? from : from + ((to - from) * i) / (n - 1)));
+}
+
+// The enabled option nearest a point, if one is within 24px of it.
+export function holdItemAt(layer: HTMLElement | null, x: number, y: number): number {
+  if (!layer) return -1;
+  let best = -1;
+  let bestDist = Infinity;
+  for (const node of Array.from(layer.querySelectorAll<HTMLButtonElement>("[data-hold-index]"))) {
+    if (node.disabled) continue;
+    const r = node.getBoundingClientRect();
+    const dist = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = Number(node.dataset.holdIndex);
+    }
+  }
+  return bestDist <= 24 ? best : -1;
+}
+
+// Where the menu goes: a stack anchored to the trigger's edges, so late-loading fonts can't shift it, kept 8px inside
+// the layer; or the arc centred on the trigger.
+export function placeHoldMenu(wrap: HTMLElement, menu: HTMLElement, layout: "stack" | "arc", direction: "up" | "down", align: "end" | "start"): Record<string, string> {
+  const t = wrap.getBoundingClientRect();
+  const l = (menu.offsetParent ?? document.documentElement).getBoundingClientRect();
+  if (layout === "arc") return { left: `${t.left - l.left}px`, top: `${t.top - l.top}px`, width: `${t.width}px`, height: `${t.height}px` };
+  const px = (v: number) => `${Math.max(8, v)}px`;
+  return {
+    ...(align === "end" ? { right: px(l.right - t.right) } : { left: px(t.left - l.left) }),
+    ...(direction === "up" ? { bottom: px(l.bottom - t.top + 12) } : { top: px(t.bottom - l.top + 12) }),
+  };
+}
+
+// Arrow keys inside an open menu: the arrow pointing away from the trigger moves outward. Escape closes.
+export function holdMenuKeydown(e: KeyboardEvent, menu: HTMLElement, layout: "stack" | "arc", direction: "up" | "down", align: "end" | "start", close: (refocus: boolean) => void): void {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    close(true);
+    return;
+  }
+  if (e.key === "Tab") {
+    close(false);
+    return;
+  }
+  const nodes = Array.from(menu.querySelectorAll<HTMLElement>("[data-hold-index]:not([disabled])"));
+  const at = nodes.indexOf(document.activeElement as HTMLElement);
+  const outward = direction === "up" ? "ArrowUp" : "ArrowDown";
+  const inward = direction === "up" ? "ArrowDown" : "ArrowUp";
+  const away = align === "end" ? "ArrowLeft" : "ArrowRight";
+  const back = align === "end" ? "ArrowRight" : "ArrowLeft";
+  const step = e.key === outward || (layout === "arc" && e.key === away) ? 1 : e.key === inward || (layout === "arc" && e.key === back) ? -1 : 0;
+  if (!step || !nodes.length) return;
+  e.preventDefault();
+  nodes[(at + step + nodes.length) % nodes.length].focus();
+}
+
+// Press and hold on the wrapped trigger opens the menu held; sliding picks the option under the finger and release
+// chooses it. Moving 10px before the hold completes gives the press back to the page. A tap passes through to the
+// trigger, or opens the menu with tapOpens. Right-click, the Menu key, Shift+F10 and the arrow towards the menu open it
+// for tapping.
+export function wireHoldMenu(parts: HoldParts): () => void {
+  const { wrap } = parts;
+  let timer = 0;
+  let pointer: number | null = null;
+  let x = 0;
+  let y = 0;
+  let suppress = false;
+  const listen = (on: boolean) => {
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("pointermove", move as EventListener, true);
+    window[method]("pointerup", up as EventListener, true);
+    window[method]("pointercancel", cancel as EventListener, true);
+  };
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+    timer = 0;
+  };
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || parts.mode() || !parts.enabled()) return;
+    suppress = false;
+    x = e.clientX;
+    y = e.clientY;
+    pointer = e.pointerId;
+    clear();
+    listen(true);
+    timer = window.setTimeout(() => {
+      timer = 0;
+      suppress = true;
+      buzz(10);
+      parts.open("held");
+    }, parts.delay());
+  };
+  function move(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    if (timer) {
+      if (Math.abs(e.clientX - x) > 10 || Math.abs(e.clientY - y) > 10) {
+        clear();
+        pointer = null;
+        listen(false);
+      }
+      return;
+    }
+    if (parts.mode() === "held") {
+      const i = holdItemAt(parts.layer(), e.clientX, e.clientY);
+      parts.setActive(i);
+    }
+  }
+  function up(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    pointer = null;
+    listen(false);
+    if (timer) {
+      clear();
+      return;
+    }
+    if (parts.mode() !== "held") return;
+    const i = holdItemAt(parts.layer(), e.clientX, e.clientY);
+    if (i !== -1) {
+      parts.choose(i);
+      return;
+    }
+    const r = wrap.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) parts.open("sticky");
+    else parts.close(false);
+  }
+  function cancel(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    pointer = null;
+    listen(false);
+    clear();
+    if (parts.mode() === "held") parts.close(false);
+  }
+  const contextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    if (!parts.mode() && parts.enabled()) parts.open("sticky");
+  };
+  const click = (e: MouseEvent) => {
+    if (suppress) {
+      suppress = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (parts.tapOpens() && !parts.mode() && parts.enabled()) {
+      e.preventDefault();
+      e.stopPropagation();
+      parts.open("sticky");
+    }
+  };
+  const keydown = (e: KeyboardEvent) => {
+    if (e.key === (parts.direction() === "up" ? "ArrowUp" : "ArrowDown") && !parts.mode() && parts.enabled()) {
+      e.preventDefault();
+      parts.open("sticky");
+    }
+  };
+  wrap.addEventListener("pointerdown", down);
+  wrap.addEventListener("contextmenu", contextmenu);
+  wrap.addEventListener("click", click, true);
+  wrap.addEventListener("keydown", keydown);
+  return () => {
+    clear();
+    listen(false);
+    wrap.removeEventListener("pointerdown", down);
+    wrap.removeEventListener("contextmenu", contextmenu);
+    wrap.removeEventListener("click", click, true);
+    wrap.removeEventListener("keydown", keydown);
+  };
+}

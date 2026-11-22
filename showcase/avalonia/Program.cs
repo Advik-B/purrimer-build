@@ -103,11 +103,11 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
                 host.RenderTransformOrigin = origin;
                 host.RenderTransform = new ScaleTransform(scale, scale);
             }
-            // Controls a component puts straight into the overlay layer (InfoButton's sheet) fill the unscaled window.
+            // Controls a component puts straight into the overlay layer (InfoButton's sheet, HoldMenu's layer) fill the unscaled window.
             // Shrink them to the frame's size and scale them back up from the corner.
             if (OverlayLayer.GetOverlayLayer(frame) is { } overlay)
             {
-                foreach (var child in overlay.Children.OfType<BottomSheet>())
+                foreach (var child in overlay.Children.OfType<Control>().Where(c => c is BottomSheet or HoldMenuLayer))
                 {
                     child.Width = overlay.Bounds.Width / scale;
                     child.Height = overlay.Bounds.Height / scale;

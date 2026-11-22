@@ -1,0 +1,103 @@
+/* Wraps the trigger; while the menu is open the trigger sits above the scrim. */
+.pm-hold { position: relative; display: inline-flex; touch-action: none; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; }
+.pm-hold--open { z-index: 121; }
+.pm-holdlayer { position: fixed; inset: 0; z-index: 120; }
+.pm-holdlayer__scrim { position: absolute; inset: 0; background: {{ "overlay-backdrop-bgColor" | tok }}; animation: pm-fade-in {{ "duration-base" | tok }} {{ "easing-standard" | tok }} backwards; }
+.pm-holdmenu { position: absolute; display: flex; gap: {{ "base-size-8" | tok }}; }
+.pm-holdmenu--stack { flex-direction: column; align-items: flex-end; }
+.pm-holdmenu--stack.pm-holdmenu--up { flex-direction: column-reverse; }
+.pm-holdmenu--stack.pm-holdmenu--start { align-items: flex-start; }
+.pm-holdmenu__item {
+  display: inline-flex;
+  align-items: center;
+  gap: {{ "base-size-12" | tok }};
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: {{ "fgColor-default" | tok }};
+  background: none;
+  border: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  animation: pm-hold-in {{ "duration-base" | tok }} {{ "easing-sleepy-enter" | tok }} backwards;
+  animation-delay: calc(var(--pm-hold-i, 0) * 30ms);
+}
+.pm-holdmenu--start .pm-holdmenu__item { flex-direction: row-reverse; }
+.pm-holdmenu__label {
+  padding: 6px 12px;
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  background: {{ "overlay-bgColor" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  transition: border-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-holdmenu__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background: {{ "overlay-bgColor" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: {{ "borderRadius-large" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, border-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
+}
+.pm-holdmenu__icon .pm-icon { fill: {{ "fgColor-accent" | tok }}; transition: fill {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+.pm-holdmenu__item--active .pm-holdmenu__icon { background: {{ "button-primary-bgColor-rest" | tok }}; border-color: {{ "button-primary-bgColor-rest" | tok }}; scale: 1.08; }
+.pm-holdmenu__item--active .pm-holdmenu__icon .pm-icon { fill: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-holdmenu__item--active .pm-holdmenu__label { border-color: {{ "borderColor-accent-emphasis" | tok }}; }
+.pm-holdmenu__item--danger .pm-holdmenu__icon .pm-icon { fill: {{ "fgColor-danger" | tok }}; }
+.pm-holdmenu__item--danger.pm-holdmenu__item--active .pm-holdmenu__icon { background: {{ "bgColor-danger-emphasis" | tok }}; border-color: {{ "bgColor-danger-emphasis" | tok }}; }
+.pm-holdmenu__item--danger.pm-holdmenu__item--active .pm-holdmenu__icon .pm-icon { fill: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-holdmenu__item:disabled { cursor: not-allowed; }
+.pm-holdmenu__item:disabled .pm-holdmenu__label { color: {{ "fgColor-disabled" | tok }}; }
+.pm-holdmenu__item:disabled .pm-holdmenu__icon .pm-icon { fill: {{ "fgColor-disabled" | tok }}; }
+.pm-holdmenu__item:focus-visible { outline: none; }
+.pm-holdmenu__item:focus-visible .pm-holdmenu__icon { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+/* The arc: icon-only options fanned around the trigger, with the option under the finger named above them. */
+.pm-holdmenu--arc { display: block; pointer-events: none; }
+.pm-holdmenu--arc .pm-holdmenu__item {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  margin: -24px 0 0 -24px;
+  translate: var(--pm-hold-x, 0) var(--pm-hold-y, 0);
+  pointer-events: auto;
+  animation-name: pm-hold-arc-in;
+  animation-duration: var(--pm-settle-dur, 360ms);
+  animation-timing-function: var(--pm-settle-ease, ease);
+}
+.pm-holdmenu--arc .pm-holdmenu__item--active .pm-holdmenu__icon { scale: 1.14; }
+.pm-holdmenu--arc .pm-holdmenu__label { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); border: 0; white-space: nowrap; }
+.pm-holdmenu__hint {
+  position: absolute;
+  right: 0;
+  bottom: calc(50% + var(--pm-hold-r, 96px) + 36px);
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+  color: {{ "fgColor-onEmphasis" | tok }};
+  background: {{ "bgColor-emphasis" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  animation: pm-fade-in {{ "duration-base" | tok }} {{ "easing-standard" | tok }} backwards;
+}
+.pm-holdmenu--arc.pm-holdmenu--start .pm-holdmenu__hint { right: auto; left: 0; }
+.pm-holdmenu--arc.pm-holdmenu--down .pm-holdmenu__hint { bottom: auto; top: calc(50% + var(--pm-hold-r, 96px) + 36px); }
+@supports (corner-shape: squircle) {
+  .pm-holdmenu__icon { border-radius: calc({{ "borderRadius-large" | tok }} * 1.6); corner-shape: squircle; }
+}
+@keyframes pm-hold-in { from { opacity: 0; translate: 0 8px; } }
+@keyframes pm-hold-arc-in { from { opacity: 0; translate: 0 0; scale: 0.6; } }
+@media (prefers-reduced-motion: reduce) {
+  .pm-holdmenu__item--active .pm-holdmenu__icon, .pm-holdmenu--arc .pm-holdmenu__item--active .pm-holdmenu__icon { scale: none; }
+  .pm-holdmenu__item, .pm-holdmenu--arc .pm-holdmenu__item { animation-name: pm-fade-in; animation-duration: {{ "duration-reduced" | tok }}; }
+}

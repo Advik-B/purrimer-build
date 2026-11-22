@@ -1,0 +1,366 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QWidget
+
+from ..icons import paint_icon
+from ..motion import Spring
+from ..theme import theme
+
+ICON = 48
+HIT_SLOP = 24
+MOVE_SLOP = 10
+
+
+@dataclass
+class HoldMenuItem:
+    label: str
+    icon: str
+    variant: str = "default"
+    disabled: bool = False
+
+
+class _HoldLayer(QWidget):
+    """Covers the window while the menu is open: the scrim, a copy of the trigger above it, and the options."""
+
+    def __init__(self, menu: HoldMenu, held: bool) -> None:
+        window = menu.trigger.window()
+        super().__init__(window)
+        self.menu = menu
+        self.held = held
+        self.active = -1
+        self.setGeometry(window.rect())
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(menu.accessible_name)
+        self._snapshot = menu.trigger.grab()
+        self._trigger = QRectF(menu.trigger.mapTo(window, menu.trigger.rect().topLeft()), menu.trigger.size().toSizeF())
+        self._label_font = QFont(theme.font({{ "text-body-medium" | tok }}))
+        self._label_font.setPixelSize(14)
+        self._label_font.setWeight(QFont.Weight.DemiBold)
+        self._scales = [Spring(1.0, precision=0.0005, parent=self) for _ in menu.items]
+        for spring in self._scales:
+            spring.changed.connect(lambda _v: self.update())
+        self._enter = QVariantAnimation(self)
+        self._enter.setStartValue(0.0)
+        self._enter.setEndValue(1.0)
+        self._enter.setDuration(0 if theme.pause_loops else {{ ms("duration-base") }} + 30 * len(menu.items))
+        self._enter.valueChanged.connect(lambda _v: self.update())
+        self._enter.start()
+        self._rects = self._layout()
+        self.show()
+        self.raise_()
+
+    def _layout(self) -> list[QRectF]:
+        m, t = self.menu, self._trigger
+        rects = []
+        if m.layout == "arc":
+            radius = m.radius or max(96, 72 + len(m.items) * 12)
+            for angle in arc_angles(len(m.items), m.direction, m.align):
+                a = math.radians(angle)
+                c = t.center() + QPointF(math.cos(a) * radius, -math.sin(a) * radius)
+                rects.append(QRectF(c.x() - ICON / 2, c.y() - ICON / 2, ICON, ICON))
+            return rects
+        metrics = QFontMetricsF(self._label_font)
+        y = t.top() - 12 - ICON if m.direction == "up" else t.bottom() + 12
+        for item in m.items:
+            label = metrics.horizontalAdvance(item.label) + 24
+            width = label + 12 + ICON
+            x = t.right() - width if m.align == "end" else t.left()
+            x = max(8.0, min(x, self.width() - width - 8))
+            rects.append(QRectF(x, max(8.0, min(y, self.height() - ICON - 8)), width, ICON))
+            y += -(ICON + 8) if m.direction == "up" else ICON + 8
+        return rects
+
+    def item_at(self, pos: QPointF) -> int:
+        best, best_dist = -1, math.inf
+        for i, rect in enumerate(self._rects):
+            if self.menu.items[i].disabled:
+                continue
+            dx = max(rect.left() - pos.x(), 0, pos.x() - rect.right())
+            dy = max(rect.top() - pos.y(), 0, pos.y() - rect.bottom())
+            dist = math.hypot(dx, dy)
+            if dist < best_dist:
+                best, best_dist = i, dist
+        return best if best_dist <= HIT_SLOP else -1
+
+    def on_trigger(self, pos: QPointF) -> bool:
+        return self._trigger.contains(pos)
+
+    def set_active(self, index: int) -> None:
+        if index == self.active:
+            return
+        lift = 1.14 if self.menu.layout == "arc" else 1.08
+        for i, spring in enumerate(self._scales):
+            spring.to(lift if i == index and not theme.pause_loops else 1.0)
+        self.active = index
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        index = self.item_at(event.position())
+        if index >= 0:
+            self.menu.choose(index)
+        else:
+            self.menu.close(refocus=True)
+
+    def keyPressEvent(self, event) -> None:
+        m = self.menu
+        key = event.key()
+        outward = Qt.Key.Key_Up if m.direction == "up" else Qt.Key.Key_Down
+        inward = Qt.Key.Key_Down if m.direction == "up" else Qt.Key.Key_Up
+        away = Qt.Key.Key_Left if m.align == "end" else Qt.Key.Key_Right
+        back = Qt.Key.Key_Right if m.align == "end" else Qt.Key.Key_Left
+        step = 1 if key == outward or (m.layout == "arc" and key == away) else -1 if key == inward or (m.layout == "arc" and key == back) else 0
+        enabled = [i for i, item in enumerate(m.items) if not item.disabled]
+        if step and enabled:
+            at = enabled.index(self.active) if self.active in enabled else -1
+            self.set_active(enabled[(at + step) % len(enabled)])
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self.active >= 0:
+            m.choose(self.active)
+        elif key == Qt.Key.Key_Escape:
+            m.close(refocus=True)
+        elif key in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab):
+            m.close(refocus=False)
+        else:
+            super().keyPressEvent(event)
+
+    def focusNextPrevChild(self, _next: bool) -> bool:
+        return False
+
+    def paintEvent(self, event) -> None:
+        m = self.menu
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        progress = self._enter.currentValue() if self._enter.state() == QVariantAnimation.State.Running else 1.0
+        p.setOpacity(min(1.0, progress * 2))
+        p.fillRect(self.rect(), theme.color({{ "overlay-backdrop-bgColor" | tok }}))
+        p.setOpacity(1.0)
+        p.drawPixmap(self._trigger.topLeft(), self._snapshot)
+        total = self._enter.duration() or 1
+        for i, item in enumerate(m.items):
+            local = min(1.0, max(0.0, (progress * total - 30 * i) / {{ ms("duration-base") }})) if total > 1 else 1.0
+            eased = 1 - (1 - local) ** 3
+            p.save()
+            p.setOpacity(eased)
+            rect = self._rects[i]
+            if m.layout == "arc":
+                origin = self._trigger.center()
+                p.translate(origin + (rect.center() - origin) * eased - rect.center())
+            else:
+                p.translate(0, 8 * (1 - eased))
+            self._paint_item(p, i, item, rect)
+            p.restore()
+        if m.layout == "arc":
+            self._paint_hint(p)
+        if self.hasFocus() and not self.held and self.active >= 0:
+            rect = self._icon_rect(self.active).adjusted(-4, -4, 4, 4)
+            p.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRoundedRect(rect, 16, 16)
+
+    def _icon_rect(self, i: int) -> QRectF:
+        rect = self._rects[i]
+        if self.menu.layout == "arc" or self.menu.align == "end":
+            return QRectF(rect.right() - ICON, rect.top(), ICON, ICON)
+        return QRectF(rect.left(), rect.top(), ICON, ICON)
+
+    def _paint_item(self, p: QPainter, i: int, item: HoldMenuItem, rect: QRectF) -> None:
+        active = i == self.active
+        danger = item.variant == "danger"
+        border = theme.color({{ "borderColor-default" | tok }})
+        surface = theme.color({{ "overlay-bgColor" | tok }})
+        if self.menu.layout == "stack":
+            metrics = QFontMetricsF(self._label_font)
+            width = metrics.horizontalAdvance(item.label) + 24
+            x = rect.left() if self.menu.align == "end" else rect.right() - width
+            pill = QRectF(x, rect.center().y() - 16, width, 32)
+            self._shadow(p, pill, {{ px("borderRadius-medium") | num }})
+            p.setPen(QPen(theme.color({{ "borderColor-accent-emphasis" | tok }}) if active else border, {{ px("borderWidth-thin") | num }}))
+            p.setBrush(surface)
+            p.drawRoundedRect(pill.adjusted(0.5, 0.5, -0.5, -0.5), {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+            p.setFont(self._label_font)
+            p.setPen(theme.color({{ "fgColor-disabled" | tok }} if item.disabled else {{ "fgColor-default" | tok }}))
+            p.drawText(pill, Qt.AlignmentFlag.AlignCenter, item.label)
+        icon = self._icon_rect(i)
+        scale = self._scales[i].value
+        p.save()
+        p.translate(icon.center())
+        p.scale(scale, scale)
+        p.translate(-icon.center())
+        # A rounded rect a little tighter than the web squircle reads the same at this size.
+        radius = {{ px("borderRadius-large") | num }} * 1.2
+        if active:
+            fill = theme.color({{ "bgColor-danger-emphasis" | tok }} if danger else {{ "button-primary-bgColor-rest" | tok }})
+            p.setPen(Qt.PenStyle.NoPen)
+            p.setBrush(fill)
+        else:
+            self._shadow(p, icon, radius)
+            p.setPen(QPen(border, {{ px("borderWidth-thin") | num }}))
+            p.setBrush(surface)
+        p.drawRoundedRect(icon.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+        ink = (
+            {{ "fgColor-disabled" | tok }} if item.disabled
+            else {{ "fgColor-onEmphasis" | tok }} if active
+            else {{ "fgColor-danger" | tok }} if danger
+            else {{ "fgColor-accent" | tok }}
+        )
+        paint_icon(p, QRectF(icon.center().x() - 12, icon.center().y() - 12, 24, 24), item.icon, theme.color(ink))
+        p.restore()
+
+    def _shadow(self, p: QPainter, rect: QRectF, radius: float) -> None:
+        shade = QColor(0, 0, 0, 90 if theme.dark else 22)
+        p.setPen(Qt.PenStyle.NoPen)
+        for spread, alpha in ((3, 0.35), (1.5, 0.6)):
+            p.setBrush(QColor(shade.red(), shade.green(), shade.blue(), int(shade.alpha() * alpha)))
+            p.drawRoundedRect(rect.adjusted(-spread, -spread + 2, spread, spread + 2), radius + spread, radius + spread)
+
+    def _paint_hint(self, p: QPainter) -> None:
+        m = self.menu
+        text = m.items[self.active].label if self.active >= 0 else m.hint
+        metrics = QFontMetricsF(self._label_font)
+        width = metrics.horizontalAdvance(text) + 24
+        radius = m.radius or max(96, 72 + len(m.items) * 12)
+        t = self._trigger
+        x = t.right() - width if m.align == "end" else t.left()
+        y = t.center().y() - radius - 36 - 32 if m.direction == "up" else t.center().y() + radius + 36
+        pill = QRectF(max(8.0, min(x, self.width() - width - 8)), y, width, 32)
+        p.setPen(Qt.PenStyle.NoPen)
+        p.setBrush(theme.color({{ "bgColor-emphasis" | tok }}))
+        p.drawRoundedRect(pill, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+        p.setFont(self._label_font)
+        p.setPen(theme.color({{ "fgColor-onEmphasis" | tok }}))
+        p.drawText(pill, Qt.AlignmentFlag.AlignCenter, text)
+
+
+def arc_angles(n: int, direction: str, align: str) -> list[float]:
+    start = 270.0 if direction == "down" else 90.0
+    end = (180.0 if align == "end" else 360.0) if direction == "down" else (180.0 if align == "end" else 0.0)
+    return [start if n == 1 else start + (end - start) * i / (n - 1) for i in range(n)]
+
+
+class HoldMenu(QObject):
+    """Press and hold the trigger to open more options around it, slide onto one and release to choose it; a plain tap
+    still does the trigger's own job, or opens the menu with tap_opens. Moving 10px before the hold completes gives the
+    press back, so a scroll that starts on the button stays a scroll. Releasing on the trigger keeps the menu open for
+    tapping. Right-click, the Menu key, Shift+F10 and the arrow towards the menu open it for the keyboard; arrows move
+    between options, Enter chooses and Escape closes. Item 0 sits nearest the trigger. Emits `selected(index)`.
+    """
+
+    selected = Signal(int)
+
+    def __init__(self, trigger: QWidget, items: list[HoldMenuItem], layout: str = "stack", direction: str = "up",
+                 align: str = "end", tap_opens: bool = False, hold_delay: int = {{ ms("duration-hold") }}, radius: int = 0,
+                 hint: str = "Slide to choose", accessible_name: str = "More options", default_open: bool = False) -> None:
+        super().__init__(trigger)
+        self.trigger = trigger
+        self.items = list(items)
+        self.layout = layout
+        self.direction = direction
+        self.align = align
+        self.tap_opens = tap_opens
+        self.radius = radius
+        self.hint = hint
+        self.accessible_name = accessible_name
+        self._layer: _HoldLayer | None = None
+        self._pressing = False
+        self._origin = QPointF()
+        self._default_open = default_open
+        self._timer = QTimer(self)
+        self._timer.setSingleShot(True)
+        self._timer.setInterval(hold_delay)
+        self._timer.timeout.connect(self._held)
+        trigger.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        trigger.customContextMenuRequested.connect(lambda _pos: self.open(held=False))
+        trigger.installEventFilter(self)
+        trigger.setAccessibleDescription("Has a menu")
+
+    @property
+    def is_open(self) -> bool:
+        return self._layer is not None
+
+    def open(self, held: bool = False) -> None:
+        if self._layer is not None or not self.items or not self.trigger.isEnabled():
+            return
+        self._layer = _HoldLayer(self, held)
+        if not held:
+            self._layer.setFocus(Qt.FocusReason.PopupFocusReason)
+            first = next((i for i, item in enumerate(self.items) if not item.disabled), -1)
+            self._layer.set_active(first)
+
+    def close(self, refocus: bool = False) -> None:
+        if self._layer is None:
+            return
+        self._layer.deleteLater()
+        self._layer = None
+        if refocus:
+            self.trigger.setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def choose(self, index: int) -> None:
+        if not 0 <= index < len(self.items) or self.items[index].disabled:
+            return
+        self.close(refocus=True)
+        self.selected.emit(index)
+
+    def _held(self) -> None:
+        if hasattr(self.trigger, "setDown"):
+            self.trigger.setDown(False)
+        self.open(held=True)
+
+    def _local(self, event) -> QPointF:
+        window = self.trigger.window()
+        return QPointF(window.mapFromGlobal(event.globalPosition().toPoint()))
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        kind = event.type()
+        if kind == QEvent.Type.Show and self._default_open:
+            self._default_open = False
+            QTimer.singleShot(0, lambda: self.open(held=False))
+        elif kind == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton and self._layer is None:
+            self._pressing = True
+            self._origin = event.globalPosition()
+            self._timer.start()
+        elif kind == QEvent.Type.MouseMove and self._pressing:
+            if self._timer.isActive():
+                delta = event.globalPosition() - self._origin
+                if abs(delta.x()) > MOVE_SLOP or abs(delta.y()) > MOVE_SLOP:
+                    self._timer.stop()
+                    self._pressing = False
+            elif self._layer is not None and self._layer.held:
+                self._layer.set_active(self._layer.item_at(self._local(event)))
+                return True
+        elif kind == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton and self._pressing:
+            self._pressing = False
+            if self._timer.isActive():
+                self._timer.stop()
+                if self.tap_opens:
+                    if hasattr(self.trigger, "setDown"):
+                        self.trigger.setDown(False)
+                    QTimer.singleShot(0, lambda: self.open(held=False))
+                    return True
+                return False
+            if self._layer is not None and self._layer.held:
+                pos = self._local(event)
+                index = self._layer.item_at(pos)
+                if index >= 0:
+                    self.choose(index)
+                elif self._layer.on_trigger(pos):
+                    self._layer.held = False
+                    self._layer.setFocus(Qt.FocusReason.PopupFocusReason)
+                    self._layer.set_active(next((i for i, item in enumerate(self.items) if not item.disabled), -1))
+                else:
+                    self.close()
+                return True
+        elif kind == QEvent.Type.KeyPress and self._layer is None:
+            towards = Qt.Key.Key_Up if self.direction == "up" else Qt.Key.Key_Down
+            shift_f10 = event.key() == Qt.Key.Key_F10 and event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+            if event.key() in (towards, Qt.Key.Key_Menu) or shift_f10:
+                self.open(held=False)
+                return True
+        return False

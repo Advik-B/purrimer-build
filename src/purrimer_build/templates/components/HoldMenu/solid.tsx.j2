@@ -1,0 +1,153 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createEffect, createSignal, onCleanup, onSettled } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { arcAngles, buzz, holdMenuKeydown, placeHoldMenu, wireHoldMenu, type HoldMode } from "../motion";
+
+export type HoldMenuItem = { label: string; icon: string; variant?: "default" | "danger"; disabled?: boolean; onSelect?: () => void };
+
+export type HoldMenuProps = {
+  items: HoldMenuItem[];
+  layout?: "stack" | "arc";
+  direction?: "up" | "down";
+  align?: "end" | "start";
+  tapOpens?: boolean;
+  holdDelay?: number;
+  radius?: number;
+  hint?: string;
+  defaultOpen?: boolean;
+  ariaLabel?: string;
+  onSelect?: (item: HoldMenuItem, index: number) => void;
+  // One button: a Button, IconButton or FAB.
+  children: JSX.Element;
+};
+
+let ids = 0;
+
+export function HoldMenu(props: HoldMenuProps): JSX.Element {
+  const [mode, setMode] = createSignal<HoldMode | null>(null);
+  const [active, setActive] = createSignal(-1);
+  const [place, setPlace] = createSignal<Record<string, string> | null>(null);
+  const id = `pm-holdmenu-${++ids}`;
+  let wrap: HTMLSpanElement | undefined;
+  let layer: HTMLDivElement | undefined;
+  let menu: HTMLDivElement | undefined;
+  let unwire: (() => void) | undefined;
+  const layout = () => props.layout ?? "stack";
+  const direction = () => props.direction ?? "up";
+  const align = () => props.align ?? "end";
+  const radius = () => props.radius || Math.max(96, 72 + props.items.length * 12);
+  const angles = () => (layout() === "arc" ? arcAngles(props.items.length, direction(), align()) : []);
+  const trigger = () => wrap?.querySelector<HTMLElement>("button, [href], [tabindex]:not([tabindex='-1'])") ?? null;
+
+  function open(next: HoldMode) {
+    setActive(-1);
+    setPlace(null);
+    setMode(next);
+    requestAnimationFrame(() => {
+      if (!wrap || !menu || !mode()) return;
+      setPlace(placeHoldMenu(wrap, menu, layout(), direction(), align()));
+      if (next === "sticky") requestAnimationFrame(() => menu?.querySelector<HTMLElement>("[data-hold-index]:not([disabled])")?.focus({ preventScroll: true }));
+    });
+  }
+
+  function close(refocus: boolean) {
+    setMode(null);
+    setActive(-1);
+    if (refocus) trigger()?.focus({ preventScroll: true });
+  }
+
+  function choose(i: number) {
+    const item = props.items[i];
+    if (!item || item.disabled) return;
+    close(true);
+    buzz();
+    item.onSelect?.();
+    props.onSelect?.(item, i);
+  }
+
+  onSettled(() => {
+    if (!wrap) return;
+    unwire = wireHoldMenu({
+      wrap,
+      delay: () => props.holdDelay ?? 400,
+      tapOpens: () => !!props.tapOpens,
+      enabled: () => props.items.length > 0,
+      direction,
+      mode,
+      open,
+      close,
+      choose,
+      setActive: (i) => {
+        if (i !== active() && i !== -1) buzz(6);
+        setActive(i);
+      },
+      layer: () => layer ?? null,
+    });
+    if (props.defaultOpen) open("sticky");
+  });
+  onCleanup(() => unwire?.());
+
+  createEffect(mode, (current) => {
+    const t = trigger();
+    if (!t) return;
+    t.setAttribute("aria-haspopup", "menu");
+    t.setAttribute("aria-expanded", current ? "true" : "false");
+    if (current) t.setAttribute("aria-controls", id);
+    else t.removeAttribute("aria-controls");
+  });
+
+  const menuStyle = () => {
+    const p = place();
+    return p ? Object.entries(p).map(([k, v]) => `${k}: ${v}`).join("; ") : "visibility: hidden";
+  };
+
+  return (
+    <>
+      <span ref={wrap} class={mode() ? "pm-hold pm-hold--open" : "pm-hold"}>{props.children}</span>
+      <Show when={mode()}>
+        <div ref={layer} class="pm-holdlayer" data-density="touch">
+          <div class="pm-holdlayer__scrim" aria-hidden="true" onClick={() => close(true)} />
+          <div
+            ref={menu}
+            id={id}
+            role="menu"
+            tabindex="-1"
+            aria-label={props.ariaLabel ?? "More options"}
+            class={`pm-holdmenu pm-holdmenu--${layout()} pm-holdmenu--${direction()}${align() === "start" ? " pm-holdmenu--start" : ""}`}
+            style={menuStyle()}
+            onKeyDown={(e) => menu && holdMenuKeydown(e, menu, layout(), direction(), align(), close)}
+          >
+            <For each={props.items}>
+              {(item, i) => {
+                const a = () => (layout() === "arc" ? (angles()[i()] * Math.PI) / 180 : 0);
+                return (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    tabindex="-1"
+                    data-hold-index={i()}
+                    disabled={item.disabled}
+                    class={`pm-holdmenu__item${i() === active() ? " pm-holdmenu__item--active" : ""}${item.variant === "danger" ? " pm-holdmenu__item--danger" : ""}`}
+                    style={layout() === "arc" ? `--pm-hold-x: ${(Math.cos(a()) * radius()).toFixed(1)}px; --pm-hold-y: ${(-Math.sin(a()) * radius()).toFixed(1)}px; --pm-hold-i: ${i()}` : `--pm-hold-i: ${i()}`}
+                    onClick={() => choose(i())}
+                    onFocus={() => setActive(i())}
+                  >
+                    <span class="pm-holdmenu__label">{item.label}</span>
+                    <span class="pm-holdmenu__icon"><Icon name={item.icon} size={24} /></span>
+                  </button>
+                );
+              }}
+            </For>
+            <Show when={layout() === "arc"}>
+              <span class="pm-holdmenu__hint" aria-hidden="true" style={`--pm-hold-r: ${radius()}px`}>
+                {active() >= 0 && props.items[active()] ? props.items[active()].label : (props.hint ?? "Slide to choose")}
+              </span>
+            </Show>
+          </div>
+        </div>
+      </Show>
+    </>
+  );
+}
