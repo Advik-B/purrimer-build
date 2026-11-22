@@ -1,0 +1,421 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+component StageButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <bool> armed;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    public function take-focus() {
+        focus.focus();
+    }
+
+    width: {{ "touch-target-min" | tok }};
+    height: {{ "touch-target-min" | tok }};
+    border-radius: self.width / 2;
+    background: root.armed ? {{ "media-stage-control-bgColor-armed" | tok }} : {{ "media-stage-control-bgColor" | tok }};
+    border-width: {{ "borderWidth-thin" | tok }};
+    border-color: root.armed ? {{ "media-stage-control-bgColor-armed" | tok }} : {{ "media-stage-control-borderColor" | tok }};
+    opacity: root.enabled ? 1 : 0.4;
+    transform-scale: touch.pressed ? PurrimerMotion.press-scale : 1;
+    animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out; }
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+
+    Icon {
+        path: root.icon;
+        color: root.armed ? {{ "media-stage-control-fgColor-armed" | tok }} : {{ "media-stage-fgColor" | tok }};
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+    focus := FocusScope {
+        enabled: root.enabled;
+        key-pressed(event) => {
+            if event.text == " " || event.text == Key.Return {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+    Rectangle {
+        visible: focus.has-focus;
+        x: -3px;
+        y: -3px;
+        width: parent.width + 6px;
+        height: parent.height + 6px;
+        border-radius: self.width / 2;
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "media-stage-focus-outlineColor" | tok }};
+    }
+}
+
+// A photo on a dark stage. Pinch or double-click to zoom (2.5x around the point, or back to fit), drag to look around
+// when zoomed, and drag down at fit to close: past 96px the close button fills, and release or a flick closes. Ctrl
+// and the wheel, or a trackpad pinch, zoom around the pointer; the wheel pans when zoomed. With the stage focused, Plus
+// and Minus zoom, 0 fits, the arrow keys pan and Escape closes.
+// Set inline to draw it in place. Otherwise place it last in the window, filling it, and set open to show it; closed()
+// asks the app to set open back to false.
+export component ImageViewer inherits Rectangle {
+    in property <image> source;
+    in property <string> alt;
+    in property <string> caption;
+    in property <bool> open;
+    in property <bool> inline;
+    in property <float> max-scale: 4;
+    // False leaves out the close button and the drag to close.
+    in property <bool> closable: true;
+    // Read after alt: "<alt>. Plus and minus zoom, arrow keys move."
+    in property <string> stage-label: "Plus and minus zoom, arrow keys move.";
+    in property <string> close-label: "Close";
+    in property <string> zoom-in-label: "Zoom in";
+    in property <string> zoom-out-label: "Zoom out";
+    out property <float> zoom: s.value;
+    callback closed();
+    property <bool> shown: root.inline || root.open;
+    property <float> fade: root.shown ? 1 : 0;
+    property <float> dismiss-scale: 1;
+    property <float> backdrop: 1;
+    property <bool> armed;
+    property <string> mode;
+    property <length> grab-x;
+    property <length> grab-y;
+    property <float> tx;
+    property <float> ty;
+    property <float> vy;
+    property <length> last-y;
+    property <duration> last-t;
+    property <float> pinch-s0: 1;
+    property <float> pinch-cx;
+    property <float> pinch-cy;
+    // The picture's size at fit, in logical pixels.
+    property <float> iw: max(1, root.source.width);
+    property <float> ih: max(1, root.source.height);
+    property <float> k: min(root.width / 1px / root.iw, root.height / 1px / root.ih);
+    property <float> fit-w: root.iw * root.k;
+    property <float> fit-h: root.ih * root.k;
+
+    animate fade {
+        duration: PurrimerMotion.pause-loops || root.inline ? 0ms : (root.shown ? {{ "duration-slow" | tok }} : {{ "duration-sleepy-exit" | tok }});
+        easing: root.shown ? ease-out : ease-in;
+    }
+    visible: root.inline || root.fade > 0;
+    clip: true;
+    accessible-role: groupbox;
+    accessible-label: root.alt;
+
+    changed shown => {
+        if root.shown && !root.inline {
+            root.reset(false);
+            close-button.take-focus();
+        }
+    }
+
+    s := PmSpring { value: 1; target: 1; precision: 0.001; }
+    x-spring := PmSpring { precision: 0.5; }
+    y-spring := PmSpring { precision: 0.5; }
+
+    function apply(scale: float, x: float, y: float, animated: bool) {
+        if animated {
+            s.to(scale, 0);
+            x-spring.to(x, 0);
+            y-spring.to(y, 0);
+        } else {
+            s.set(scale);
+            x-spring.set(x);
+            y-spring.set(y);
+        }
+    }
+
+    function bound-x(scale: float) -> float {
+        return max(0, (root.fit-w * scale - root.width / 1px) / 2);
+    }
+
+    function bound-y(scale: float) -> float {
+        return max(0, (root.fit-h * scale - root.height / 1px) / 2);
+    }
+
+    function resist(v: float, lo: float, hi: float) -> float {
+        return v < lo ? lo - (lo - v) * 0.35 : v > hi ? hi + (v - hi) * 0.35 : v;
+    }
+
+    function settle() {
+        let scale = Math.clamp(s.value, 1, root.max-scale);
+        if scale < 1.01 {
+            root.apply(1, 0, 0, true);
+        } else {
+            root.apply(scale, Math.clamp(x-spring.value, -root.bound-x(scale), root.bound-x(scale)), Math.clamp(y-spring.value, -root.bound-y(scale), root.bound-y(scale)), true);
+        }
+    }
+
+    // Zooms to scale keeping the image point under (px, py), measured from the stage centre, where it is.
+    function zoom-to(scale: float, px: float, py: float, animated: bool) {
+        let f = scale / s.value;
+        root.apply(scale, px - (px - x-spring.value) * f, py - (py - y-spring.value) * f, false);
+        if animated {
+            root.settle();
+        }
+    }
+
+    public function zoom-by(f: float) {
+        root.zoom-to(Math.clamp(s.target * f, 1, root.max-scale), 0, 0, true);
+    }
+
+    function reset(animated: bool) {
+        root.dismiss-scale = 1;
+        root.backdrop = 1;
+        root.armed = false;
+        root.apply(1, 0, 0, animated);
+    }
+
+    function close() {
+        if !root.closable {
+            return;
+        }
+        root.closed();
+        if root.inline {
+            root.reset(true);
+        }
+    }
+
+    Rectangle {
+        background: {{ "media-stage-bgColor" | tok }};
+        opacity: root.backdrop;
+    }
+
+    stage := FocusScope {
+        opacity: root.fade;
+        accessible-role: image;
+        accessible-label: root.alt + ". " + root.stage-label;
+
+        key-pressed(event) => {
+            if event.text == Key.Escape && root.closable {
+                root.close();
+            } else if event.text == "+" || event.text == "=" {
+                root.zoom-by(1.5);
+            } else if event.text == "-" || event.text == "_" {
+                root.zoom-by(1 / 1.5);
+            } else if event.text == "0" {
+                root.apply(1, 0, 0, true);
+            } else if s.value > 1.01 && (event.text == Key.LeftArrow || event.text == Key.RightArrow || event.text == Key.UpArrow || event.text == Key.DownArrow) {
+                let dx = event.text == Key.LeftArrow ? 48 : event.text == Key.RightArrow ? -48 : 0;
+                let dy = event.text == Key.UpArrow ? 48 : event.text == Key.DownArrow ? -48 : 0;
+                root.apply(s.value, Math.clamp(x-spring.value + dx, -root.bound-x(s.value), root.bound-x(s.value)), Math.clamp(y-spring.value + dy, -root.bound-y(s.value), root.bound-y(s.value)), true);
+            } else {
+                return reject;
+            }
+            accept
+        }
+
+        Image {
+            source: root.source;
+            image-fit: contain;
+            x: x-spring.value * 1px;
+            y: y-spring.value * 1px;
+            width: root.width;
+            height: root.height;
+            transform-scale: s.value * root.dismiss-scale * (root.inline ? 1 : 0.96 + 0.04 * root.fade);
+            accessible-role: none;
+        }
+
+        Rectangle {
+            visible: stage.has-focus;
+            x: 4px;
+            y: 4px;
+            width: parent.width - 8px;
+            height: parent.height - 8px;
+            border-width: {{ "borderWidth-thick" | tok }};
+            border-color: {{ "media-stage-focus-outlineColor" | tok }};
+        }
+
+        ScaleRotateGestureHandler {
+            started => {
+                root.pinch-s0 = s.value;
+                root.pinch-cx = (self.center.x / 1px - root.width / 2px - x-spring.value) / s.value;
+                root.pinch-cy = (self.center.y / 1px - root.height / 2px - y-spring.value) / s.value;
+                root.mode = "pinch";
+            }
+            updated => {
+                let raw = root.pinch-s0 * self.scale;
+                let scale = raw < 1 ? 1 - (1 - raw) * 0.4 : raw > root.max-scale ? root.max-scale + (raw - root.max-scale) * 0.4 : raw;
+                root.apply(scale, self.center.x / 1px - root.width / 2px - root.pinch-cx * scale, self.center.y / 1px - root.height / 2px - root.pinch-cy * scale, false);
+            }
+            ended => {
+                root.mode = "";
+                root.settle();
+            }
+            cancelled => {
+                root.mode = "";
+                root.settle();
+            }
+        }
+
+        TouchArea {
+            mouse-cursor: crosshair;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left && root.mode != "pinch" {
+                    stage.focus();
+                    root.grab-x = self.mouse-x;
+                    root.grab-y = self.mouse-y;
+                    root.tx = x-spring.value;
+                    root.ty = y-spring.value;
+                    root.mode = "";
+                    root.vy = 0;
+                    root.last-y = self.mouse-y;
+                    root.last-t = animation-tick();
+                    s.stop();
+                    x-spring.stop();
+                    y-spring.stop();
+                } else if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) || event.kind == PointerEventKind.cancel {
+                    if root.mode == "dismiss" {
+                        let dy = y-spring.value;
+                        let flick = abs(root.vy) > 0.6 && (root.vy > 0) == (dy > 0);
+                        let armed = root.armed;
+                        root.armed = false;
+                        if event.kind != PointerEventKind.cancel && (armed || flick) {
+                            root.mode = "";
+                            root.close();
+                            return;
+                        }
+                        root.dismiss-scale = 1;
+                        root.backdrop = 1;
+                        root.apply(1, 0, 0, true);
+                    } else if root.mode != "pinch" {
+                        root.settle();
+                    }
+                    root.mode = "";
+                }
+            }
+            moved => {
+                if root.mode == "pinch" {
+                    return;
+                }
+                let dx = (self.mouse-x - root.grab-x) / 1px;
+                let dy = (self.mouse-y - root.grab-y) / 1px;
+                if root.mode == "" {
+                    if abs(dx) < 10 && abs(dy) < 10 {
+                        return;
+                    }
+                    root.mode = s.value > 1.01 ? "pan" : abs(dy) > abs(dx) && root.closable ? "dismiss" : "none";
+                }
+                if root.mode == "pan" {
+                    root.apply(s.value, root.resist(root.tx + dx, -root.bound-x(s.value), root.bound-x(s.value)), root.resist(root.ty + dy, -root.bound-y(s.value), root.bound-y(s.value)), false);
+                } else if root.mode == "dismiss" {
+                    let f = min(1, abs(dy) / (96 * 3));
+                    root.dismiss-scale = 1 - f * 0.1;
+                    root.backdrop = 1 - f * 0.7;
+                    root.armed = abs(dy) >= 96;
+                    root.apply(1, 0, dy, false);
+                    let now = animation-tick();
+                    if now > root.last-t {
+                        root.vy = (self.mouse-y - root.last-y) / 1px / ((now - root.last-t) / 1ms);
+                    }
+                    root.last-y = self.mouse-y;
+                    root.last-t = now;
+                }
+            }
+            double-clicked => {
+                root.mode = "";
+                if s.value > 1.01 {
+                    root.apply(1, 0, 0, true);
+                } else {
+                    root.zoom-to(min(2.5, root.max-scale), self.mouse-x / 1px - root.width / 2px, self.mouse-y / 1px - root.height / 2px, true);
+                }
+            }
+            scroll-event(event) => {
+                if event.modifiers.control {
+                    root.zoom-to(Math.clamp(s.value * Math.exp(event.delta-y / 1px * 0.01), 1, root.max-scale), self.mouse-x / 1px - root.width / 2px, self.mouse-y / 1px - root.height / 2px, false);
+                    wheel-settle.running = false;
+                    wheel-settle.running = true;
+                    return accept;
+                }
+                if s.value > 1.01 {
+                    root.apply(s.value, Math.clamp(x-spring.value + event.delta-x / 1px, -root.bound-x(s.value), root.bound-x(s.value)), Math.clamp(y-spring.value + event.delta-y / 1px, -root.bound-y(s.value), root.bound-y(s.value)), false);
+                    return accept;
+                }
+                reject
+            }
+        }
+
+        wheel-settle := Timer {
+            interval: 120ms;
+            running: false;
+            triggered => {
+                self.running = false;
+                root.settle();
+            }
+        }
+    }
+
+    close-button := StageButton {
+        visible: root.closable;
+        opacity: root.fade;
+        x: parent.width - self.width - 8px;
+        y: 8px;
+        icon: PurrimerIcons.x-16;
+        label: root.close-label;
+        armed: root.armed;
+        clicked => { root.close(); }
+    }
+
+    Rectangle {
+        y: parent.height - self.height;
+        height: 24px + {{ "touch-target-min" | tok }} + 8px;
+        background: {{ "media-stage-bar-bgColor" | tok }};
+        opacity: root.fade;
+
+        Text {
+            x: {{ "mobile-gutter" | tok }};
+            y: parent.height - 8px - {{ "touch-target-min" | tok }};
+            width: zoom-out.x - self.x - 8px;
+            height: {{ "touch-target-min" | tok }};
+            text: root.caption;
+            overflow: elide;
+            vertical-alignment: center;
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            color: {{ "media-stage-fgColor" | tok }};
+        }
+
+        zoom-out := StageButton {
+            x: parent.width - 8px - self.width - 4px - 48px - 4px - self.width;
+            y: parent.height - 8px - self.height;
+            icon: PurrimerIcons.dash-16;
+            label: root.zoom-out-label;
+            enabled: s.target > 1.01;
+            clicked => { root.zoom-by(1 / 1.5); }
+        }
+
+        Text {
+            x: parent.width - 8px - {{ "touch-target-min" | tok }} - 4px - 48px;
+            y: parent.height - 8px - {{ "touch-target-min" | tok }};
+            width: 48px;
+            height: {{ "touch-target-min" | tok }};
+            text: Math.round(s.value * 100) + "%";
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            color: {{ "media-stage-fgColor" | tok }};
+        }
+
+        StageButton {
+            x: parent.width - 8px - self.width;
+            y: parent.height - 8px - self.height;
+            icon: PurrimerIcons.plus-16;
+            label: root.zoom-in-label;
+            enabled: s.target < root.max-scale - 0.01;
+            clicked => { root.zoom-by(1.5); }
+        }
+    }
+}

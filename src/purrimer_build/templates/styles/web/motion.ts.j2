@@ -956,3 +956,291 @@ export function wireHoldMenu(parts: HoldParts): () => void {
     wrap.removeEventListener("keydown", keydown);
   };
 }
+
+export interface ViewerParts {
+  stage: HTMLElement;
+  img: HTMLImageElement;
+  backdrop: HTMLElement;
+  maxScale: () => number;
+  canClose: () => boolean;
+  close: () => void;
+  onScale: (scale: number) => void;
+  onArmed: (armed: boolean) => void;
+}
+
+export interface Viewer {
+  zoomBy: (factor: number) => void;
+  reset: () => void;
+  keydown: (e: KeyboardEvent) => boolean;
+  destroy: () => void;
+}
+
+const VIEWER_DISMISS = 96;
+const VIEWER_FLICK = 0.6;
+const VIEWER_DOUBLE_TAP = 300;
+
+// Pinch and double-tap zoom, panning with resistance at the edges, and drag down to close, for ImageViewer.
+export function wireImageViewer(parts: ViewerParts): Viewer {
+  const { stage, img, backdrop } = parts;
+  let t = { s: 1, x: 0, y: 0 };
+  const pointers = new Map<number, { x: number; y: number }>();
+  let lastTap: { t: number; x: number; y: number } | null = null;
+  let wheelTimer = 0;
+  type Gesture = {
+    mode: "pinch" | "pan" | "dismiss" | "none" | null;
+    moved: boolean;
+    startT: number;
+    sy: number;
+    armed: boolean;
+    x0: number;
+    y0: number;
+    tx: number;
+    ty: number;
+    d0: number;
+    s0: number;
+    cx: number;
+    cy: number;
+    atMax: boolean;
+    dy: number;
+    vy: number;
+    lastY: number | null;
+    lastT: number;
+  };
+  let g: Gesture | null = null;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const resist = (v: number, lo: number, hi: number) => (v < lo ? lo - (lo - v) * 0.35 : v > hi ? hi + (v - hi) * 0.35 : v);
+
+  function bounds(s: number) {
+    return {
+      x: Math.max(0, (img.offsetWidth * s - stage.clientWidth) / 2),
+      y: Math.max(0, (img.offsetHeight * s - stage.clientHeight) / 2),
+    };
+  }
+
+  function apply(animate: boolean, extra = "") {
+    img.style.transition = animate
+      ? "transform var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), opacity {{ "duration-base" | tok }} {{ "easing-standard" | tok }}"
+      : "none";
+    img.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.s})${extra}`;
+  }
+
+  function settle() {
+    const s = clamp(t.s, 1, parts.maxScale());
+    if (s < 1.01) t = { s: 1, x: 0, y: 0 };
+    else {
+      const b = bounds(s);
+      t = { s, x: clamp(t.x, -b.x, b.x), y: clamp(t.y, -b.y, b.y) };
+    }
+    apply(true);
+    parts.onScale(t.s);
+  }
+
+  // Zooms to s keeping the image point under (px, py), measured from the stage centre, where it is.
+  function zoomTo(s: number, px: number, py: number, animate: boolean) {
+    const k = s / t.s;
+    t = { s, x: px - (px - t.x) * k, y: py - (py - t.y) * k };
+    if (animate) settle();
+    else {
+      apply(false);
+      parts.onScale(t.s);
+    }
+  }
+
+  function fromCentre(x: number, y: number) {
+    const r = stage.getBoundingClientRect();
+    return { x: x - r.left - r.width / 2, y: y - r.top - r.height / 2 };
+  }
+
+  function dismissOut(dy: number) {
+    img.style.transition = "transform {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}, opacity {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}";
+    if (!reducedMotion()) img.style.transform = `translate(0px, ${dy + Math.sign(dy || 1) * innerHeight * 0.5}px) scale(0.9)`;
+    img.style.opacity = "0";
+    backdrop.style.opacity = "0";
+    setTimeout(() => {
+      parts.close();
+      t = { s: 1, x: 0, y: 0 };
+      img.style.opacity = "";
+      backdrop.style.opacity = "";
+      apply(false);
+    }, {{ ms("duration-sleepy-exit") }});
+  }
+
+  function startGesture() {
+    if (!g) return;
+    const ids = [...pointers.values()];
+    if (ids.length >= 2) {
+      const [a, b] = ids;
+      const m = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+      g.mode = "pinch";
+      g.d0 = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      g.s0 = t.s;
+      g.cx = (m.x - t.x) / t.s;
+      g.cy = (m.y - t.y) / t.s;
+      g.atMax = t.s >= parts.maxScale();
+      g.moved = true;
+    } else if (ids.length === 1) {
+      g.mode = null;
+      g.x0 = ids[0].x;
+      g.y0 = ids[0].y;
+      g.tx = t.x;
+      g.ty = t.y;
+    }
+  }
+
+  function down(e: PointerEvent) {
+    if (e.button > 0 || (e.target as Element).closest?.("button")) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!g) {
+      g = { mode: null, moved: false, startT: e.timeStamp, sy: e.clientY, armed: false, x0: 0, y0: 0, tx: 0, ty: 0, d0: 1, s0: 1, cx: 0, cy: 0, atMax: false, dy: 0, vy: 0, lastY: null, lastT: 0 };
+      listen(true);
+      img.style.transition = "none";
+    }
+    startGesture();
+  }
+
+  function move(e: PointerEvent) {
+    const p = pointers.get(e.pointerId);
+    if (!p || !g) return;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    const max = parts.maxScale();
+    if (g.mode === "pinch" && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const m = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+      const raw = g.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / g.d0);
+      const s = raw < 1 ? 1 - (1 - raw) * 0.4 : raw > max ? max + (raw - max) * 0.4 : raw;
+      if (raw >= max && !g.atMax) buzz(16);
+      g.atMax = raw >= max;
+      t = { s, x: m.x - g.cx * s, y: m.y - g.cy * s };
+      apply(false);
+      parts.onScale(clamp(s, 1, max));
+      return;
+    }
+    const dx = e.clientX - g.x0;
+    const dy = e.clientY - g.y0;
+    if (!g.mode) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      g.moved = true;
+      g.mode = t.s > 1.01 ? "pan" : Math.abs(dy) > Math.abs(dx) && parts.canClose() ? "dismiss" : "none";
+    }
+    if (g.mode === "pan") {
+      const b = bounds(t.s);
+      t = { s: t.s, x: resist(g.tx + dx, -b.x, b.x), y: resist(g.ty + dy, -b.y, b.y) };
+      apply(false);
+    } else if (g.mode === "dismiss") {
+      const k = Math.min(1, Math.abs(dy) / (VIEWER_DISMISS * 3));
+      t = { s: 1, x: 0, y: dy };
+      apply(false, ` scale(${1 - k * 0.1})`);
+      backdrop.style.transition = "none";
+      backdrop.style.opacity = String(1 - k * 0.7);
+      const armed = Math.abs(dy) >= VIEWER_DISMISS;
+      if (armed !== g.armed) {
+        g.armed = armed;
+        parts.onArmed(armed);
+        if (armed) buzz();
+      }
+      const dt = e.timeStamp - (g.lastT || g.startT);
+      g.vy = dt > 0 ? (e.clientY - (g.lastY ?? g.sy)) / dt : 0;
+      g.dy = dy;
+      g.lastY = e.clientY;
+      g.lastT = e.timeStamp;
+    }
+  }
+
+  function up(e: PointerEvent, cancelled: boolean) {
+    const p = pointers.get(e.pointerId);
+    if (!p || !g) return;
+    pointers.delete(e.pointerId);
+    const G = g;
+    if (pointers.size) {
+      startGesture();
+      return;
+    }
+    listen(false);
+    g = null;
+    if (G.mode === "dismiss") {
+      parts.onArmed(false);
+      const flick = Math.abs(G.vy) > VIEWER_FLICK && G.vy > 0 === G.dy > 0;
+      if (!cancelled && (G.armed || flick)) {
+        dismissOut(G.dy);
+        return;
+      }
+      t = { s: 1, x: 0, y: 0 };
+      backdrop.style.transition = "opacity var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease)";
+      backdrop.style.opacity = "";
+      apply(true);
+      return;
+    }
+    if (!G.moved && !cancelled && e.timeStamp - G.startT < 250) {
+      if (lastTap && e.timeStamp - lastTap.t < VIEWER_DOUBLE_TAP && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 24) {
+        lastTap = null;
+        const c = fromCentre(p.x, p.y);
+        if (t.s > 1.01) {
+          t = { s: 1, x: 0, y: 0 };
+          settle();
+        } else zoomTo(Math.min(2.5, parts.maxScale()), c.x, c.y, true);
+        return;
+      }
+      lastTap = { t: e.timeStamp, x: p.x, y: p.y };
+    }
+    settle();
+  }
+
+  const onMove = (e: PointerEvent) => move(e);
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+  function listen(on: boolean) {
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("pointermove", onMove as EventListener, true);
+    window[method]("pointerup", onUp as EventListener, true);
+    window[method]("pointercancel", onCancel as EventListener, true);
+  }
+
+  function wheel(e: WheelEvent) {
+    e.preventDefault();
+    if (e.ctrlKey) {
+      const c = fromCentre(e.clientX, e.clientY);
+      zoomTo(clamp(t.s * Math.exp(-e.deltaY * 0.01), 1, parts.maxScale()), c.x, c.y, false);
+      clearTimeout(wheelTimer);
+      wheelTimer = window.setTimeout(settle, 120);
+    } else if (t.s > 1.01) {
+      const b = bounds(t.s);
+      t = { s: t.s, x: clamp(t.x - e.deltaX, -b.x, b.x), y: clamp(t.y - e.deltaY, -b.y, b.y) };
+      apply(false);
+    }
+  }
+
+  stage.addEventListener("pointerdown", down);
+  stage.addEventListener("wheel", wheel, { passive: false });
+
+  return {
+    zoomBy: (f) => zoomTo(clamp(t.s * f, 1, parts.maxScale()), 0, 0, true),
+    reset: () => {
+      t = { s: 1, x: 0, y: 0 };
+      settle();
+    },
+    keydown: (e) => {
+      const k = e.key;
+      if (k === "+" || k === "=") zoomTo(clamp(t.s * 1.5, 1, parts.maxScale()), 0, 0, true);
+      else if (k === "-" || k === "_") zoomTo(clamp(t.s / 1.5, 1, parts.maxScale()), 0, 0, true);
+      else if (k === "0") {
+        t = { s: 1, x: 0, y: 0 };
+        settle();
+      } else if (t.s > 1.01 && k.startsWith("Arrow")) {
+        const b = bounds(t.s);
+        const dx = k === "ArrowLeft" ? 48 : k === "ArrowRight" ? -48 : 0;
+        const dy = k === "ArrowUp" ? 48 : k === "ArrowDown" ? -48 : 0;
+        t = { s: t.s, x: clamp(t.x + dx, -b.x, b.x), y: clamp(t.y + dy, -b.y, b.y) };
+        apply(true);
+      } else return false;
+      e.preventDefault();
+      return true;
+    },
+    destroy: () => {
+      listen(false);
+      clearTimeout(wheelTimer);
+      stage.removeEventListener("pointerdown", down);
+      stage.removeEventListener("wheel", wheel);
+    },
+  };
+}

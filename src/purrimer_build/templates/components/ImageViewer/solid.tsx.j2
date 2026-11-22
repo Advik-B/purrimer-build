@@ -1,0 +1,121 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { wireImageViewer, type Viewer } from "../motion";
+
+export type ImageViewerLabels = Partial<Record<"image" | "stage" | "close" | "zoomIn" | "zoomOut", string>>;
+
+export type ImageViewerProps = {
+  src: string;
+  alt: string;
+  caption?: string;
+  open?: boolean;
+  // Drawn in place instead of over the screen, for docs and previews.
+  inline?: boolean;
+  maxScale?: number;
+  labels?: ImageViewerLabels;
+  onClose?: () => void;
+};
+
+export function ImageViewer(props: ImageViewerProps): JSX.Element {
+  const shown = () => !!props.inline || !!props.open;
+  const [phase, setPhase] = createSignal<"closed" | "open" | "closing">(shown() ? "open" : "closed");
+  const [scale, setScale] = createSignal(1);
+  const [armed, setArmed] = createSignal(false);
+  const maxScale = () => props.maxScale ?? 4;
+  const labels = () => props.labels ?? {};
+  const name = () => props.alt || labels().image || "Image";
+  let stage: HTMLDivElement | undefined;
+  let img: HTMLImageElement | undefined;
+  let backdrop: HTMLDivElement | undefined;
+  let closeButton: HTMLButtonElement | undefined;
+  let viewer: Viewer | null = null;
+  let timer = 0;
+  let before: HTMLElement | null = null;
+
+  createEffect(shown, (on) => {
+    clearTimeout(timer);
+    if (on) {
+      if (!props.inline) before = document.activeElement as HTMLElement | null;
+      setPhase("open");
+      requestAnimationFrame(() => {
+        if (!stage || !img || !backdrop) return;
+        viewer?.destroy();
+        viewer = wireImageViewer({
+          stage,
+          img,
+          backdrop,
+          maxScale,
+          canClose: () => !!props.onClose,
+          close: () => props.onClose?.(),
+          onScale: setScale,
+          onArmed: setArmed,
+        });
+        if (!props.inline) closeButton?.focus();
+      });
+    } else if (phase() === "open") {
+      viewer?.destroy();
+      viewer = null;
+      setScale(1);
+      setPhase("closing");
+      timer = window.setTimeout(() => setPhase("closed"), {{ ms("duration-sleepy-exit") }});
+      before?.focus?.();
+      before = null;
+    }
+  });
+  onCleanup(() => {
+    clearTimeout(timer);
+    viewer?.destroy();
+  });
+
+  function keydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && props.onClose) {
+      e.preventDefault();
+      props.onClose();
+      return;
+    }
+    viewer?.keydown(e);
+  }
+
+  return (
+    <Show when={phase() !== "closed"}>
+      <div
+        class={`pm-imgview${props.inline ? " pm-imgview--inline" : ""}${phase() === "closing" ? " pm-imgview--closing" : ""}`}
+        role={props.inline ? "group" : "dialog"}
+        aria-modal={props.inline ? undefined : "true"}
+        aria-label={name()}
+        data-density="touch"
+        tabindex="-1"
+        onKeyDown={keydown}
+      >
+        <div ref={backdrop} class="pm-imgview__backdrop" aria-hidden="true" />
+        <div ref={stage} class="pm-imgview__stage" tabindex="0" role="img" aria-label={(labels().stage ?? "{name}. Plus and minus zoom, arrow keys move.").replace("{name}", name())}>
+          <img ref={img} class="pm-imgview__img" src={props.src} alt={props.alt} draggable={false} />
+        </div>
+        <Show when={props.onClose}>
+          <div class="pm-imgview__top">
+            <button ref={closeButton} type="button" class={`pm-imgview__btn${armed() ? " pm-imgview__btn--armed" : ""}`} aria-label={labels().close ?? "Close"} onClick={() => props.onClose?.()}>
+              <Icon name="x" />
+            </button>
+          </div>
+        </Show>
+        <div class="pm-imgview__bottom">
+          <Show when={props.caption} fallback={<span />}>
+            <p class="pm-imgview__caption">{props.caption}</p>
+          </Show>
+          <span class="pm-imgview__zoom">
+            <button type="button" class="pm-imgview__btn" aria-label={labels().zoomOut ?? "Zoom out"} aria-disabled={scale() <= 1.01 ? "true" : undefined} onClick={() => viewer?.zoomBy(1 / 1.5)}>
+              <Icon name="dash" />
+            </button>
+            <span class="pm-imgview__pct" aria-live="polite">{Math.round(scale() * 100)}%</span>
+            <button type="button" class="pm-imgview__btn" aria-label={labels().zoomIn ?? "Zoom in"} aria-disabled={scale() >= maxScale() - 0.01 ? "true" : undefined} onClick={() => viewer?.zoomBy(1.5)}>
+              <Icon name="plus" />
+            </button>
+          </span>
+        </div>
+      </div>
+    </Show>
+  );
+}

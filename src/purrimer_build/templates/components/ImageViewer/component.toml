@@ -1,0 +1,40 @@
+name = "ImageViewer"
+group = "Mobile"
+order = 67
+summary = "A photo on a dark stage that people pinch or double-tap to zoom, drag to look around, and drag down to close."
+web_exports = ["type ImageViewerLabels"]
+
+[props.src]
+type = "string"
+default = ""
+doc = "The picture."
+
+[props.alt]
+type = "string"
+default = ""
+doc = "What the picture shows; it names the viewer."
+
+[props.caption]
+type = "string"
+default = ""
+doc = "A line under the picture."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Shows the viewer over the screen."
+
+[props.inline]
+type = "bool"
+default = false
+doc = "Draws the viewer in place instead of over the screen, for docs and previews."
+
+[props.maxScale]
+type = "number"
+default = 4
+doc = "The furthest zoom."
+
+[props.labels]
+type = "object"
+default = {}
+doc = "Words for the image, stage, close, zoomIn and zoomOut, for translation."

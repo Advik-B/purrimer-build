@@ -1,0 +1,97 @@
+/* The stage is dark in every theme and has its own tokens; tune it there, never with data-theme on the viewer. */
+.pm-imgview {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  overflow: hidden;
+  color: {{ "media-stage-fgColor" | tok }};
+  --focus-outlineColor: {{ "media-stage-focus-outlineColor" | tok }};
+  animation: pm-fade-in {{ "duration-base" | tok }} {{ "easing-standard" | tok }} both;
+}
+.pm-imgview--inline { position: relative; inset: auto; z-index: auto; width: 100%; height: 100%; min-height: 320px; animation: none; }
+.pm-imgview--closing { animation: pm-fade-out {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }} both; }
+.pm-imgview__backdrop { position: absolute; inset: 0; background: {{ "media-stage-bgColor" | tok }}; }
+.pm-imgview__stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  outline: none;
+  cursor: zoom-in;
+}
+.pm-imgview__stage:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "media-stage-focus-outlineColor" | tok }}; outline-offset: -4px; }
+.pm-imgview__img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transform-origin: center;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+  animation: pm-imgview-in {{ "duration-slow" | tok }} {{ "easing-sleepy-enter" | tok }} backwards;
+}
+.pm-imgview--inline .pm-imgview__img { animation: none; }
+.pm-imgview__top, .pm-imgview__bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: {{ "base-size-8" | tok }};
+  padding: {{ "base-size-8" | tok }};
+  pointer-events: none;
+}
+.pm-imgview__top { top: 0; justify-content: flex-end; padding-top: calc({{ "base-size-8" | tok }} + env(safe-area-inset-top, 0px)); }
+.pm-imgview__bottom {
+  bottom: 0;
+  justify-content: space-between;
+  padding-top: {{ "base-size-24" | tok }};
+  padding-left: {{ "mobile-gutter" | tok }};
+  padding-bottom: calc({{ "base-size-8" | tok }} + env(safe-area-inset-bottom, 0px));
+  background: {{ "media-stage-bar-bgColor" | tok }};
+}
+.pm-imgview__top > *, .pm-imgview__bottom > * { pointer-events: auto; }
+.pm-imgview__caption { flex: 1; min-width: 0; margin: 0; font-family: var(--font-sans); font-size: 14px; line-height: 20px; color: {{ "media-stage-fgColor" | tok }}; }
+.pm-imgview__zoom { display: inline-flex; align-items: center; gap: {{ "base-size-4" | tok }}; }
+.pm-imgview__pct {
+  min-width: 48px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  color: {{ "media-stage-fgColor" | tok }};
+}
+.pm-imgview__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: {{ "touch-target-min" | tok }};
+  height: {{ "touch-target-min" | tok }};
+  margin: 0;
+  padding: 0;
+  color: {{ "media-stage-fgColor" | tok }};
+  background: {{ "media-stage-control-bgColor" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "media-stage-control-borderColor" | tok }};
+  border-radius: {{ "borderRadius-full" | tok }};
+  cursor: pointer;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
+}
+.pm-imgview__btn .pm-icon { fill: currentColor; }
+.pm-imgview__btn:active { scale: var(--pm-press-scale, 0.96); }
+.pm-imgview__btn[aria-disabled="true"] { opacity: 0.4; pointer-events: none; }
+.pm-imgview__btn--armed {
+  color: {{ "media-stage-control-fgColor-armed" | tok }};
+  background: {{ "media-stage-control-bgColor-armed" | tok }};
+  border-color: {{ "media-stage-control-bgColor-armed" | tok }};
+}
+.pm-imgview__btn:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "media-stage-focus-outlineColor" | tok }}; outline-offset: 2px; }
+@keyframes pm-imgview-in { from { opacity: 0; scale: 0.96; } }
+@media (prefers-reduced-motion: reduce) {
+  .pm-imgview__img { animation-name: pm-fade-in; }
+}

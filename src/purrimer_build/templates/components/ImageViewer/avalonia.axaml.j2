@@ -1,0 +1,54 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ImageViewer}" TargetType="pm:ImageViewer">
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+  </ControlTheme>
+
+  <ControlTheme x:Key="{x:Type pm:ImageViewerButton}" TargetType="pm:ImageViewerButton">
+    <Setter Property="Width" Value="{{ "touch-target-min" | tok }}" />
+    <Setter Property="Height" Value="{{ "touch-target-min" | tok }}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Foreground" Value="{DynamicResource PmMediaStageFgColor}" />
+    <Setter Property="Background" Value="{DynamicResource PmMediaStageControlBgColor}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource PmMediaStageControlBorderColor}" />
+    <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
+    <Setter Property="RenderTransform" Value="scale(1)" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <TransformOperationsTransition Property="RenderTransform" Duration="0:0:0.2" />
+      </Transitions>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ImageViewerButton">
+        <Panel>
+          <Border Name="ring" Margin="-3" CornerRadius="999" BorderThickness="{{ "borderWidth-thick" | tokx("Thickness") }}"
+                  BorderBrush="{DynamicResource PmMediaStageFocusOutlineColor}" IsVisible="False" />
+          <Border CornerRadius="999" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}">
+            <pm:Icon IconName="{TemplateBinding IconName}" Size="16"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pressed">
+      <Setter Property="RenderTransform" Value="scale(0.96)" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Opacity" Value="0.4" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#ring">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^[IsArmed=True]">
+      <Setter Property="Foreground" Value="{DynamicResource PmMediaStageControlFgColorArmed}" />
+      <Setter Property="Background" Value="{DynamicResource PmMediaStageControlBgColorArmed}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource PmMediaStageControlBgColorArmed}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>
