@@ -23,6 +23,20 @@ const classlessExamples = import.meta.glob<string>("../stage/examples/*/classles
   import: "default",
 });
 const svelteExamples = import.meta.glob("../stage/examples/*/svelte.svelte");
+// Pictures an example keeps beside its files. The HTML examples name them relatively, as a page next to them would.
+const assets = import.meta.glob<string>("../stage/examples/*/*.{jpg,jpeg,png,webp}", {
+  query: "?url",
+  import: "default",
+  eager: true,
+});
+
+function resolveAssets(): void {
+  for (const node of Array.from(frame.querySelectorAll<HTMLImageElement>("img[src]"))) {
+    const src = node.getAttribute("src") ?? "";
+    const url = assets[`../stage/examples/${component}/${src.replace(/^\.\//, "")}`];
+    if (url) node.src = url;
+  }
+}
 const solidExamples = import.meta.glob("../stage/examples/*/solid.tsx");
 
 function pick<T>(glob: Record<string, () => Promise<T>>, file: string): () => Promise<T> {
@@ -35,8 +49,10 @@ function pick<T>(glob: Record<string, () => Promise<T>>, file: string): () => Pr
 async function mount(): Promise<void> {
   if (target === "css") {
     frame.innerHTML = await pick(cssExamples, "css.html")();
+    resolveAssets();
   } else if (target === "classless") {
     frame.innerHTML = await pick(classlessExamples, "classless.html")();
+    resolveAssets();
   } else if (target === "svelte") {
     const { mount } = await import("svelte");
     const mod = (await pick(svelteExamples, "svelte.svelte")()) as { default: never };

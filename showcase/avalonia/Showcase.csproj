@@ -28,4 +28,9 @@
     <AvaloniaXaml Include="$(PurrimerDir)**/*.axaml" Link="Purrimer/%(RecursiveDir)%(Filename)%(Extension)" />
     <AvaloniaResource Include="$(PurrimerDir)Fonts/**" Link="Purrimer/Fonts/%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
+
+  <!-- Pictures the examples keep beside their files, as avares://Purrimer.Avalonia/Examples/<Name>/<file>. -->
+  <ItemGroup>
+    <AvaloniaResource Include="$(MSBuildThisFileDirectory)../../examples/**/*.jpg;$(MSBuildThisFileDirectory)../../examples/**/*.png" Link="Examples/%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
 </Project>
