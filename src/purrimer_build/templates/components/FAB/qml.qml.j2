@@ -13,13 +13,31 @@ T.Button {
     // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
     property bool folded: false
     property real fold: folded && extended ? 1 : 0
+    // Two to six { icon, label } that a press and hold opens above the FAB (see HoldMenu); a tap still clicks, or opens
+    // them with tapOpens. actionSelected(index) reports the choice.
+    property var actions: []
+    property string actionsLayout: "stack"
+    property bool tapOpens: false
+    signal actionSelected(int index)
     Behavior on fold { NumberAnimation { duration: Purrimer.pauseLoops ? 0 : {{ "duration-base" | tok }}; easing.type: Easing.InOutQuad } }
 
     implicitWidth: extended ? row.implicitWidth + 32 + ({{ "mobile-fab-size" | tok }} - row.implicitWidth - 32) * fold : {{ "mobile-fab-size" | tok }}
     implicitHeight: {{ "mobile-fab-size" | tok }}
     Accessible.name: label
-    scale: down ? 0.96 : 1
-    Behavior on scale { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
+    // Compresses while pressed and springs back on release.
+    scale: down && !Purrimer.pauseLoops ? Purrimer.pressScale : 1
+    Behavior on scale { SpringAnimation { spring: 5; damping: 0.35; epsilon: 0.001 } }
+
+    HoldMenu {
+        target: control
+        width: 0
+        height: 0
+        items: control.actions
+        layout: control.actionsLayout
+        tapOpens: control.tapOpens
+        accessibleName: control.label
+        onSelected: (index) => control.actionSelected(index)
+    }
 
     contentItem: Item {
         clip: true

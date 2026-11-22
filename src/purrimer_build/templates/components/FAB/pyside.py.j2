@@ -4,22 +4,39 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QRectF, QSize, Qt, QVariantAnimation
+from PySide6.QtCore import QRectF, QSize, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
 from ..icons import paint_icon
+from ..motion import PressFeedback
 from ..theme import theme
+from .hold_menu import HoldMenu, HoldMenuItem
 
 SIZE = {{ px("mobile-fab-size") | int }}
 
 
 class FAB(QAbstractButton):
-    """The floating action button; extended shows the label beside the icon."""
+    """The floating action button; extended shows the label beside the icon. It compresses while pressed.
+
+    Give it `actions` (two to six HoldMenuItem) and a press and hold opens them above it; slide onto one and release to
+    choose it, which emits `action_selected(index)`. A tap still emits `clicked`, or opens them with tap_opens.
+    actions_layout picks the labelled "stack" or the icon-only "arc".
+    """
+
+    action_selected = Signal(int)
 
     def __init__(self, icon: str = "plus", label: str = "", extended: bool = False,
+                 actions: list[HoldMenuItem] | None = None, actions_layout: str = "stack", tap_opens: bool = False,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._press = PressFeedback(self)
+        self.pressed.connect(self._press.press)
+        self.released.connect(self._press.release)
+        self.hold_menu: HoldMenu | None = None
+        if actions:
+            self.hold_menu = HoldMenu(self, actions, layout=actions_layout, tap_opens=tap_opens, accessible_name=label)
+            self.hold_menu.selected.connect(self.action_selected)
         self._icon = icon
         self._extended = extended
         # 0 shows an extended FAB's label; 1 folds it to its icon.
@@ -78,6 +95,10 @@ class FAB(QAbstractButton):
         painter = QPainter(self)
         painter.setFont(self._font)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        scale = self._press.scale
+        painter.translate(self.width() / 2, self.height() / 2)
+        painter.scale(scale, scale)
+        painter.translate(-self.width() / 2, -self.height() / 2)
         if self.isDown():
             token = {{ "button-primary-bgColor-active" | tok }}
         elif self.underMouse():

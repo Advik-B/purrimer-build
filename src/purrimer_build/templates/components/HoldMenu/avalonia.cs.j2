@@ -105,6 +105,19 @@ public class HoldMenu : ContentControl
     // Two to six options; item 0 sits nearest the button.
     public AvaloniaList<HoldMenuItem> Items { get; } = new();
 
+    // Replaces the items, for a control that keeps them elsewhere, as FAB does with its actions.
+    public IEnumerable<HoldMenuItem> ItemsSource
+    {
+        get => Items;
+        set
+        {
+            if (ReferenceEquals(value, Items))
+                return;
+            Items.Clear();
+            Items.AddRange(value);
+        }
+    }
+
     // stack: labelled options in a column. arc: two to four icon-only options fanned around a corner button.
     public string Layout { get => GetValue(LayoutProperty); set => SetValue(LayoutProperty, value); }
     // up or down: which side of the button the options open on.
