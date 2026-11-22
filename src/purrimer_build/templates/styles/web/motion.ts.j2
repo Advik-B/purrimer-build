@@ -1244,3 +1244,70 @@ export function wireImageViewer(parts: ViewerParts): Viewer {
     },
   };
 }
+
+// Press anywhere on a bar of equal cells and slide: onScrub follows the finger cell by cell, with a tick at each, and
+// onCommit gets the cell under the finger on release. The click a scrub ends with is swallowed. A press that never
+// moves 10px stays an ordinary click.
+export function wireScrub(bar: HTMLElement, count: () => number, onScrub: (index: number) => void, onCommit: (index: number) => void): () => void {
+  let g: { x: number; id: number; active: boolean; at: number } | null = null;
+  let swallow = false;
+  const indexAt = (x: number) => {
+    const r = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(count() - 1, Math.floor(((x - r.left) / r.width) * count())));
+  };
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || !count()) return;
+    swallow = false;
+    g = { x: e.clientX, id: e.pointerId, active: false, at: -1 };
+  };
+  const move = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    if (!g.active) {
+      if (Math.abs(e.clientX - g.x) < 10) return;
+      g.active = true;
+      try {
+        bar.setPointerCapture(e.pointerId);
+      } catch {
+        // Without capture the scrub ends when the finger leaves the bar.
+      }
+    }
+    const i = indexAt(e.clientX);
+    if (i !== g.at) {
+      if (g.at !== -1) buzz(6);
+      g.at = i;
+      onScrub(i);
+    }
+  };
+  const up = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    const done = g;
+    g = null;
+    if (!done.active) return;
+    swallow = true;
+    onScrub(-1);
+    onCommit(done.at);
+  };
+  const cancel = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    g = null;
+    onScrub(-1);
+  };
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  bar.addEventListener("pointerdown", down);
+  bar.addEventListener("pointermove", move);
+  bar.addEventListener("pointerup", up);
+  bar.addEventListener("pointercancel", cancel);
+  bar.addEventListener("click", click, true);
+  return () => {
+    bar.removeEventListener("pointerdown", down);
+    bar.removeEventListener("pointermove", move);
+    bar.removeEventListener("pointerup", up);
+    bar.removeEventListener("pointercancel", cancel);
+    bar.removeEventListener("click", click, true);
+  };
+}

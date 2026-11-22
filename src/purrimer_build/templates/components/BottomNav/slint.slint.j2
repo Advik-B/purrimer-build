@@ -1,6 +1,6 @@
 // {{ note }}
 // {{ c.summary }}
-import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
 
@@ -9,75 +9,202 @@ export struct BottomNavItem {
     icon: string,
     label: string,
     badge: int,
+    // A dot instead of a count.
+    dot: bool,
+    // Shown while the item is current; leave empty to keep icon.
+    active-icon: string,
 }
 
-export component BottomNav inherits Rectangle {
+// The bottom navigation bar: three to five destinations, the current one marked by a short bar on the top edge that
+// slides from tab to tab. Press anywhere on the bar and slide to scrub: the bar follows the pointer, the tab under it
+// lifts, and that tab opens on release. Left and Right move between tabs, Enter or Space opens one. activated(index)
+// fires on every press, the current tab included.
+export component BottomNav inherits FocusScope {
     in property <[BottomNavItem]> items;
     in-out property <int> selected;
     in property <bool> show-labels;
+    in property <string> accessible-name: "Main";
     callback activated(int);
+    property <int> count: min(root.items.length, 5);
+    property <length> cell: root.width / max(1, root.count);
+    property <int> scrub: -1;
+    property <int> pressed: -1;
+    property <int> focus-index: root.selected;
+    property <bool> keyboard;
+    property <int> marked: root.scrub >= 0 ? root.scrub : root.selected;
 
     height: {{ "mobile-bottomNav-height" | tok }};
-    background: {{ "bgColor-default" | tok }};
+    accessible-role: tab-list;
+    accessible-label: root.accessible-name;
 
-    Rectangle { y: 0px; height: {{ "borderWidth-thin" | tok }}; background: {{ "borderColor-muted" | tok }}; }
+    function pick(i: int) {
+        root.selected = i;
+        root.focus-index = i;
+        root.activated(i);
+    }
 
-    HorizontalLayout {
-        for item[i] in root.items: Rectangle {
-            property <bool> current: i == root.selected;
-            accessible-role: tab;
-            accessible-label: item.label;
-            accessible-item-selectable: true;
-            accessible-item-selected: current;
-            accessible-action-default => { root.selected = i; root.activated(i); }
+    key-pressed(event) => {
+        if event.text == Key.LeftArrow || event.text == Key.RightArrow {
+            root.keyboard = true;
+            root.focus-index = Math.clamp(root.focus-index + (event.text == Key.LeftArrow ? -1 : 1), 0, root.count - 1);
+            return accept;
+        }
+        if event.text == Key.Return || event.text == " " {
+            root.pick(root.focus-index);
+            return accept;
+        }
+        reject
+    }
 
-            Rectangle {
-                y: 0px;
-                width: current ? 24px : 0px;
-                height: 3px;
-                border-bottom-left-radius: 3px;
-                border-bottom-right-radius: 3px;
-                background: {{ "bgColor-accent-emphasis" | tok }};
-                animate width { duration: {{ "duration-base" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+    Rectangle { background: {{ "bgColor-default" | tok }}; }
+    Rectangle { y: 0px; height: {{ "borderWidth-thin" | tok }}; background: {{ "borderColor-default" | tok }}; }
+
+    for item[i] in root.items: cell := Rectangle {
+        property <bool> current: i == root.selected;
+        property <bool> lit: i == root.scrub || (self.current && (root.scrub < 0 || root.scrub == i));
+        property <int> badge: item.badge;
+        property <bool> dot: item.dot;
+        property <length> content: 32px + (root.show-labels ? 4px + 16px : 0px);
+        visible: i < 5;
+        x: i * root.cell;
+        width: root.cell;
+        accessible-role: tab;
+        accessible-label: item.label + (item.dot ? ", new" : item.badge > 0 ? ", " + item.badge + " new" : "");
+        accessible-item-selectable: true;
+        accessible-item-selected: self.current;
+        accessible-action-default => { root.pick(i); }
+
+        changed badge => {
+            if self.badge > 0 {
+                bump.set(0.4);
+                bump.to(1, 0);
+            }
+        }
+        changed dot => {
+            if self.dot {
+                bump.set(0.4);
+                bump.to(1, 0);
+            }
+        }
+
+        bump := PmSpring { value: 1; target: 1; precision: 0.001; playful: true; }
+
+        indicator := Rectangle {
+            x: (parent.width - self.width) / 2;
+            y: (cell.height - cell.content) / 2 + (i == root.scrub && !PurrimerMotion.pause-loops ? -2px : 0px);
+            width: 56px;
+            height: 32px;
+            border-radius: {{ "borderRadius-medium" | tok }} * 1.4;
+            background: i == root.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+            transform-scale: i == root.pressed && !PurrimerMotion.pause-loops ? 0.9 : 1;
+            animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out; }
+            animate y { duration: {{ "duration-fast" | tok }}; easing: ease-out; }
+
+            Icon {
+                path: cell.current && item.active-icon != "" ? item.active-icon : item.icon;
+                box: 24;
+                size: 24px;
+                color: cell.lit ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }};
             }
 
-            VerticalLayout {
-                alignment: center;
-                spacing: 2px;
-                HorizontalLayout {
-                    alignment: center;
-                    Icon { path: item.icon; box: 24; size: 24px; color: current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }}; }
-                }
-                if root.show-labels: Text {
-                    text: item.label;
-                    horizontal-alignment: center;
-                    color: current ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }};
-                    font-family: {{ "text-mobile-navLabel" | tok }}.font-family;
-                    font-size: {{ "text-mobile-navLabel" | tok }}.font-size;
-                    font-weight: {{ "text-mobile-navLabel" | tok }}.font-weight;
-                }
-            }
-
-            if item.badge > 0: Rectangle {
+            if item.badge > 0 || item.dot: Rectangle {
                 x: parent.width / 2 + 6px;
-                y: 6px;
-                width: max(16px, badge-text.preferred-width + 8px);
-                height: 16px;
-                border-radius: 8px;
+                y: item.dot ? 2px : -2px;
+                width: item.dot ? 12px : max(20px, badge-text.preferred-width + 10px + 2 * {{ "borderWidth-thick" | tok }});
+                height: item.dot ? 12px : 20px;
+                border-radius: self.height / 2;
                 background: {{ "bgColor-danger-emphasis" | tok }};
+                border-width: {{ "borderWidth-thick" | tok }};
+                border-color: {{ "bgColor-default" | tok }};
+                transform-scale: bump.value;
+                opacity: Math.clamp((bump.value - 0.4) / 0.6, 0, 1);
                 badge-text := Text {
+                    visible: !item.dot;
                     text: item.badge > 99 ? "99+" : item.badge;
                     color: {{ "fgColor-onEmphasis" | tok }};
-                    font-family: {{ "text-caption" | tok }}.font-family;
-                    font-size: 11px;
+                    font-family: {{ "text-mobile-navLabel" | tok }}.font-family;
+                    font-size: 12px;
                     font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
                 }
             }
 
-            TouchArea {
-                mouse-cursor: pointer;
-                clicked => { root.selected = i; root.activated(i); }
+            Rectangle {
+                visible: root.keyboard && root.has-focus && root.focus-index == i;
+                x: -4px;
+                y: -4px;
+                width: parent.width + 8px;
+                height: parent.height + 8px;
+                border-radius: parent.border-radius + 4px;
+                border-width: {{ "borderWidth-thick" | tok }};
+                border-color: {{ "focus-outlineColor" | tok }};
             }
+        }
+
+        if root.show-labels: Text {
+            x: 4px;
+            y: indicator.y + 32px + 4px;
+            width: parent.width - 8px;
+            height: 16px;
+            text: item.label;
+            overflow: elide;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: cell.lit ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-mobile-navLabel" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: cell.lit ? 600 : 500;
+        }
+    }
+
+    // One marker that slides between tabs and follows the pointer while scrubbing; clipped so only its rounded
+    // bottom shows.
+    Rectangle {
+        clip: true;
+        if root.marked >= 0 && root.count > 0: Rectangle {
+            x: root.cell * (root.marked + 0.5) - 16px;
+            y: -{{ "borderRadius-small" | tok }};
+            width: 32px;
+            height: {{ "borderWidth-thick" | tok }} + {{ "borderRadius-small" | tok }};
+            border-radius: {{ "borderRadius-small" | tok }};
+            background: {{ "bgColor-accent-emphasis" | tok }};
+            animate x {
+                duration: PurrimerMotion.pause-loops ? 0ms : root.scrub >= 0 ? {{ "duration-fast" | tok }} : {{ "duration-slow" | tok }};
+                easing: ease-out;
+            }
+        }
+    }
+
+    TouchArea {
+        mouse-cursor: pointer;
+        property <length> origin-x;
+        function index-at(x: length) -> int {
+            return Math.clamp(floor(x / root.cell), 0, root.count - 1);
+        }
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left && root.count > 0 {
+                root.keyboard = false;
+                self.origin-x = self.mouse-x;
+                root.pressed = self.index-at(self.mouse-x);
+            } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                let i = root.scrub >= 0 ? root.scrub : root.pressed;
+                root.scrub = -1;
+                root.pressed = -1;
+                if i >= 0 {
+                    root.pick(i);
+                }
+            } else if event.kind == PointerEventKind.cancel {
+                root.scrub = -1;
+                root.pressed = -1;
+            }
+        }
+        moved => {
+            if root.scrub < 0 && abs(self.mouse-x - self.origin-x) < 10px {
+                return;
+            }
+            root.pressed = -1;
+            root.scrub = self.index-at(self.mouse-x);
         }
     }
 }

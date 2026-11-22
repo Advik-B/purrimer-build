@@ -8,6 +8,7 @@ export component Example inherits VerticalLayout {
             { icon: PurrimerIcons.home-24, label: "Home" },
             { icon: PurrimerIcons.search-24, label: "Search" },
             { icon: PurrimerIcons.inbox-24, label: "Inbox", badge: 3 },
+            { icon: PurrimerIcons.bell-24, label: "Activity", dot: true },
             { icon: PurrimerIcons.person-24, label: "Profile" },
         ];
         activated(index) => { self.selected = index; }

@@ -103,16 +103,7 @@ public class MobileNavigator : Decorator
         _root.Children.Add(_nav);
         _mark.Child = _markIcon;
         _stage.SizeChanged += (_, _) => Relayout();
-        _nav.SelectionChanged += (_, _) =>
-        {
-            if (_nav.SelectedIndex >= 0 && _nav.SelectedIndex != _tab)
-                _ = SwitchTab(_nav.SelectedIndex);
-        };
-        _nav.Tapped += (_, _) =>
-        {
-            if (_nav.SelectedIndex == _tab)
-                _ = SwitchTab(_tab);
-        };
+        _nav.Activated += (_, e) => _ = SwitchTab(e.Index);
         AddHandler(AppBar.BackRequestedEvent, (_, e) =>
         {
             if (Depth > 1)

@@ -3,70 +3,8 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:pm="clr-namespace:{{ ns }}">
-  <ControlTheme x:Key="PmBottomNavItem" TargetType="ListBoxItem">
-    <Setter Property="Foreground" Value="{{ "fgColor-muted" | tok }}" />
-    <Setter Property="Background" Value="Transparent" />
-    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
-    <Setter Property="Cursor" Value="Hand" />
-    <Setter Property="Template">
-      <ControlTemplate TargetType="ListBoxItem">
-        <Panel Background="{TemplateBinding Background}">
-          <Border Name="indicator" Width="0" Height="3" VerticalAlignment="Top" CornerRadius="0,0,3,3"
-                  Background="{{ "bgColor-accent-emphasis" | tok }}">
-            <Border.Transitions>
-              <Transitions>
-                <DoubleTransition Property="Width" Duration="{{ "duration-base" | tok }}" Easing="{{ "easing-sleepy-enter" | tok }}" />
-              </Transitions>
-            </Border.Transitions>
-          </Border>
-          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}" VerticalAlignment="Center"
-                            HorizontalContentAlignment="Center" />
-        </Panel>
-      </ControlTemplate>
-    </Setter>
-    <Style Selector="^:selected">
-      <Setter Property="Foreground" Value="{{ "fgColor-accent" | tok }}" />
-    </Style>
-    <Style Selector="^:selected /template/ Border#indicator">
-      <Setter Property="Width" Value="24" />
-    </Style>
-  </ControlTheme>
   <ControlTheme x:Key="{x:Type pm:BottomNav}" TargetType="pm:BottomNav">
-    <Setter Property="Background" Value="{{ "bgColor-default" | tok }}" />
-    <Setter Property="Height" Value="{{ "mobile-bottomNav-height" | tok }}" />
-    <Setter Property="ItemContainerTheme" Value="{StaticResource PmBottomNavItem}" />
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
-    <Setter Property="ItemsPanel">
-      <ItemsPanelTemplate>
-        <UniformGrid Rows="1" />
-      </ItemsPanelTemplate>
-    </Setter>
-    <Setter Property="ItemTemplate">
-      <DataTemplate x:DataType="pm:BottomNavItem">
-        <Panel>
-          <StackPanel Spacing="2" HorizontalAlignment="Center">
-            <pm:Icon IconName="{Binding IconName}" Size="24" HorizontalAlignment="Center" />
-            <TextBlock Text="{Binding Label}" HorizontalAlignment="Center"
-                       FontSize="{{ "text-mobile-navLabel" | tokx("FontSize") }}" FontWeight="{{ "text-mobile-navLabel" | tokx("FontWeight") }}"
-                       IsVisible="{Binding $parent[pm:BottomNav].ShowLabels}" />
-          </StackPanel>
-          <Border IsVisible="{Binding HasBadge}" MinWidth="16" Height="16" Padding="4,0" CornerRadius="8"
-                  HorizontalAlignment="Center" VerticalAlignment="Top" Margin="28,-6,0,0"
-                  Background="{{ "bgColor-danger-emphasis" | tok }}">
-            <TextBlock Text="{Binding BadgeText}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center"
-                       VerticalAlignment="Center" Foreground="{{ "fgColor-onEmphasis" | tok }}" />
-          </Border>
-        </Panel>
-      </DataTemplate>
-    </Setter>
-    <Setter Property="Template">
-      <ControlTemplate TargetType="pm:BottomNav">
-        <Border Background="{TemplateBinding Background}" BorderBrush="{{ "borderColor-muted" | tok }}"
-                BorderThickness="0,1,0,0">
-          <ItemsPresenter Name="PART_ItemsPresenter" ItemsPanel="{TemplateBinding ItemsPanel}" />
-        </Border>
-      </ControlTemplate>
-    </Setter>
+    <Setter Property="FocusAdorner" Value="{x:Null}" />
   </ControlTheme>
 </ResourceDictionary>

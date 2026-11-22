@@ -13,6 +13,7 @@ def example() -> QWidget:
             BottomNavItem("home", "Home"),
             BottomNavItem("search", "Search"),
             BottomNavItem("inbox", "Inbox", badge=3),
+            BottomNavItem("bell", "Activity", dot=True),
             BottomNavItem("person", "Profile"),
         ]
     )

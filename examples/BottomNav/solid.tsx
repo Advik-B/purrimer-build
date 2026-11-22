@@ -13,6 +13,7 @@ export default function Example() {
           { icon: "home", label: "Home" },
           { icon: "search", label: "Search" },
           { icon: "inbox", label: "Inbox", badge: 3 },
+          { icon: "bell", label: "Activity", badge: true },
           { icon: "person", label: "Profile" },
         ]}
       />

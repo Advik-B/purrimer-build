@@ -1,29 +1,63 @@
 <!-- {{ note }} -->
 <!-- {{ c.summary }} -->
+<script lang="ts" module>
+  // badge: a count, or true for a dot.
+  export type BottomNavItem = { icon: string; label: string; activeIcon?: string; badge?: number | true };
+</script>
+
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import { buzz, wireScrub } from "../motion";
 
-  type Item = { icon: string; label: string; badge?: number };
-
-  let { items, selected = $bindable(0), showLabels = false, onselect }: {
-    items: Item[];
+  let {
+    items,
+    selected = $bindable(0),
+    showLabels = false,
+    ariaLabel = "Main",
+    onselect,
+  }: {
+    items: BottomNavItem[];
     selected?: number;
     showLabels?: boolean;
+    ariaLabel?: string;
     onselect?: (index: number) => void;
   } = $props();
 
+  let nav: HTMLElement | undefined = $state();
+  let scrub = $state(-1);
+  const marked = $derived(scrub !== -1 ? scrub : selected);
+
+  // Fires on every press, the current tab included, so a screen can scroll to the top or pop to its root.
   function pick(i: number) {
+    if (i !== selected) buzz();
     selected = i;
     onselect?.(i);
   }
+
+  $effect(() => {
+    if (!nav) return;
+    return wireScrub(nav, () => Math.min(items.length, 5), (i) => (scrub = i), pick);
+  });
 </script>
 
-<nav class="pm-bottomnav" aria-label="Main">
-  {#each items as item, i}
-    <button type="button" class="pm-bottomnav__item" aria-current={i === selected ? "page" : undefined} aria-label={showLabels ? undefined : item.label} onclick={() => pick(i)}>
-      <Icon name={item.icon} size={24} />
-      {#if showLabels}<span>{item.label}</span>{/if}
-      {#if item.badge}<span class="pm-bottomnav__badge">{item.badge > 99 ? "99+" : item.badge}</span>{/if}
+<nav
+  bind:this={nav}
+  class={["pm-bottomnav", scrub !== -1 && "pm-bottomnav--scrubbing"]}
+  aria-label={ariaLabel}
+  data-density="touch"
+  style="--pm-bottomnav-n: {Math.max(1, Math.min(items.length, 5))}; --pm-bottomnav-i: {Math.max(0, marked)}"
+>
+  {#if marked >= 0}<span class="pm-bottomnav__bar" aria-hidden="true"></span>{/if}
+  {#each items.slice(0, 5) as item, i (i)}
+    <button type="button" class={["pm-bottomnav__item", i === scrub && "pm-bottomnav__item--scrub"]} aria-current={i === selected ? "page" : undefined} onclick={() => pick(i)}>
+      <span class="pm-bottomnav__indicator">
+        <Icon name={i === selected && item.activeIcon ? item.activeIcon : item.icon} size={24} />
+        {#key item.badge}
+          {#if item.badge}<span class={["pm-bottomnav__badge", item.badge === true && "pm-bottomnav__badge--dot"]} aria-hidden="true">{item.badge === true ? "" : item.badge > 99 ? "99+" : item.badge}</span>{/if}
+        {/key}
+      </span>
+      <span class={showLabels ? "pm-bottomnav__label" : "pm-sr-only"}>{item.label}</span>
+      {#if item.badge}<span class="pm-sr-only">{item.badge === true ? ", new" : `, ${item.badge} new`}</span>{/if}
     </button>
   {/each}
 </nav>

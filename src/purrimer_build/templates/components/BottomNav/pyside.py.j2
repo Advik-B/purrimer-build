@@ -6,12 +6,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QFontMetrics, QPainter
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetricsF, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..icons import paint_icon
+from ..motion import Spring
 from ..theme import theme
+
+HEIGHT = {{ px("mobile-bottomNav-height") | int }}
+SLOP = 10
 
 
 @dataclass
@@ -19,78 +23,232 @@ class BottomNavItem:
     icon: str
     label: str
     badge: int = 0
+    # A dot instead of a count.
+    dot: bool = False
+    active_icon: str | None = None
 
 
 class BottomNav(QWidget):
-    """The bottom navigation bar of a mobile screen."""
+    """The bottom navigation bar: three to five destinations, the current one marked by a short bar on the top edge
+    that slides from tab to tab. Press anywhere on the bar and slide to scrub: the bar follows the pointer, the tab
+    under it lifts, and that tab opens on release. Left and Right move between tabs, Enter or Space opens one.
+
+    `activated(index)` fires on every press, the current tab included, so a screen can scroll to the top or pop to its
+    root. Change a badge with set_badge() so it bumps.
+    """
 
     activated = Signal(int)
 
     def __init__(self, items: list[BottomNavItem], selected: int = 0, show_labels: bool = True,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._items = items
+        self._items = list(items[:5])
         self._selected = selected
         self._show_labels = show_labels
-        self.setFixedHeight({{ px("mobile-bottomNav-height") | int }})
+        self._pressed = -1
+        self._scrub = -1
+        self._origin: QPointF | None = None
+        self._focus = selected
+        self._keyboard = False
+        self._marker = Spring(float(selected), precision=0.002, parent=self)
+        self._marker.changed.connect(lambda _v: self.update())
+        self._dips = [self._spring(1.0) for _ in self._items]
+        self._lifts = [self._spring(0.0) for _ in self._items]
+        self._bumps = [self._spring(1.0, "playful") for _ in self._items]
+        self.setFixedHeight(HEIGHT)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._font = (theme.font({{ "text-mobile-navLabel" | tok }}))
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName("Main")
+        self._font = QFont(theme.font({{ "text-mobile-navLabel" | tok }}))
+        self._font.setPixelSize(12)
+        self._badge_font = QFont(self._font)
+        self._badge_font.setWeight(QFont.Weight.DemiBold)
+        self._describe()
         theme.changed.connect(self.update)
+
+    def _spring(self, value: float, kind: str | None = None) -> Spring:
+        spring = Spring(value, precision=0.001, kind=kind, parent=self)
+        spring.changed.connect(lambda _v: self.update())
+        return spring
 
     def selected(self) -> int:
         return self._selected
 
     def set_selected(self, index: int) -> None:
         self._selected = index
+        self._focus = index
+        self._marker.to(float(index))
+        self._describe()
         self.update()
+
+    def set_badge(self, index: int, badge: int, dot: bool = False) -> None:
+        item = self._items[index]
+        if (item.badge, item.dot) == (badge, dot):
+            return
+        item.badge, item.dot = badge, dot
+        if badge or dot:
+            self._bumps[index].set(0.4)
+            self._bumps[index].to(1.0)
+        self.update()
+
+    def _describe(self) -> None:
+        if 0 <= self._selected < len(self._items):
+            item = self._items[self._selected]
+            extra = ", new" if item.dot else f", {item.badge} new" if item.badge else ""
+            self.setAccessibleDescription(item.label + extra)
 
     def sizeHint(self) -> QSize:
-        return QSize(80 * max(1, len(self._items)), {{ px("mobile-bottomNav-height") | int }})
+        return QSize(72 * max(1, len(self._items)), HEIGHT)
 
-    def mouseReleaseEvent(self, event) -> None:
-        if not self._items:
-            return
-        index = min(len(self._items) - 1, int(event.position().x() // (self.width() / len(self._items))))
-        self._selected = index
-        self.update()
+    def _cell(self) -> float:
+        return self.width() / max(1, len(self._items))
+
+    def _index_at(self, x: float) -> int:
+        return max(0, min(len(self._items) - 1, int(x // self._cell())))
+
+    def _pick(self, index: int) -> None:
+        self.set_selected(index)
         self.activated.emit(index)
 
+    def _set_scrub(self, index: int) -> None:
+        if index == self._scrub:
+            return
+        for i, lift in enumerate(self._lifts):
+            lift.to(-2.0 if i == index and not theme.pause_loops else 0.0)
+        self._scrub = index
+        self._marker.to(float(index if index >= 0 else self._selected))
+        self.update()
+
+    def _set_pressed(self, index: int) -> None:
+        if index == self._pressed:
+            return
+        if 0 <= self._pressed < len(self._dips):
+            self._dips[self._pressed].to(1.0)
+        if 0 <= index < len(self._dips):
+            self._dips[index].to(0.9)
+        self._pressed = index
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or not self._items:
+            return
+        self._keyboard = False
+        self._origin = event.position()
+        self._set_pressed(self._index_at(event.position().x()))
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        if self._scrub < 0 and abs(event.position().x() - self._origin.x()) < SLOP:
+            return
+        self._set_pressed(-1)
+        self._set_scrub(self._index_at(event.position().x()))
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._origin = None
+        index = self._scrub if self._scrub >= 0 else self._pressed
+        self._set_pressed(-1)
+        self._set_scrub(-1)
+        if index >= 0:
+            self._pick(index)
+
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Left, Qt.Key.Key_Right) and self._items:
+            self._keyboard = True
+            self._focus = max(0, min(len(self._items) - 1, self._focus + (-1 if key == Qt.Key.Key_Left else 1)))
+            self.update()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space) and self._items:
+            self._pick(self._focus)
+        else:
+            super().keyPressEvent(event)
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self._keyboard = event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self.update()
+
     def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setFont(self._font)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
-        painter.fillRect(0, 0, self.width(), 1, theme.color({{ "borderColor-muted" | tok }}))
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
+        p.fillRect(QRectF(0, 0, self.width(), {{ px("borderWidth-thin") | num }}), theme.color({{ "borderColor-default" | tok }}))
         if not self._items:
             return
-        cell = self.width() / len(self._items)
-        content_h = 24 + (2 + QFontMetrics(self._font).height() if self._show_labels else 0)
-        top = (self.height() - content_h) / 2
+        cell = self._cell()
+        metrics = QFontMetricsF(self._font)
+        content = 32 + (4 + 16 if self._show_labels else 0)
+        top = (self.height() - content) / 2
+        marked = self._scrub if self._scrub >= 0 else self._selected
         for i, item in enumerate(self._items):
             current = i == self._selected
-            ink = theme.color({{ "fgColor-accent" | tok }} if current else {{ "fgColor-muted" | tok }})
+            lit = i == self._scrub or (current and (self._scrub < 0 or self._scrub == i))
+            ink = theme.color({{ "fgColor-accent" | tok }} if lit else {{ "fgColor-muted" | tok }})
             cx = cell * i + cell / 2
-            if current:
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }}))
-                painter.drawRoundedRect(QRectF(cx - 12, -3, 24, 6), 3, 3)
-            paint_icon(painter, QRectF(cx - 12, top, 24, 24), item.icon, ink)
+            indicator = QRectF(cx - 28, top + self._lifts[i].value, 56, 32)
+            p.save()
+            scale = self._dips[i].value
+            p.translate(indicator.center())
+            p.scale(scale, scale)
+            p.translate(-indicator.center())
+            radius = {{ px("borderRadius-medium") | num }} * 1.4
+            if i == self._pressed:
+                p.setPen(Qt.PenStyle.NoPen)
+                p.setBrush(theme.color({{ "control-transparent-bgColor-hover" | tok }}))
+                p.drawRoundedRect(indicator, radius, radius)
+            name = item.active_icon if current and item.active_icon else item.icon
+            paint_icon(p, QRectF(cx - 12, indicator.center().y() - 12, 24, 24), name, ink)
+            if item.badge or item.dot:
+                self._paint_badge(p, item, QPointF(cx + 6, indicator.top() - 2), self._bumps[i].value)
+            p.restore()
+            if self._keyboard and self.hasFocus() and i == self._focus:
+                p.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+                p.setBrush(Qt.BrushStyle.NoBrush)
+                p.drawRoundedRect(indicator.adjusted(-2, -2, 2, 2), radius + 2, radius + 2)
             if self._show_labels:
-                painter.setPen(ink)
-                painter.drawText(QRectF(cell * i, top + 26, cell, QFontMetrics(self._font).height()),
-                                 Qt.AlignmentFlag.AlignHCenter, item.label)
-            if item.badge > 0:
-                text = "99+" if item.badge > 99 else str(item.badge)
-                badge_font = self._font
-                badge_font.setPixelSize(11)
-                badge_font.setBold(True)
-                painter.setFont(badge_font)
-                width = max(16.0, QFontMetrics(painter.font()).horizontalAdvance(text) + 8.0)
-                rect = QRectF(cx + 6, top - 4, width, 16)
-                painter.setPen(Qt.PenStyle.NoPen)
-                painter.setBrush(theme.color({{ "bgColor-danger-emphasis" | tok }}))
-                painter.drawRoundedRect(rect, 8, 8)
-                painter.setPen(theme.color({{ "fgColor-onEmphasis" | tok }}))
-                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
-                painter.setFont(self._font)
+                font = QFont(self._font)
+                font.setWeight(QFont.Weight.DemiBold if lit else QFont.Weight.Medium)
+                p.setFont(font)
+                p.setPen(ink)
+                label = QRectF(cell * i + 4, top + 32 + 4, cell - 8, 16)
+                p.drawText(label, Qt.AlignmentFlag.AlignCenter, metrics.elidedText(item.label, Qt.TextElideMode.ElideRight, label.width()))
+        if marked >= 0:
+            x = cell * (self._marker.value + 0.5) - 16
+            small = {{ px("borderRadius-small") | num }}
+            bar = QPainterPath()
+            bar.addRoundedRect(QRectF(x, -small, 32, {{ px("borderWidth-thick") | num }} + small), small, small)
+            p.save()
+            p.setClipRect(QRectF(0, 0, self.width(), self.height()))
+            p.fillPath(bar, theme.color({{ "bgColor-accent-emphasis" | tok }}))
+            p.restore()
+
+    def _paint_badge(self, p: QPainter, item: BottomNavItem, at: QPointF, scale: float) -> None:
+        ring = {{ px("borderWidth-thick") | num }}
+        if item.dot:
+            rect = QRectF(at.x(), at.y() + 4, 12, 12)
+            text = ""
+        else:
+            text = "99+" if item.badge > 99 else str(item.badge)
+            p.setFont(self._badge_font)
+            width = max(20.0, QFontMetricsF(self._badge_font).horizontalAdvance(text) + 10 + 2 * ring)
+            rect = QRectF(at.x(), at.y(), width, 20)
+        p.save()
+        p.translate(rect.center())
+        p.scale(scale, scale)
+        p.translate(-rect.center())
+        p.setOpacity(max(0.0, min(1.0, (scale - 0.4) / 0.6)))
+        p.setPen(QPen(theme.color({{ "bgColor-default" | tok }}), ring))
+        p.setBrush(theme.color({{ "bgColor-danger-emphasis" | tok }}))
+        r = rect.height() / 2
+        p.drawRoundedRect(rect.adjusted(ring / 2, ring / 2, -ring / 2, -ring / 2), r, r)
+        if text:
+            p.setPen(theme.color({{ "fgColor-onEmphasis" | tok }}))
+            p.drawText(rect, Qt.AlignmentFlag.AlignCenter, text)
+        p.restore()
