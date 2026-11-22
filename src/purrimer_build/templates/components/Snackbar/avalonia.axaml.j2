@@ -41,12 +41,11 @@
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:Snackbar">
-        <Border Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" MinHeight="48"
+        <Border Name="PART_Bar" Background="{TemplateBinding Background}" CornerRadius="{TemplateBinding CornerRadius}" MinHeight="48"
                 Padding="16,4,4,4" BoxShadow="{{ "shadow-floating-small" | tok }}">
           <Grid ColumnDefinitions="*,Auto">
             <TextBlock Text="{TemplateBinding Message}" TextWrapping="Wrap" VerticalAlignment="Center" Margin="0,0,8,0" />
             <Button Name="PART_Action" Grid.Column="1" Theme="{StaticResource PmSnackbarAction}"
-                    Content="{TemplateBinding ActionText}"
                     IsVisible="{TemplateBinding ActionText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
           </Grid>
         </Border>

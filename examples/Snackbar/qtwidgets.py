@@ -12,5 +12,7 @@ def example() -> QWidget:
     snackbar = Snackbar()
     snackbar.actionTriggered.connect(lambda: print("undo"))
     layout.addWidget(snackbar)
+    # Above the bottom bar, as on a phone screen.
+    layout.addSpacing(56)
     QTimer.singleShot(0, lambda: snackbar.show_message("Message archived", "Undo"))
     return screen

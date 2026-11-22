@@ -1390,3 +1390,85 @@ export function wireSwipe(parts: SwipeParts, commit = 0.4): () => void {
     row.removeEventListener("click", click, true);
   };
 }
+
+export interface DismissParts {
+  el: HTMLElement;
+  enabled: () => boolean;
+  // A finger or mouse is on the element; timers pause while it is.
+  onHold?: (held: boolean) => void;
+  onMove: (dx: number, armed: boolean, dragging: boolean) => void;
+  // Past `commit` of the width, or a flick, on release; direction is the sign of the travel.
+  onDismiss: (direction: number) => void;
+}
+
+// Swipe an element sideways to dismiss it: it follows the pointer, arms past `commit` of its width with a tick, and a
+// release there or a quick flick dismisses it. An earlier release springs back. A vertical drag is left to scrolling.
+export function wireDismissSwipe(parts: DismissParts, commit = 0.3): () => void {
+  const { el } = parts;
+  let d: { x: number; y: number; id: number; axis: "x" | "y" | null; w: number; armed: boolean; dx: number; tracker: VelocityTracker } | null = null;
+  let swallow = false;
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || !parts.enabled()) return;
+    swallow = false;
+    d = { x: e.clientX, y: e.clientY, id: e.pointerId, axis: null, w: el.offsetWidth, armed: false, dx: 0, tracker: new VelocityTracker() };
+    d.tracker.add(e.clientX, e.clientY, e.timeStamp);
+    parts.onHold?.(true);
+  };
+  const move = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    const my = e.clientY - d.y;
+    d.tracker.add(e.clientX, e.clientY, e.timeStamp);
+    if (!d.axis) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      d.axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (d.axis === "x") {
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // Without capture the swipe still tracks while the pointer stays on the element.
+        }
+      }
+    }
+    if (d.axis !== "x") return;
+    const armed = Math.abs(mx) >= d.w * commit;
+    if (armed !== d.armed) {
+      d.armed = armed;
+      if (armed) buzz();
+    }
+    d.dx = mx;
+    parts.onMove(mx, armed, true);
+  };
+  const up = (e: PointerEvent, cancelled: boolean) => {
+    if (!d || d.id !== e.pointerId) return;
+    const done = d;
+    d = null;
+    parts.onHold?.(false);
+    if (done.axis !== "x") return;
+    swallow = true;
+    const v = done.tracker.velocity().x / 1000;
+    const flick = Math.abs(v) > 0.6 && Math.sign(v) === Math.sign(done.dx);
+    if (!cancelled && (done.armed || flick) && done.dx !== 0) parts.onDismiss(Math.sign(done.dx));
+    else parts.onMove(0, false, false);
+  };
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  el.addEventListener("pointerdown", down);
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerup", onUp);
+  el.addEventListener("pointercancel", onCancel);
+  el.addEventListener("click", click, true);
+  return () => {
+    el.removeEventListener("pointerdown", down);
+    el.removeEventListener("pointermove", move);
+    el.removeEventListener("pointerup", onUp);
+    el.removeEventListener("pointercancel", onCancel);
+    el.removeEventListener("click", click, true);
+  };
+}

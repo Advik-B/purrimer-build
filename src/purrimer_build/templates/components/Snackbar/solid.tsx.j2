@@ -1,22 +1,67 @@
 // {{ note }}
 // {{ c.summary }}
-import { Show, createEffect } from "solid-js";
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
 import type { JSX } from "@solidjs/web";
+import { wireDismissSwipe } from "../motion";
 
 export type SnackbarProps = { open: boolean; message: string; action?: string; duration?: number; onAction?: () => void; onClose: () => void };
 
 export function Snackbar(props: SnackbarProps): JSX.Element {
+  const [dx, setDx] = createSignal(0);
+  const [dragging, setDragging] = createSignal(false);
+  const [leaving, setLeaving] = createSignal(false);
+  const [held, setHeld] = createSignal(false);
+  let bar: HTMLDivElement | undefined;
+  let unwire: (() => void) | undefined;
+
+  const close = () => {
+    setDx(0);
+    setLeaving(false);
+    props.onClose();
+  };
+
+  // The timer pauses while a finger is on the bar.
   createEffect(
-    () => (props.open ? props.duration ?? {{ c.spec.props.duration.default }} : 0),
+    () => (props.open && !held() && !leaving() ? props.duration ?? {{ c.spec.props.duration.default }} : 0),
     (duration) => {
       if (duration <= 0) return;
-      const id = setTimeout(() => props.onClose(), duration);
+      const id = setTimeout(close, duration);
       return () => clearTimeout(id);
     }
   );
+  onCleanup(() => unwire?.());
+
+  const wire = (el: HTMLDivElement) => {
+    bar = el;
+    unwire?.();
+    unwire = wireDismissSwipe({
+      el,
+      enabled: () => !leaving(),
+      onHold: setHeld,
+      onMove: (v, _armed, d) => {
+        setDx(v);
+        setDragging(d);
+      },
+      onDismiss: (direction) => {
+        setDragging(false);
+        setLeaving(true);
+        setDx(direction * (bar?.offsetWidth ?? 320) * 1.2);
+        setTimeout(close, {{ ms("duration-base") }});
+      },
+    });
+  };
+
+  const opacity = () => (leaving() ? 0 : Math.max(0, 1 - Math.abs(dx()) / ((bar?.offsetWidth ?? 320) * 0.6)));
+
   return (
     <Show when={props.open}>
-      <div class="pm-snackbar" role="status" aria-live="polite">
+      <div
+        ref={wire}
+        class={`pm-snackbar${dragging() ? " pm-snackbar--dragging" : ""}${leaving() ? " pm-snackbar--leaving" : ""}`}
+        role="status"
+        aria-live="polite"
+        style={`--pm-snackbar-dx: ${dx()}px; --pm-snackbar-opacity: ${opacity()}`}
+      >
         <span class="pm-snackbar__message">{props.message}</span>
         <Show when={props.action}>
           <button
@@ -24,7 +69,7 @@ export function Snackbar(props: SnackbarProps): JSX.Element {
             class="pm-snackbar__action"
             onClick={() => {
               props.onAction?.();
-              props.onClose();
+              close();
             }}
           >
             {props.action}

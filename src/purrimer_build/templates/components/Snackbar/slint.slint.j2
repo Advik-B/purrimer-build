@@ -3,7 +3,9 @@
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 
-// Place it in the window above the bottom bar; it shows while open is true and closes after duration.
+// Place it in the window above the bottom bar; it shows while open is true and closes after duration. Swipe it
+// sideways to dismiss it: it follows the pointer and fades, and past 30% of its width, or on a flick, it slides out and
+// closes. Its timer pauses while the pointer is held on it.
 export component Snackbar inherits Rectangle {
     in-out property <bool> open;
     in property <string> message;
@@ -11,61 +13,147 @@ export component Snackbar inherits Rectangle {
     in property <duration> duration: {{ c.spec.props.duration.default }}ms;
     callback action-triggered();
     callback closed();
+    property <length> dx;
+    property <bool> dragging;
+    property <bool> leaving;
+    property <string> axis;
+    property <length> origin-x;
+    property <length> origin-y;
+    property <length> last-x;
+    property <duration> last-t;
+    property <float> velocity;
 
-    visible: self.opacity > 0;
-    opacity: open ? 1 : 0;
-    animate opacity { duration: {{ "duration-sleepy-medium" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+    visible: bar.opacity > 0 || root.open;
     height: max(48px, row.preferred-height);
-    border-radius: {{ "borderRadius-large" | tok }};
-    background: {{ "bgColor-emphasis" | tok }};
-    drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
-    drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
-    drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
     accessible-role: AccessibleRole.text;
     accessible-label: message;
+    animate dx {
+        duration: root.dragging || PurrimerMotion.pause-loops ? 0ms : root.leaving ? {{ "duration-base" | tok }} : {{ "duration-slow" | tok }};
+        easing: root.leaving ? ease-in : ease-out;
+    }
+
+    function close() {
+        root.open = false;
+        root.closed();
+    }
 
     Timer {
         interval: root.duration;
-        running: root.open && root.duration > 0ms;
+        running: root.open && root.duration > 0ms && !touch.pressed && !root.leaving;
+        triggered => { root.close(); }
+    }
+
+    Timer {
+        interval: PurrimerMotion.pause-loops ? 1ms : {{ "duration-base" | tok }};
+        running: root.leaving;
         triggered => {
-            root.open = false;
-            root.closed();
+            root.leaving = false;
+            root.close();
+            root.dx = 0;
         }
     }
 
-    row := HorizontalLayout {
-        padding-left: 16px;
-        padding-right: 4px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 8px;
-        Text {
-            horizontal-stretch: 1;
-            text: root.message;
-            wrap: word-wrap;
-            vertical-alignment: center;
-            color: {{ "fgColor-onEmphasis" | tok }};
-            font-family: {{ "text-body-medium" | tok }}.font-family;
-            font-size: 14px;
+    bar := Rectangle {
+        x: root.dx;
+        width: root.width;
+        opacity: !root.open || root.leaving ? 0 : max(0, 1 - abs(root.dx) / (root.width * 0.6));
+        animate opacity { duration: root.dragging ? 0ms : {{ "duration-sleepy-medium" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+        border-radius: {{ "borderRadius-large" | tok }};
+        background: {{ "bgColor-emphasis" | tok }};
+        drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
+        drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
+        drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
+
+        touch := TouchArea {
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    root.origin-x = self.mouse-x + root.dx;
+                    root.origin-y = self.mouse-y;
+                    root.axis = "";
+                    root.velocity = 0;
+                    root.last-x = root.origin-x;
+                    root.last-t = animation-tick();
+                } else if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) || event.kind == PointerEventKind.cancel {
+                    if root.axis == "x" {
+                        root.dragging = false;
+                        let flick = abs(root.velocity) > 0.6 && (root.velocity > 0) == (root.dx > 0);
+                        if event.kind != PointerEventKind.cancel && root.dx != 0 && (abs(root.dx) >= root.width * 0.3 || flick) {
+                            root.leaving = true;
+                            root.dx = (root.dx > 0 ? 1 : -1) * root.width * 1.2;
+                        } else {
+                            root.dx = 0;
+                        }
+                    }
+                    root.axis = "";
+                }
+            }
+            moved => {
+                // Measured in the root's space, since the bar itself moves with the pointer.
+                let x = self.mouse-x + root.dx;
+                let mx = x - root.origin-x;
+                let my = self.mouse-y - root.origin-y;
+                if root.axis == "" {
+                    if abs(mx) < 10px && abs(my) < 10px {
+                        return;
+                    }
+                    root.axis = abs(mx) > abs(my) ? "x" : "y";
+                }
+                if root.axis != "x" {
+                    return;
+                }
+                let now = animation-tick();
+                if now > root.last-t {
+                    root.velocity = (x - root.last-x) / 1px / ((now - root.last-t) / 1ms);
+                }
+                root.last-x = x;
+                root.last-t = now;
+                root.dragging = true;
+                root.dx = mx;
+            }
         }
-        if root.action != "": Rectangle {
-            height: 40px;
-            width: action-text.preferred-width + 24px;
-            border-radius: {{ "borderRadius-medium" | tok }};
-            background: action-touch.pressed ? {{ "fgColor-onEmphasis" | tok }}.with-alpha(0.12) : transparent;
-            accessible-role: button;
-            accessible-label: root.action;
-            accessible-action-default => { root.action-triggered(); root.open = false; root.closed(); }
-            action-text := Text {
-                text: root.action;
+
+        row := HorizontalLayout {
+            padding-left: 16px;
+            padding-right: 4px;
+            padding-top: 4px;
+            padding-bottom: 4px;
+            spacing: 8px;
+            Text {
+                horizontal-stretch: 1;
+                text: root.message;
+                wrap: word-wrap;
+                vertical-alignment: center;
                 color: {{ "fgColor-onEmphasis" | tok }};
                 font-family: {{ "text-body-medium" | tok }}.font-family;
                 font-size: 14px;
-                font-weight: 600;
             }
-            action-touch := TouchArea {
-                mouse-cursor: pointer;
-                clicked => { root.action-triggered(); root.open = false; root.closed(); }
+            if root.action != "": Rectangle {
+                height: 40px;
+                width: action-text.preferred-width + 24px;
+                border-radius: {{ "borderRadius-medium" | tok }};
+                background: action-touch.pressed ? {{ "fgColor-onEmphasis" | tok }}.with-alpha(0.12) : transparent;
+                accessible-role: button;
+                accessible-label: root.action;
+                accessible-action-default => { root.action-triggered(); root.close(); }
+                action-text := Text {
+                    text: root.action;
+                    color: {{ "fgColor-onEmphasis" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                // Slint text has no underline, so the action draws its own.
+                Rectangle {
+                    x: (parent.width - action-text.preferred-width) / 2;
+                    y: (parent.height + action-text.preferred-height) / 2 - 3px;
+                    width: action-text.preferred-width;
+                    height: 1px;
+                    background: {{ "fgColor-onEmphasis" | tok }};
+                }
+                action-touch := TouchArea {
+                    mouse-cursor: pointer;
+                    clicked => { root.action-triggered(); root.close(); }
+                }
             }
         }
     }

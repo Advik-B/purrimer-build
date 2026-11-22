@@ -4,11 +4,17 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 
+// A short message with one optional action. Swipe it sideways to dismiss it: it follows the pointer and fades, and
+// past 30% of its width, or on a flick, it slides out and closes. Its timer pauses while the pointer is held on it.
 T.Popup {
     id: control
     property string message
     property string action
     property int duration: {{ c.spec.props.duration.default }}
+    property real dx: 0
+    property bool leaving: false
+    property var samples: []
+    readonly property real fade: leaving ? 0 : Math.max(0, 1 - Math.abs(dx) / (width * 0.6))
     signal actionTriggered()
 
     parent: T.Overlay.overlay
@@ -16,7 +22,7 @@ T.Popup {
     focus: false
     closePolicy: T.Popup.NoAutoClose
     width: parent ? Math.min(parent.width - 2 * {{ "mobile-gutter" | tok }}, 560) : 328
-    x: parent ? (parent.width - width) / 2 : 0
+    x: (parent ? (parent.width - width) / 2 : 0) + dx
     y: parent ? parent.height - height - {{ "mobile-bottomNav-height" | tok }} - {{ "base-size-16" | tok }} : 0
     implicitHeight: Math.max(48, row.implicitHeight + 8)
     leftPadding: 16
@@ -29,8 +35,25 @@ T.Popup {
         NumberAnimation { property: "opacity"; to: 0; duration: {{ "duration-sleepy-exit" | tok }} }
     }
 
+    Behavior on dx {
+        enabled: !swipe.active
+        NumberAnimation {
+            duration: Purrimer.pauseLoops ? 0 : control.leaving ? {{ "duration-base" | tok }} : {{ "duration-slow" | tok }}
+            easing.type: control.leaving ? Easing.InCubic : Easing.OutCubic
+        }
+    }
     Timer {
-        running: control.opened && control.duration > 0
+        running: control.leaving
+        interval: Purrimer.pauseLoops ? 0 : {{ "duration-base" | tok }}
+        onTriggered: control.close()
+    }
+    onClosed: {
+        leaving = false
+        dx = 0
+    }
+
+    Timer {
+        running: control.opened && control.duration > 0 && !hold.active && !swipe.active && !control.leaving
         interval: control.duration
         onTriggered: control.close()
     }
@@ -38,11 +61,42 @@ T.Popup {
     background: Rectangle {
         radius: {{ "borderRadius-large" | tok }}
         color: {{ "bgColor-emphasis" | tok }}
+        opacity: control.fade
+
+        PointHandler { id: hold }
+
+        DragHandler {
+            id: swipe
+            target: null
+            yAxis.enabled: false
+            onTranslationChanged: {
+                control.dx = translation.x
+                const now = Date.now()
+                control.samples = control.samples.filter(p => now - p.t <= 100).concat([{ t: now, x: translation.x }])
+            }
+            onActiveChanged: {
+                if (active) {
+                    control.samples = []
+                    return
+                }
+                const a = control.samples[0]
+                const b = control.samples[control.samples.length - 1]
+                const v = a && b && b.t > a.t ? (b.x - a.x) / (b.t - a.t) : 0
+                const flick = Math.abs(v) > 0.6 && (v > 0) === (control.dx > 0)
+                if (control.dx !== 0 && (Math.abs(control.dx) >= control.width * 0.3 || flick)) {
+                    control.leaving = true
+                    control.dx = (control.dx > 0 ? 1 : -1) * control.width * 1.2
+                } else {
+                    control.dx = 0
+                }
+            }
+        }
     }
 
     contentItem: Row {
         id: row
         spacing: 8
+        opacity: control.fade
         Text {
             width: row.width - (actionButton.visible ? actionButton.width + 8 : 0)
             text: control.message
@@ -54,6 +108,7 @@ T.Popup {
         T.Button {
             id: actionButton
             visible: control.action !== ""
+            anchors.verticalCenter: parent.verticalCenter
             implicitWidth: actionText.implicitWidth + 24
             implicitHeight: 40
             onClicked: {
