@@ -1,0 +1,172 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Wraps one trigger. Hover shows the tip after Delay ms, keyboard focus at once, and Escape hides it. With WhatsThis, a
+// click on the trigger opens an explanation bubble instead, and a click elsewhere closes it.
+[TemplatePart("PART_Popup", typeof(Popup))]
+public class ToolTip : ContentControl
+{
+    private const double Gap = 6;
+
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<ToolTip, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> PlacementProperty =
+        AvaloniaProperty.Register<ToolTip, string>(nameof(Placement), "top");
+
+    public static readonly StyledProperty<int> DelayProperty =
+        AvaloniaProperty.Register<ToolTip, int>(nameof(Delay), {{ c.spec.props.delay.default }});
+
+    public static readonly StyledProperty<bool> WhatsThisProperty =
+        AvaloniaProperty.Register<ToolTip, bool>(nameof(WhatsThis));
+
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<ToolTip, bool>(nameof(IsOpen));
+
+    private Popup? _popup;
+    private readonly DispatcherTimer _timer = new();
+
+    public ToolTip()
+    {
+        _timer.Tick += (_, _) =>
+        {
+            _timer.Stop();
+            IsOpen = true;
+        };
+        AddHandler(KeyDownEvent, OnKey, RoutingStrategies.Tunnel);
+    }
+
+    public string? Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
+
+    // top, bottom, left or right
+    public string Placement { get => GetValue(PlacementProperty); set => SetValue(PlacementProperty, value); }
+
+    public int Delay { get => GetValue(DelayProperty); set => SetValue(DelayProperty, value); }
+
+    public bool WhatsThis { get => GetValue(WhatsThisProperty); set => SetValue(WhatsThisProperty, value); }
+
+    public bool IsOpen { get => GetValue(IsOpenProperty); set => SetValue(IsOpenProperty, value); }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        if (_popup != null)
+            _popup.Closed -= OnPopupClosed;
+        _popup = e.NameScope.Find<Popup>("PART_Popup");
+        if (_popup != null)
+        {
+            _popup.PlacementTarget = this;
+            _popup.Closed += OnPopupClosed;
+            Place();
+        }
+    }
+
+    private void OnPopupClosed(object? sender, EventArgs e) => IsOpen = false;
+
+    private void Place()
+    {
+        if (_popup == null)
+            return;
+        // A whatsThis bubble has an 8px margin for its shadow; take it off the gap.
+        var gap = WhatsThis ? Gap - 8 : Gap;
+        _popup.HorizontalOffset = 0;
+        _popup.VerticalOffset = 0;
+        switch (Placement)
+        {
+            case "bottom":
+                _popup.Placement = PlacementMode.Bottom;
+                _popup.VerticalOffset = gap;
+                break;
+            case "left":
+                _popup.Placement = PlacementMode.Left;
+                _popup.HorizontalOffset = -gap;
+                break;
+            case "right":
+                _popup.Placement = PlacementMode.Right;
+                _popup.HorizontalOffset = gap;
+                break;
+            default:
+                _popup.Placement = PlacementMode.Top;
+                _popup.VerticalOffset = -gap;
+                break;
+        }
+    }
+
+    // A popup needs the window's overlay layer, which exists once the control is loaded.
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        if (_popup != null)
+            _popup.IsOpen = IsOpen;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsOpenProperty && _popup != null && IsLoaded)
+            _popup.IsOpen = IsOpen;
+        else if (change.Property == PlacementProperty || change.Property == WhatsThisProperty)
+            Place();
+        else if (change.Property == TextProperty && Content is Control trigger)
+            AutomationProperties.SetHelpText(trigger, Text);
+    }
+
+    protected override void OnPointerEntered(PointerEventArgs e)
+    {
+        base.OnPointerEntered(e);
+        if (WhatsThis || !IsEffectivelyEnabled)
+            return;
+        _timer.Interval = TimeSpan.FromMilliseconds(Delay);
+        _timer.Start();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        if (WhatsThis)
+            return;
+        _timer.Stop();
+        IsOpen = false;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (WhatsThis)
+            IsOpen = !IsOpen;
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        if (!WhatsThis && e.NavigationMethod == NavigationMethod.Tab)
+            IsOpen = true;
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        if (!WhatsThis)
+            IsOpen = false;
+    }
+
+    private void OnKey(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && IsOpen)
+        {
+            IsOpen = false;
+            e.Handled = true;
+        }
+    }
+}

@@ -1,0 +1,20 @@
+name = "UnderlineNav"
+group = "Navigation"
+order = 62
+summary = "Page-level navigation between sibling views, with an underline on the current one."
+slint_exports = ["UnderlineNav", "UnderlineNavItem"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Items: { label, href?, icon?, count? }."
+
+[props.current]
+type = "int"
+default = 0
+doc = "Index of the current item."
+
+[props.ariaLabel]
+type = "string"
+default = ""
+doc = "Accessible name of the navigation landmark."

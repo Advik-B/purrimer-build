@@ -1,0 +1,128 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Property, QPropertyAnimation, QRectF, QSize, Qt
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+
+def initials(name: str) -> str:
+    return "".join(word[0].upper() for word in name.split()[:2])
+
+
+class AvatarStack(QWidget):
+    """Overlapping initials for the people on an item; hover or focus spreads them out."""
+
+    def __init__(self, people: list[str], max_shown: int = {{ c.spec.props.max.default }}, size: int = {{ c.spec.props.size.default }},
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._people = list(people)
+        self._max = max_shown
+        self._size = size
+        self._spread = 0.0
+        self._anim = QPropertyAnimation(self, b"spread", self)
+        self._anim.setDuration(theme.duration({{ "duration-base" | tok }}))
+        self._anim.setEasingCurve(theme.easing({{ "easing-standard" | tok }}))
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(f"{len(self._people)} people")
+        theme.changed.connect(self.update)
+
+    def _get_spread(self) -> float:
+        return self._spread
+
+    def _set_spread(self, value: float) -> None:
+        self._spread = value
+        self.updateGeometry()
+        self.update()
+
+    spread = Property(float, _get_spread, _set_spread)
+
+    def _shown(self) -> list[str]:
+        return self._people[: self._max]
+
+    def _extra(self) -> int:
+        return len(self._people) - len(self._shown())
+
+    def _font(self, more: bool) -> QFont:
+        font = theme.font({{ "text-caption" | tok }})
+        font.setWeight(QFont.Weight.DemiBold)
+        font.setPixelSize(max(10, round(self._size * 0.42)) if more else round(self._size * 0.4))
+        return font
+
+    def _more_width(self) -> int:
+        if not self._extra():
+            return 0
+        return max(self._size, QFontMetrics(self._font(True)).horizontalAdvance(f"+{self._extra()}") + 8)
+
+    def _step(self) -> float:
+        """Distance from one avatar's left edge to the next: 60% tucked behind, or a 4px gap spread out."""
+        return self._size * 0.4 + (self._size * 0.6 + 4) * self._spread
+
+    def sizeHint(self) -> QSize:
+        count = len(self._shown())
+        width = self._size + max(0, count - 1) * self._step()
+        if self._extra():
+            width += 4 + self._more_width()
+        return QSize(round(width) + 2, self._size + 2)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def _go(self, spread: float) -> None:
+        self._anim.stop()
+        self._anim.setStartValue(self._spread)
+        self._anim.setEndValue(spread)
+        self._anim.start()
+
+    def enterEvent(self, event) -> None:
+        self._go(1.0)
+
+    def leaveEvent(self, event) -> None:
+        if not self.hasFocus():
+            self._go(0.0)
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self._go(1.0)
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        if not self.underMouse():
+            self._go(0.0)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        ring = theme.color({{ "bgColor-default" | tok }})
+        shown = self._shown()
+        # Later avatars tuck behind earlier ones, so paint from the back.
+        for i in reversed(range(len(shown))):
+            rect = QRectF(1 + i * self._step(), 1, self._size, self._size)
+            painter.setPen(QPen(ring, 2))
+            painter.setBrush(theme.color({{ "bgColor-accent-muted" | tok }}))
+            painter.drawEllipse(rect.adjusted(-0.5, -0.5, 0.5, 0.5))
+            if i == 0 or self._spread > 0.5:
+                painter.setFont(self._font(False))
+                painter.setPen(theme.color({{ "fgColor-accent" | tok }}))
+                painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, initials(shown[i]))
+        if self._extra():
+            x = 1 + max(0, len(shown) - 1) * self._step() + self._size + 4
+            rect = QRectF(x, 1, self._more_width(), self._size)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "bgColor-neutral-muted" | tok }}))
+            painter.drawRoundedRect(rect, self._size / 2, self._size / 2)
+            painter.setFont(self._font(True))
+            painter.setPen(theme.color({{ "fgColor-muted" | tok }}))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, f"+{self._extra()}")
+        if self.hasFocus():
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            outline = QRectF(self.rect()).adjusted(1, 1, -1, -1)
+            painter.drawRoundedRect(outline, outline.height() / 2, outline.height() / 2)

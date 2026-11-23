@@ -1,0 +1,265 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Metadata;
+
+namespace {{ ns }};
+
+// A button that opens a menu of ActionListItem children. Open, the button and the menu are one shape.
+[TemplatePart("PART_Anchor", typeof(Border))]
+[TemplatePart("PART_Popup", typeof(Popup))]
+[TemplatePart("PART_List", typeof(ActionList))]
+[PseudoClasses(":open")]
+public class ActionMenu : TemplatedControl
+{
+    private const double MenuMin = 192;
+    private const double MenuMax = 320;
+
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<ActionMenu, string?>(nameof(Label));
+
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<ActionMenu, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<string> VariantProperty =
+        AvaloniaProperty.Register<ActionMenu, string>(nameof(Variant), "default");
+
+    public static readonly StyledProperty<bool> CloseOnSelectProperty =
+        AvaloniaProperty.Register<ActionMenu, bool>(nameof(CloseOnSelect), true);
+
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<ActionMenu, bool>(nameof(IsOpen));
+
+    public static readonly DirectProperty<ActionMenu, bool> IsIconOnlyProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, bool>(nameof(IsIconOnly), o => o.IsIconOnly);
+
+    public static readonly DirectProperty<ActionMenu, bool> HasTextProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, bool>(nameof(HasText), o => o.HasText);
+
+    public static readonly DirectProperty<ActionMenu, string> AnchorIconProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, string>(nameof(AnchorIcon), o => o.AnchorIcon);
+
+    public static readonly DirectProperty<ActionMenu, double> MenuWidthProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, double>(nameof(MenuWidth), o => o.MenuWidth);
+
+    public static readonly DirectProperty<ActionMenu, double> AnchorWidthProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, double>(nameof(AnchorWidth), o => o.AnchorWidth);
+
+    public static readonly DirectProperty<ActionMenu, double> AnchorHeightProperty =
+        AvaloniaProperty.RegisterDirect<ActionMenu, double>(nameof(AnchorHeight), o => o.AnchorHeight);
+
+    private bool _isIconOnly;
+    private bool _hasText = true;
+    private string _anchorIcon = "triangle-down";
+    private double _menuWidth = MenuMin;
+    private double _anchorWidth;
+    private double _anchorHeight = {{ px("control-medium-size") | num }};
+    private Border? _anchor;
+    private Popup? _popup;
+    private ActionMenuSurface? _surface;
+
+    public ActionMenu()
+    {
+        AddHandler(ActionList.TriggeredEvent, OnTriggered);
+    }
+
+    // Rows in ActionList's shape: ActionListItem, ActionListGroup and ActionListDivider.
+    [Content]
+    public AvaloniaList<Control> Items { get; } = new();
+
+    public string? Label { get => GetValue(LabelProperty); set => SetValue(LabelProperty, value); }
+
+    // An Octicon for an icon-only anchor, such as kebab-horizontal.
+    public string? IconName { get => GetValue(IconNameProperty); set => SetValue(IconNameProperty, value); }
+
+    // default, primary or invisible
+    public string Variant { get => GetValue(VariantProperty); set => SetValue(VariantProperty, value); }
+
+    public bool CloseOnSelect { get => GetValue(CloseOnSelectProperty); set => SetValue(CloseOnSelectProperty, value); }
+
+    public bool IsOpen { get => GetValue(IsOpenProperty); set => SetValue(IsOpenProperty, value); }
+
+    public bool IsIconOnly { get => _isIconOnly; private set => SetAndRaise(IsIconOnlyProperty, ref _isIconOnly, value); }
+    public bool HasText { get => _hasText; private set => SetAndRaise(HasTextProperty, ref _hasText, value); }
+    public string AnchorIcon { get => _anchorIcon; private set => SetAndRaise(AnchorIconProperty, ref _anchorIcon, value); }
+    public double MenuWidth { get => _menuWidth; private set => SetAndRaise(MenuWidthProperty, ref _menuWidth, value); }
+    public double AnchorWidth { get => _anchorWidth; private set => SetAndRaise(AnchorWidthProperty, ref _anchorWidth, value); }
+    public double AnchorHeight { get => _anchorHeight; private set => SetAndRaise(AnchorHeightProperty, ref _anchorHeight, value); }
+
+    public static readonly RoutedEvent<RoutedEventArgs> PickedEvent =
+        RoutedEvent.Register<ActionMenu, RoutedEventArgs>(nameof(Picked), RoutingStrategies.Bubble);
+
+    // Raised with the picked ActionListItem as the source.
+    public event EventHandler<RoutedEventArgs>? Picked
+    {
+        add => AddHandler(PickedEvent, value);
+        remove => RemoveHandler(PickedEvent, value);
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        if (_anchor != null)
+            _anchor.SizeChanged -= OnAnchorSized;
+        if (_popup != null)
+            _popup.Closed -= OnPopupClosed;
+        _anchor = e.NameScope.Find<Border>("PART_Anchor");
+        _popup = e.NameScope.Find<Popup>("PART_Popup");
+        _surface = e.NameScope.Find<ActionMenuSurface>("PART_Surface");
+        if (_anchor != null)
+            _anchor.SizeChanged += OnAnchorSized;
+        if (_popup != null)
+        {
+            _popup.PlacementTarget = _anchor;
+            _popup.Closed += OnPopupClosed;
+            if (IsLoaded)
+                _popup.IsOpen = IsOpen;
+        }
+        var list = e.NameScope.Find<ActionList>("PART_List");
+        if (list != null)
+            list.ItemsSource = Items;
+        var face = e.NameScope.Find<Panel>("PART_Face");
+        if (face != null)
+            face.PointerReleased += (_, args) => { IsOpen = false; args.Handled = true; };
+    }
+
+    // A popup needs the window's overlay layer, which exists once the control is loaded.
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        if (_popup != null)
+            _popup.IsOpen = IsOpen;
+    }
+
+    private void OnAnchorSized(object? sender, SizeChangedEventArgs e)
+    {
+        AnchorWidth = e.NewSize.Width;
+        AnchorHeight = e.NewSize.Height;
+        MenuWidth = Math.Clamp(Math.Max(MenuMin, e.NewSize.Width + 2 * ActionMenuSurface.AnchorRadius), MenuMin, MenuMax);
+        if (_surface != null)
+            _surface.AnchorSize = e.NewSize;
+    }
+
+    private void OnPopupClosed(object? sender, EventArgs e)
+    {
+        IsOpen = false;
+        Focus();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IconNameProperty)
+        {
+            IsIconOnly = !string.IsNullOrEmpty(IconName);
+            HasText = !IsIconOnly;
+            AnchorIcon = IsIconOnly ? IconName! : "triangle-down";
+        }
+        else if (change.Property == LabelProperty)
+            AutomationProperties.SetName(this, Label);
+        else if (change.Property == IsOpenProperty)
+        {
+            PseudoClasses.Set(":open", IsOpen);
+            if (_popup != null && IsLoaded)
+                _popup.IsOpen = IsOpen;
+        }
+    }
+
+    private void OnTriggered(object? sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        RaiseEvent(new RoutedEventArgs(PickedEvent, e.Source));
+        if (CloseOnSelect)
+            IsOpen = false;
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            IsOpen = !IsOpen;
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Key is Key.Enter or Key.Space or Key.Down)
+        {
+            IsOpen = true;
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape && IsOpen)
+        {
+            IsOpen = false;
+            e.Handled = true;
+        }
+    }
+}
+
+// The open shape of an ActionMenu: the anchor's top, a concave fillet where it meets the menu, and the menu's body.
+public class ActionMenuSurface : Control
+{
+    internal const double AnchorRadius = {{ px("borderRadius-medium") | num }};
+    private const double MenuRadius = {{ px("borderRadius-large") | num }};
+
+    public static readonly StyledProperty<IBrush?> FillProperty =
+        AvaloniaProperty.Register<ActionMenuSurface, IBrush?>(nameof(Fill));
+
+    public static readonly StyledProperty<IBrush?> StrokeProperty =
+        AvaloniaProperty.Register<ActionMenuSurface, IBrush?>(nameof(Stroke));
+
+    public static readonly StyledProperty<Size> AnchorSizeProperty =
+        AvaloniaProperty.Register<ActionMenuSurface, Size>(nameof(AnchorSize), new Size(96, 32));
+
+    static ActionMenuSurface()
+    {
+        AffectsRender<ActionMenuSurface>(FillProperty, StrokeProperty, AnchorSizeProperty);
+    }
+
+    public IBrush? Fill { get => GetValue(FillProperty); set => SetValue(FillProperty, value); }
+    public IBrush? Stroke { get => GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+    public Size AnchorSize { get => GetValue(AnchorSizeProperty); set => SetValue(AnchorSizeProperty, value); }
+
+    public override void Render(DrawingContext context)
+    {
+        var r = AnchorRadius;
+        var big = MenuRadius;
+        var a = AnchorSize.Width - 0.5;
+        var top = AnchorSize.Height - 1;
+        var l = 0.5;
+        var right = Bounds.Width - 0.5;
+        var bottom = Bounds.Height - 0.5;
+        if (right - big < a + r || bottom - big < top)
+            return;
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(l, 0.5 + r), true);
+            g.ArcTo(new Point(l + r, 0.5), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            g.LineTo(new Point(a - r, 0.5));
+            g.ArcTo(new Point(a, 0.5 + r), new Size(r, r), 0, false, SweepDirection.Clockwise);
+            g.LineTo(new Point(a, top - r));
+            g.ArcTo(new Point(a + r, top), new Size(r, r), 0, false, SweepDirection.CounterClockwise);
+            g.LineTo(new Point(right - big, top));
+            g.ArcTo(new Point(right, top + big), new Size(big, big), 0, false, SweepDirection.Clockwise);
+            g.LineTo(new Point(right, bottom - big));
+            g.ArcTo(new Point(right - big, bottom), new Size(big, big), 0, false, SweepDirection.Clockwise);
+            g.LineTo(new Point(l + big, bottom));
+            g.ArcTo(new Point(l, bottom - big), new Size(big, big), 0, false, SweepDirection.Clockwise);
+            g.EndFigure(true);
+        }
+        context.DrawGeometry(Fill, new Pen(Stroke, 1), geometry);
+    }
+}

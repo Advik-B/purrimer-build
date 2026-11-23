@@ -1,0 +1,100 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QElapsedTimer, QPointF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+# Per motion kind: step cycle and snooze loop (ms), travel (px), peak scale and the easing of a step.
+KINDS = {
+    "sleepy": {"dots": {{ (ms("duration-sleepy-loop") * 0.45) | int }}, "loop": {{ ms("duration-sleepy-loop") }}, "dist": 8, "peak": 1.03,
+               "wave": {{ "easing-sleepy-drift" | tok }}},
+    "playful": {"dots": {{ (ms("duration-playful-loop") * 0.7) | int }}, "loop": {{ ms("duration-playful-loop") }}, "dist": 18, "peak": 1.14,
+                "wave": {{ "easing-playful-snap" | tok }}},
+}
+BUBBLES = (7, 5, 4)
+
+
+class LoadingDots(QWidget):
+    """Three dots stepping in turn, or three bubbles drifting up. They animate while visible."""
+
+    def __init__(self, variant: str = "steps", label: str = "", kind: str = "sleepy",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._snooze = variant == "snooze"
+        self._kind = KINDS.get(kind, KINDS["sleepy"])
+        self._wave = theme.easing(self._kind["wave"])
+        self._drift = theme.easing({{ "easing-sleepy-drift" | tok }})
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self.update)
+        self.setFixedSize(self.sizeHint())
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(label or ("Waiting" if self._snooze else "Loading"))
+        theme.changed.connect(self.update)
+
+    def sizeHint(self) -> QSize:
+        return QSize(28, 24) if self._snooze else QSize(26, 20)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not theme.pause_loops:
+            self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def _now(self) -> float:
+        # Paused, the dots rest on the same snapshot as the web's resting style.
+        if theme.pause_loops:
+            return self._kind["dots"] * 0.45 if not self._snooze else self._kind["loop"] * 0.75 * 0.5
+        return float(self._clock.elapsed())
+
+    def _step(self, phase: float) -> tuple[float, float, float]:
+        """Opacity, lift and scale of a stepping dot."""
+        dist, peak = self._kind["dist"], self._kind["peak"]
+        if phase < 0.3:
+            p = self._wave.valueForProgress(phase / 0.3)
+        elif phase < 0.6:
+            p = 1 - self._wave.valueForProgress((phase - 0.3) / 0.3)
+        else:
+            p = 0.0
+        return 0.35 + 0.65 * p, -0.4 * dist * p, 1 + (peak - 1) * p
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        color = QColor(theme.color({{ "fgColor-muted" | tok }}))
+        now = self._now()
+        if not self._snooze:
+            for i in range(3):
+                phase = (now / self._kind["dots"] - 0.15 * i) % 1.0
+                opacity, lift, scale = self._step(phase)
+                painter.setOpacity(opacity)
+                painter.setBrush(color)
+                radius = 3 * scale
+                painter.drawEllipse(QPointF(3 + i * 10, 10 + lift), radius, radius)
+            return
+        cycle = self._kind["loop"] * 0.75
+        dist = self._kind["dist"]
+        for i, size in enumerate(BUBBLES):
+            phase = (now / cycle - i / 3) % 1.0
+            if phase < 0.3:
+                opacity = 0.9 * self._drift.valueForProgress(phase / 0.3)
+            else:
+                opacity = 0.9 * (1 - self._drift.valueForProgress((phase - 0.3) / 0.7))
+            q = self._drift.valueForProgress(phase)
+            centre = QPointF(4 + size / 2 + q * (dist * 0.8 + 4), 22 - size / 2 - q * (dist * 2 + 8))
+            painter.setOpacity(opacity)
+            painter.setBrush(color)
+            radius = size / 2 * (0.6 + 0.5 * q)
+            painter.drawEllipse(centre, radius, radius)

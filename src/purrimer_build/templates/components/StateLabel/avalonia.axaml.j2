@@ -1,0 +1,35 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:StateLabel}" TargetType="pm:StateLabel">
+    <Setter Property="Background" Value="{{ "bgColor-success-emphasis" | tok }}" />
+    <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:StateLabel">
+        <Border Padding="{TemplateBinding Padding}" CornerRadius="16" Background="{TemplateBinding Background}">
+          <StackPanel Orientation="Horizontal" Spacing="4">
+            <pm:Icon IconName="{TemplateBinding IconName}" Foreground="{TemplateBinding Foreground}" VerticalAlignment="Center" />
+            <TextBlock Text="{TemplateBinding Text}" VerticalAlignment="Center" />
+          </StackPanel>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[Size=small]">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="8,0" />
+    </Style>
+{% for tone in ["danger", "done", "neutral"] %}
+    <Style Selector="^[Tone={{ tone }}]">
+      <Setter Property="Background" Value="{{ ("bgColor-" ~ tone ~ "-emphasis") | tok }}" />
+    </Style>
+{% endfor %}
+  </ControlTheme>
+</ResourceDictionary>

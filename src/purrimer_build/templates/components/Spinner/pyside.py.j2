@@ -1,0 +1,83 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QElapsedTimer, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+SIZES = {{ c.spec.sizes | py }}
+# One turn, in ms. Playful also stretches the arc over 1.75 turns.
+TURN = {"sleepy": {{ (ms("duration-sleepy-loop") * 0.4) | int }}, "playful": {{ (ms("duration-playful-loop") * 0.6) | int }}}
+# Arc length and offset, in percent of the circle, at the start, middle and end of a stretch.
+STRETCH = ((8, 0), (60, -16), (8, -92))
+
+
+class Spinner(QWidget):
+    """A turning arc on a faint track. It animates while it is visible."""
+
+    def __init__(self, size: str | int = "medium", label: str = "{{ c.spec.props.label.default }}", kind: str = "sleepy",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._px = size if isinstance(size, int) else SIZES[size]
+        self._kind = kind if kind in TURN else "sleepy"
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self.update)
+        self._ease = theme.easing({{ "easing-sleepy-move" | tok }})
+        self.setFixedSize(self._px, self._px)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(label)
+        theme.changed.connect(self.update)
+
+    def set_kind(self, kind: str) -> None:
+        self._kind = kind if kind in TURN else "sleepy"
+        self.update()
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._px, self._px)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not theme.pause_loops:
+            self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def _arc(self) -> tuple[float, float]:
+        """Start angle (clockwise from three o'clock) and length, in degrees."""
+        now = 0 if theme.pause_loops else self._clock.elapsed()
+        turn = TURN[self._kind]
+        spin = (now % turn) / turn * 360.0
+        if self._kind == "sleepy" or theme.pause_loops:
+            return spin, 26 * 3.6
+        cycle = turn * 1.75
+        t = (now % cycle) / cycle
+        (a0, o0), (a1, o1) = (STRETCH[0], STRETCH[1]) if t < 0.5 else (STRETCH[1], STRETCH[2])
+        p = self._ease.valueForProgress((t % 0.5) * 2)
+        length = a0 + (a1 - a0) * p
+        offset = o0 + (o1 - o0) * p
+        return spin - offset * 3.6, length * 3.6
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        stroke = self._px / 8
+        rect = QRectF(stroke / 2, stroke / 2, self._px - stroke, self._px - stroke)
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), stroke))
+        painter.setBrush(Qt.BrushStyle.NoBrush)
+        painter.drawEllipse(rect)
+        pen = QPen(theme.color({{ "fgColor-accent" | tok }}), stroke)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        start, length = self._arc()
+        # Qt measures angles counter-clockwise in sixteenths of a degree.
+        painter.drawArc(rect, round(-start * 16), round(-length * 16))

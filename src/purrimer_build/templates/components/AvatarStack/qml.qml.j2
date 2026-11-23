@@ -1,0 +1,90 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Item {
+    id: root
+    property var people: []
+    property int max: {{ c.spec.props.max.default }}
+    property int size: {{ c.spec.props.size.default }}
+    readonly property var shown: people.slice(0, max)
+    readonly property int extra: people.length - shown.length
+    readonly property bool spread: hover.hovered || activeFocus
+    property real spreadAmount: spread ? 1 : 0
+    Behavior on spreadAmount { NumberAnimation { duration: {{ "duration-base" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-standard" | tok }} } }
+
+    function initials(name) {
+        return name.split(/\s+/).filter(w => w.length).slice(0, 2).map(w => w[0].toUpperCase()).join("")
+    }
+
+    implicitWidth: row.width + 2
+    implicitHeight: size + 2
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Grouping
+    Accessible.name: people.length + " people"
+
+    HoverHandler { id: hover }
+
+    Row {
+        id: row
+        x: 1
+        y: 1
+        spacing: 4
+        Row {
+            spacing: -root.size * 0.6 + (root.size * 0.6 + 4) * root.spreadAmount
+            Repeater {
+                model: root.shown
+                Rectangle {
+                    id: person
+                    required property int index
+                    required property string modelData
+                    z: root.shown.length - index
+                    width: root.size
+                    height: root.size
+                    radius: root.size / 2
+                    color: {{ "bgColor-accent-muted" | tok }}
+                    border.width: 1
+                    border.color: {{ "bgColor-default" | tok }}
+                    Accessible.role: Accessible.Graphic
+                    Accessible.name: modelData
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.initials(person.modelData)
+                        visible: person.index === 0 || root.spreadAmount > 0.5
+                        font.family: {{ "text-body-medium" | tok }}.family
+                        font.pixelSize: Math.round(root.size * 0.4)
+                        font.weight: Font.DemiBold
+                        color: {{ "fgColor-accent" | tok }}
+                    }
+                }
+            }
+        }
+        Rectangle {
+            visible: root.extra > 0
+            width: Math.max(root.size, more.implicitWidth + 8)
+            height: root.size
+            radius: root.size / 2
+            color: {{ "bgColor-neutral-muted" | tok }}
+            Text {
+                id: more
+                anchors.centerIn: parent
+                text: "+" + root.extra
+                font.family: {{ "text-body-medium" | tok }}.family
+                font.pixelSize: Math.max(10, Math.round(root.size * 0.42))
+                font.weight: Font.DemiBold
+                color: {{ "fgColor-muted" | tok }}
+            }
+        }
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: -3
+        radius: height / 2
+        color: "transparent"
+        border.width: {{ "borderWidth-thick" | tok }}
+        border.color: {{ "focus-outlineColor" | tok }}
+        visible: root.activeFocus
+    }
+}

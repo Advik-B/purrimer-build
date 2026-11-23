@@ -1,0 +1,55 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+component Dot inherits Rectangle {
+    in property <length> size: 6px;
+    in property <float> scale: 1;
+    width: root.size * root.scale;
+    height: root.size * root.scale;
+    border-radius: self.width / 2;
+}
+
+export component LoadingDots {
+    // steps or snooze
+    in property <string> variant: "steps";
+    in property <string> label;
+    // sleepy or playful
+    in property <string> kind: "sleepy";
+    in property <brush> color: {{ "fgColor-muted" | tok }};
+
+    property <bool> snooze: root.variant == "snooze";
+    property <bool> playful: root.kind == "playful";
+    property <duration> step-cycle: root.playful ? {{ (ms("duration-playful-loop") * 0.7) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.45) | int }}ms;
+    property <duration> snooze-cycle: root.playful ? {{ (ms("duration-playful-loop") * 0.75) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.75) | int }}ms;
+    property <float> dist: root.playful ? 18 : 8;
+    property <float> peak: root.playful ? 1.14 : 1.03;
+    // Paused, the dots rest on the same snapshot as the web's resting style.
+    property <duration> now: PurrimerMotion.pause-loops ? (root.snooze ? root.snooze-cycle * 0.5 : root.step-cycle * 0.45) : PurrimerMotion.loop-tick;
+
+    pure function drift(x: float) -> float { return x * x * (3 - 2 * x); }
+    pure function wave(x: float) -> float { return root.playful ? 1 - Math.pow(1 - x, 3) : root.drift(x); }
+    pure function wrap(x: float) -> float { return mod(mod(x, 1) + 1, 1); }
+    pure function step(phase: float) -> float {
+        return phase < 0.3 ? root.wave(phase / 0.3) : phase < 0.6 ? 1 - root.wave((phase - 0.3) / 0.3) : 0;
+    }
+    pure function rise-opacity(phase: float) -> float {
+        return phase < 0.3 ? 0.9 * root.drift(phase / 0.3) : 0.9 * (1 - root.drift((phase - 0.3) / 0.7));
+    }
+
+    width: root.snooze ? 28px : 26px;
+    height: root.snooze ? 24px : 20px;
+    accessible-role: progress-indicator;
+    accessible-label: root.label != "" ? root.label : root.snooze ? "Waiting" : "Loading";
+
+    for i in 3: Dot {
+        property <float> phase: root.snooze ? root.wrap(root.now / root.snooze-cycle - i / 3) : root.wrap(root.now / root.step-cycle - 0.15 * i);
+        property <float> p: root.snooze ? root.drift(self.phase) : root.step(self.phase);
+        size: root.snooze ? (i == 0 ? 7px : i == 1 ? 5px : 4px) : 6px;
+        scale: root.snooze ? 0.6 + 0.5 * self.p : 1 + (root.peak - 1) * self.p;
+        background: root.color;
+        opacity: root.snooze ? root.rise-opacity(self.phase) : 0.35 + 0.65 * self.p;
+        x: root.snooze ? 4px + self.size / 2 + self.p * (root.dist * 0.8 + 4) * 1px - self.width / 2 : 3px + i * 10px - self.width / 2;
+        y: root.snooze ? 22px - self.size / 2 - self.p * (root.dist * 2 + 8) * 1px - self.height / 2 : 10px - 0.4 * root.dist * self.p * 1px - self.height / 2;
+    }
+}

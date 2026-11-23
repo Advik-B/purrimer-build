@@ -1,0 +1,19 @@
+import { LoadingDots, Purrimer } from "purrimer-components.slint";
+
+component Waiting inherits HorizontalLayout {
+    in property <string> text;
+    in property <string> variant: "steps";
+    in property <string> kind: "sleepy";
+    spacing: root.variant == "snooze" ? 4px : 8px;
+    alignment: start;
+    Text { text: root.text; color: Purrimer.fg-color-default; vertical-alignment: center; }
+    LoadingDots { variant: root.variant; kind: root.kind; y: (parent.height - self.height) / 2; }
+}
+
+export component Example inherits VerticalLayout {
+    spacing: 12px;
+    alignment: start;
+    Waiting { text: "Connecting"; }
+    Waiting { text: "Mona is typing"; variant: "snooze"; }
+    Waiting { text: "Fetching treats"; kind: "playful"; }
+}

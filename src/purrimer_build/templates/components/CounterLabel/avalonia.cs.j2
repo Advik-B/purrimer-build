@@ -1,0 +1,29 @@
+// {{ note }}
+// {{ c.summary }}
+using Avalonia;
+using Avalonia.Controls.Primitives;
+
+namespace {{ ns }};
+
+// A rounded count, 18px tall.
+public class CounterLabel : TemplatedControl
+{
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<CounterLabel, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> VariantProperty =
+        AvaloniaProperty.Register<CounterLabel, string>(nameof(Variant), "secondary");
+
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    // secondary or primary
+    public string Variant
+    {
+        get => GetValue(VariantProperty);
+        set => SetValue(VariantProperty, value);
+    }
+}

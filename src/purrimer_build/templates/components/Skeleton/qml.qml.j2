@@ -1,0 +1,89 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Item {
+    id: root
+    property string variant: "text"
+    property string effect: "sunbeam"
+    property int lines: 1
+    property string kind: "sleepy"
+    readonly property int count: variant === "text" ? Math.max(1, lines) : 1
+    readonly property int loop: kind === "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}
+    readonly property color base: {{ "bgColor-neutral-muted" | tok }}
+    readonly property color beam: Purrimer.dark ? {{ "borderColor-default" | tok }} : {{ "bgColor-default" | tok }}
+    // Sweep progress, 0 to 1; paused, the band rests at the left edge as it does on the web.
+    property real sweep: 1.2 / 4.4
+    property real breath: 0
+
+    implicitWidth: variant === "circle" ? 40 : 240
+    implicitHeight: variant === "text" ? 20 * count : variant === "circle" ? width : 64
+    opacity: 1 - 0.5 * breath
+    Accessible.ignored: true
+
+    // How much of the beam shows at x in a bone of width w: a 30% band with soft 14px edges.
+    function beamAt(x, w) {
+        const band = w * 0.3
+        const centre = -1.2 * band + 4.4 * band * sweep + band / 2
+        const inner = Math.max(0, band / 2 - 14)
+        const outer = band / 2 + 14
+        const peak = 0.9 * Math.min(1, band / 56)
+        const d = Math.abs(x - centre)
+        return d >= outer ? 0 : d <= inner ? peak : peak * (outer - d) / (outer - inner)
+    }
+    function stopAt(i, w) {
+        const band = w * 0.3
+        const centre = -1.2 * band + 4.4 * band * sweep + band / 2
+        const inner = Math.max(0, band / 2 - 14)
+        const outer = band / 2 + 14
+        const xs = [0, centre - outer, centre - inner, centre + inner, centre + outer, w]
+        return Math.min(Math.max(xs[i], 0), w)
+    }
+    function mix(t) {
+        return Qt.rgba(base.r + (beam.r - base.r) * t, base.g + (beam.g - base.g) * t, base.b + (beam.b - base.b) * t,
+                       base.a + (beam.a - base.a) * t)
+    }
+
+    NumberAnimation on sweep {
+        running: root.effect === "sunbeam" && root.visible && !Purrimer.pauseLoops
+        from: 0
+        to: 1
+        duration: root.loop * 0.55
+        loops: Animation.Infinite
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: {{ "easing-sleepy-move" | tok }}
+    }
+
+    SequentialAnimation on breath {
+        running: root.effect === "snore" && root.visible && !Purrimer.pauseLoops
+        loops: Animation.Infinite
+        NumberAnimation { from: 0; to: 1; duration: root.loop / 2; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-drift" | tok }} }
+        NumberAnimation { from: 1; to: 0; duration: root.loop / 2; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-drift" | tok }} }
+    }
+
+    Repeater {
+        model: root.count
+        Rectangle {
+            id: bone
+            required property int index
+            readonly property real w: root.count > 1 && index === root.count - 1 ? root.width * 0.6 : root.width
+            y: root.variant === "text" ? index * 20 + 4 : 0
+            width: w
+            height: root.variant === "text" ? 12 : root.height
+            radius: root.variant === "block" ? {{ "borderRadius-large" | tok }} : Math.min(width, height) / 2
+            color: root.base
+            gradient: root.effect !== "sunbeam" ? null : beamGradient
+            Gradient {
+                id: beamGradient
+                orientation: Gradient.Horizontal
+                GradientStop { position: root.stopAt(0, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(0, bone.w), bone.w)) }
+                GradientStop { position: root.stopAt(1, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(1, bone.w), bone.w)) }
+                GradientStop { position: root.stopAt(2, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(2, bone.w), bone.w)) }
+                GradientStop { position: root.stopAt(3, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(3, bone.w), bone.w)) }
+                GradientStop { position: root.stopAt(4, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(4, bone.w), bone.w)) }
+                GradientStop { position: root.stopAt(5, bone.w) / Math.max(bone.w, 1); color: root.mix(root.beamAt(root.stopAt(5, bone.w), bone.w)) }
+            }
+        }
+    }
+}

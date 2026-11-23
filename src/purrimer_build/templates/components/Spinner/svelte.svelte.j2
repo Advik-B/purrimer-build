@@ -1,0 +1,21 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  const SIZES = {{ c.spec.sizes | tojson }};
+
+  let { size = "medium", label = "{{ c.spec.props.label.default }}", kind, class: className = "" }: {
+    size?: keyof typeof SIZES | number;
+    label?: string;
+    kind?: {{ c.spec.props.kind["values"] | map("tojson") | join(" | ") }};
+    class?: string;
+  } = $props();
+  const px = $derived(typeof size === "number" ? size : SIZES[size]);
+</script>
+
+<span class={["pm-spinner", className]} role="status" data-motion={kind}>
+  <svg width={px} height={px} viewBox="0 0 16 16" fill="none" aria-hidden="true" focusable="false">
+    <circle class="pm-spinner__track" cx="8" cy="8" r="7" stroke-width="2" />
+    <circle class="pm-spinner__arc" cx="8" cy="8" r="7" stroke-width="2" pathLength="100" />
+  </svg>
+  <span class="pm-sr-only">{label}</span>
+</span>

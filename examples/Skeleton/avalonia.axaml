@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="16">
+    <Grid ColumnDefinitions="Auto,*">
+      <pm:Skeleton Variant="circle" VerticalAlignment="Center" />
+      <pm:Skeleton Grid.Column="1" Lines="2" Margin="12,0,0,0" VerticalAlignment="Center" />
+    </Grid>
+    <pm:Skeleton Variant="block" LoadingEffect="snore" />
+  </StackPanel>
+</UserControl>

@@ -1,0 +1,12 @@
+import { Skeleton } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 16px;
+    alignment: start;
+    HorizontalLayout {
+        spacing: 12px;
+        Skeleton { variant: "circle"; }
+        Skeleton { lines: 2; y: (parent.height - self.height) / 2; }
+    }
+    Skeleton { variant: "block"; effect: "snore"; }
+}

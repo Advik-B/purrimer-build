@@ -1,0 +1,118 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ActionList}" TargetType="pm:ActionList">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel Spacing="2" />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ActionList">
+        <ItemsPresenter Margin="0,8,8,8" ItemsPanel="{TemplateBinding ItemsPanel}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:ActionListGroup}" TargetType="pm:ActionListGroup">
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ActionListGroup">
+        <TextBlock Margin="16,6,8,4" LineHeight="20" Text="{TemplateBinding Header}" FontFamily="{{ "sans" | font }}" FontSize="12"
+                   FontWeight="SemiBold" Foreground="{{ "fgColor-muted" | tok }}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:ActionListDivider}" TargetType="pm:ActionListDivider">
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ActionListDivider">
+        <Border Height="1" Margin="0,6,-8,6" Background="{{ "borderColor-muted" | tok }}" />
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:ActionListItem}" TargetType="pm:ActionListItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ActionListItem">
+        <Panel>
+          <Border Name="row" Margin="8,0,0,0" MinHeight="{{ "control-medium-size" | tok }}" Padding="8,6" CornerRadius="{{ "borderRadius-medium" | tok }}"
+                  Background="{TemplateBinding Background}" BorderBrush="{{ "focus-outlineColor" | tok }}">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="{{ "duration-fast" | tok }}" />
+              </Transitions>
+            </Border.Transitions>
+            <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+              <Panel Name="check" Width="16" Height="20" Margin="0,0,8,0" VerticalAlignment="Top" IsVisible="False">
+                <pm:Icon Name="checkIcon" IconName="check" Foreground="{TemplateBinding Foreground}" IsVisible="False" VerticalAlignment="Center" />
+              </Panel>
+              <pm:Icon Name="leading" Grid.Column="1" Height="20" Margin="0,0,8,0" VerticalAlignment="Top" IconName="{TemplateBinding LeadingIcon}"
+                       Foreground="{{ "fgColor-muted" | tok }}"
+                       IsVisible="{TemplateBinding LeadingIcon, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <StackPanel Grid.Column="2">
+                <TextBlock Name="label" Text="{TemplateBinding Label}" LineHeight="20" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{TemplateBinding Description}" FontSize="12" LineHeight="16" TextTrimming="CharacterEllipsis"
+                           Foreground="{{ "fgColor-muted" | tok }}"
+                           IsVisible="{TemplateBinding Description, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+              <StackPanel Grid.Column="3" Orientation="Horizontal" Height="20" Margin="8,0,0,0" VerticalAlignment="Top">
+                <pm:Icon Name="trailing" IconName="{TemplateBinding TrailingIcon}" Foreground="{{ "fgColor-muted" | tok }}" VerticalAlignment="Center"
+                         IsVisible="{TemplateBinding TrailingIcon, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Name="trailingText" Text="{TemplateBinding TrailingText}" FontSize="12" VerticalAlignment="Center"
+                           Foreground="{{ "fgColor-muted" | tok }}"
+                           IsVisible="{TemplateBinding TrailingText, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+          <Border Name="indicator" Width="4" Height="24" HorizontalAlignment="Left" VerticalAlignment="Center"
+                  CornerRadius="2" Background="{{ "bgColor-accent-emphasis" | tok }}" IsVisible="False" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^:pressed">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-selected" | tok }}" />
+    </Style>
+    <Style Selector="^:current">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-selected" | tok }}" />
+    </Style>
+    <Style Selector="^:current /template/ TextBlock#label">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="^:current /template/ Border#indicator">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:checkable /template/ Panel#check">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:checked /template/ pm|Icon#checkIcon">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#row">
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="^[Variant=danger]">
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^[Variant=danger] /template/ pm|Icon#leading">
+      <Setter Property="Foreground" Value="{{ "fgColor-danger" | tok }}" />
+    </Style>
+    <Style Selector="^[Variant=danger]:pointerover">
+      <Setter Property="Background" Value="{{ "bgColor-danger-muted" | tok }}" />
+    </Style>
+    <Style Selector="^:disabled">
+      <Setter Property="Foreground" Value="{{ "fgColor-disabled" | tok }}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="^:disabled /template/ pm|Icon#leading">
+      <Setter Property="Foreground" Value="{{ "fgColor-disabled" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

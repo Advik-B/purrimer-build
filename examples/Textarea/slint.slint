@@ -1,0 +1,16 @@
+import { Textarea } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    spacing: 16px;
+    alignment: start;
+    Textarea {
+        label: "Bio";
+        placeholder: "Tell us a little about yourself";
+        caption: "Shown on your public profile.";
+    }
+    Textarea {
+        label: "Why are you closing this?";
+        rows: 2;
+        error: "Add a short reason.";
+    }
+}

@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="12">
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBlock Text="Connecting" VerticalAlignment="Center" />
+      <pm:LoadingDots />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Spacing="4">
+      <TextBlock Text="Mona is typing" VerticalAlignment="Center" />
+      <pm:LoadingDots Variant="snooze" />
+    </StackPanel>
+    <StackPanel Orientation="Horizontal" Spacing="8">
+      <TextBlock Text="Fetching treats" VerticalAlignment="Center" />
+      <pm:LoadingDots Kind="playful" />
+    </StackPanel>
+  </StackPanel>
+</UserControl>

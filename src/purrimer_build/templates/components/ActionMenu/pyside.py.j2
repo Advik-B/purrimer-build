@@ -1,0 +1,222 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QApplication, QGraphicsDropShadowEffect, QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+from .action_list import ActionDivider, ActionGroup, ActionItem, ActionList
+
+ANCHOR_RADIUS = {{ px("borderRadius-medium") | num }}
+OVERLAY_RADIUS = {{ px("borderRadius-large") | num }}
+
+
+def outline(anchor: QSize, width: float, height: float) -> QPainterPath:
+    """The open shape: the anchor's top, a concave fillet where it meets the menu, and the menu's body."""
+    r, big = ANCHOR_RADIUS, OVERLAY_RADIUS
+    aw, top = anchor.width() - 0.5, anchor.height() - 1.0
+    left, right, bottom = 0.5, width - 0.5, height - 0.5
+    path = QPainterPath()
+    path.moveTo(left, 0.5 + r)
+    path.arcTo(QRectF(left, 0.5, 2 * r, 2 * r), 180, -90)
+    path.lineTo(aw - r, 0.5)
+    path.arcTo(QRectF(aw - 2 * r, 0.5, 2 * r, 2 * r), 90, -90)
+    path.lineTo(aw, top - r)
+    path.arcTo(QRectF(aw, top - 2 * r, 2 * r, 2 * r), 180, 90)
+    path.lineTo(right - big, top)
+    path.arcTo(QRectF(right - 2 * big, top, 2 * big, 2 * big), 90, -90)
+    path.lineTo(right, bottom - big)
+    path.arcTo(QRectF(right - 2 * big, bottom - 2 * big, 2 * big, 2 * big), 0, -90)
+    path.lineTo(left + big, bottom)
+    path.arcTo(QRectF(left, bottom - 2 * big, 2 * big, 2 * big), 270, -90)
+    path.closeSubpath()
+    return path
+
+
+class _Surface(QWidget):
+    """The open menu, drawn over the anchor inside the window so the anchor and the menu read as one shape."""
+
+    def __init__(self, menu: ActionMenu, window: QWidget) -> None:
+        super().__init__(window)
+        self._menu = menu
+        self.list = ActionList(menu.items(), self)
+        self.list.triggered.connect(menu._picked)
+        self.list.installEventFilter(self)
+        anchor = menu.size()
+        list_hint = self.list.sizeHint()
+        self._full = QSize(
+            round(min(320, max(192, anchor.width() + 2 * ANCHOR_RADIUS, list_hint.width() + 2))),
+            anchor.height() - 1 + list_hint.height() + 1,
+        )
+        self.list.setGeometry(1, anchor.height() - 1, self._full.width() - 2, list_hint.height())
+        effect = QGraphicsDropShadowEffect(self)
+        effect.setOffset(0, 6)
+        effect.setBlurRadius(28)
+        effect.setColor(theme.color({{ "overlay-backdrop-bgColor" | tok }}))
+        self.setGraphicsEffect(effect)
+        self.move(menu.mapTo(window, QPoint(0, 0)))
+        self.resize(self._full.width(), anchor.height())
+        self._anim = QPropertyAnimation(self, b"size", self)
+        self._anim.setDuration(theme.duration({{ "duration-base" | tok }}))
+        self._anim.setEasingCurve(theme.easing({{ "easing-standard" | tok }}))
+
+    def unroll(self) -> None:
+        self.show()
+        self.raise_()
+        self._anim.setStartValue(self.size())
+        self._anim.setEndValue(self._full)
+        self._anim.start()
+        self.list.setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.list and event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+            self._menu.close_menu()
+            return True
+        return super().eventFilter(watched, event)
+
+    def mousePressEvent(self, event) -> None:
+        # The top of the surface is the anchor: pressing it again closes the menu.
+        if event.position().y() < self._menu.height():
+            self._menu.close_menu()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setClipRect(self.rect())
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+        painter.setBrush(theme.color({{ "overlay-bgColor" | tok }}))
+        painter.drawPath(outline(self._menu.size(), self._full.width(), self._full.height()))
+        self._menu.paint_label(painter, theme.color({{ "fgColor-default" | tok }}))
+
+
+class ActionMenu(QWidget):
+    """A button that opens a menu of actions. Escape and a click outside close it."""
+
+    triggered = Signal(int)
+
+    def __init__(self, label: str, items: list[ActionItem | ActionGroup | ActionDivider], icon: str | None = None,
+                 variant: str = "default", close_on_select: bool = True, open: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._label = label
+        self._items = list(items)
+        self._icon = icon
+        self._variant = variant
+        self._close_on_select = close_on_select
+        self._want_open = open
+        self._surface: _Surface | None = None
+        self._hover = False
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setWeight(QFont.Weight.DemiBold)
+        self._font = font
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(label)
+        theme.changed.connect(self.update)
+
+    def items(self) -> list[ActionItem | ActionGroup | ActionDivider]:
+        return self._items
+
+    def is_open(self) -> bool:
+        return self._surface is not None
+
+    def sizeHint(self) -> QSize:
+        height = round(theme.length({{ "control-medium-size" | tok }}))
+        if self._icon:
+            return QSize(height, height)
+        return QSize(QFontMetrics(self._font).horizontalAdvance(self._label) + 2 * 12 + 8 + 16, height)
+
+    def minimumSizeHint(self) -> QSize:
+        return self.sizeHint()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._want_open:
+            self._want_open = False
+            QTimer.singleShot(0, self.open_menu)
+
+    def open_menu(self) -> None:
+        if self._surface is not None or not self.isVisible():
+            return
+        self._surface = _Surface(self, self.window())
+        self._surface.unroll()
+        QApplication.instance().installEventFilter(self)
+
+    def close_menu(self) -> None:
+        if self._surface is None:
+            return
+        QApplication.instance().removeEventFilter(self)
+        self._surface.deleteLater()
+        self._surface = None
+        self.setFocus(Qt.FocusReason.PopupFocusReason)
+        self.update()
+
+    def _picked(self, index: int) -> None:
+        self.triggered.emit(index)
+        if self._close_on_select:
+            self.close_menu()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if event.type() == QEvent.Type.MouseButtonPress and self._surface is not None:
+            pos = self._surface.mapFromGlobal(event.globalPosition().toPoint())
+            if not self._surface.rect().contains(pos):
+                self.close_menu()
+        return super().eventFilter(watched, event)
+
+    def enterEvent(self, event) -> None:
+        self._hover = True
+        self.update()
+
+    def leaveEvent(self, event) -> None:
+        self._hover = False
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.open_menu()
+
+    def keyPressEvent(self, event) -> None:
+        if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space, Qt.Key.Key_Down):
+            self.open_menu()
+        else:
+            super().keyPressEvent(event)
+
+    def paint_label(self, painter: QPainter, color: QColor) -> None:
+        h = self.height()
+        if self._icon:
+            paint_icon(painter, QRectF((self.width() - 16) / 2, (h - 16) / 2, 16, 16), self._icon, color)
+            return
+        painter.setFont(self._font)
+        painter.setPen(color)
+        text_w = QFontMetrics(self._font).horizontalAdvance(self._label)
+        painter.drawText(QRectF(12, 0, text_w + 1, h), Qt.AlignmentFlag.AlignVCenter, self._label)
+        paint_icon(painter, QRectF(12 + text_w + 8, (h - 16) / 2, 16, 16), "triangle-down", color)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        if self._variant == "primary":
+            fill = {{ "button-primary-bgColor-hover" | tok }} if self._hover else {{ "button-primary-bgColor-rest" | tok }}
+            border, ink = fill, {{ "fgColor-onEmphasis" | tok }}
+        elif self._variant == "invisible":
+            fill = {{ "control-transparent-bgColor-hover" | tok }} if self._hover else None
+            border, ink = None, {{ "fgColor-default" | tok }}
+        else:
+            fill = {{ "button-default-bgColor-hover" | tok }} if self._hover else {{ "button-default-bgColor-rest" | tok }}
+            border = {{ "button-default-borderColor-rest" | tok }}
+            ink = {{ "fgColor-muted" | tok }} if self._icon else {{ "fgColor-default" | tok }}
+        painter.setPen(QPen(theme.color(border), 1) if border else Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(fill) if fill else Qt.BrushStyle.NoBrush)
+        painter.drawRoundedRect(rect, ANCHOR_RADIUS, ANCHOR_RADIUS)
+        self.paint_label(painter, theme.color(ink))
+        if self.hasFocus() and self._surface is None:
+            painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+            painter.setBrush(Qt.BrushStyle.NoBrush)
+            painter.drawRoundedRect(QRectF(self.rect()).adjusted(1, 1, -1, -1), ANCHOR_RADIUS - 1, ANCHOR_RADIUS - 1)

@@ -1,0 +1,148 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let {
+    label = "",
+    ariaLabel = "",
+    value = $bindable({{ c.spec.props.value.default }}),
+    min = {{ c.spec.props.min.default }},
+    max = {{ c.spec.props.max.default }},
+    step = {{ c.spec.props.step.default }},
+    pageStep,
+    orientation = "horizontal",
+    tickPosition = "none",
+    tickInterval = 0,
+    length = 0,
+    showValue = false,
+    suffix = "",
+    valueText,
+    disabled = false,
+    onchange,
+    onrelease,
+  }: {
+    label?: string;
+    ariaLabel?: string;
+    value?: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    pageStep?: number;
+    orientation?: "horizontal" | "vertical";
+    tickPosition?: {{ c.spec.props.tickPosition["values"] | map("tojson") | join(" | ") }};
+    tickInterval?: number;
+    length?: number;
+    showValue?: boolean;
+    suffix?: string;
+    valueText?: (value: number) => string;
+    disabled?: boolean;
+    onchange?: (value: number) => void;
+    onrelease?: (value: number) => void;
+  } = $props();
+
+  const uid = $props.id();
+  let dragging = $state(false);
+  let track: HTMLDivElement;
+  let thumb: HTMLDivElement;
+  const vertical = $derived(orientation === "vertical");
+  const page = $derived(pageStep ?? Math.max(step, Math.round((max - min) / 10)));
+  const pct = $derived(max > min ? ((Math.min(Math.max(value, min), max) - min) / (max - min)) * 100 : 0);
+  const text = $derived(valueText ? valueText(value) : `${value}${suffix}`);
+  const marks = $derived.by(() => {
+    const every = tickInterval > 0 ? tickInterval : page;
+    if (tickPosition === "none" || every <= 0 || max <= min) return [];
+    const out: number[] = [];
+    for (let t = min; t <= max + 1e-9; t += every) out.push(((t - min) / (max - min)) * 100);
+    return out;
+  });
+  const before = $derived(tickPosition === "both" || tickPosition === (vertical ? "left" : "above"));
+  const after = $derived(tickPosition === "both" || tickPosition === (vertical ? "right" : "below"));
+
+  function set(v: number) {
+    const snapped = Math.round((v - min) / step) * step + min;
+    const next = Math.min(Math.max(Number(snapped.toFixed(10)), min), max);
+    if (next !== value) {
+      value = next;
+      onchange?.(next);
+    }
+  }
+
+  function fromPointer(e: PointerEvent): number {
+    const r = track.getBoundingClientRect();
+    const f = vertical ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
+    return min + Math.min(Math.max(f, 0), 1) * (max - min);
+  }
+
+  function onpointerdown(e: PointerEvent) {
+    if (disabled || e.button !== 0) return;
+    e.preventDefault();
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    dragging = true;
+    set(fromPointer(e));
+    thumb.focus();
+  }
+
+  function onkeydown(e: KeyboardEvent) {
+    if (disabled) return;
+    const next =
+      e.key === "ArrowUp" || e.key === "ArrowRight" ? value + step
+      : e.key === "ArrowDown" || e.key === "ArrowLeft" ? value - step
+      : e.key === "PageUp" ? value + page
+      : e.key === "PageDown" ? value - page
+      : e.key === "Home" ? min
+      : e.key === "End" ? max
+      : null;
+    if (next === null) return;
+    e.preventDefault();
+    set(next);
+  }
+</script>
+
+{#snippet ticks(side: "before" | "after")}
+  <div class="pm-slider__ticks pm-slider__ticks--{side}" aria-hidden="true">
+    {#each marks as m}<span class="pm-slider__tick" style={vertical ? `bottom: ${m}%` : `left: ${m}%`}></span>{/each}
+  </div>
+{/snippet}
+
+<div class={["pm-slider", vertical && "pm-slider--vertical", dragging && "pm-slider--dragging", disabled && "pm-slider--disabled"]}>
+  {#if label || showValue}
+    <div class="pm-slider__head">
+      {#if label}<span class="pm-slider__label" id="pm-slider-{uid}-label">{label}</span>{/if}
+      {#if showValue}<span class="pm-slider__value" aria-hidden="true">{text}</span>{/if}
+    </div>
+  {/if}
+  <!-- svelte-ignore a11y_no_static_element_interactions (the thumb is the slider; the track only forwards pointer input to it) -->
+  <div
+    class="pm-slider__control"
+    style:width={!vertical && length ? `${length}px` : undefined}
+    style:height={vertical ? `${length || 160}px` : undefined}
+    {onpointerdown}
+    onpointermove={(e) => dragging && set(fromPointer(e))}
+    onpointerup={() => {
+      if (!dragging) return;
+      dragging = false;
+      onrelease?.(value);
+    }}
+  >
+    {#if before}{@render ticks("before")}{/if}
+    <div class="pm-slider__track" bind:this={track}>
+      <div class="pm-slider__fill" style={vertical ? `height: ${pct}%` : `width: ${pct}%`}></div>
+      <div
+        bind:this={thumb}
+        class="pm-slider__thumb"
+        role="slider"
+        tabindex={disabled ? -1 : 0}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={valueText || suffix ? text : undefined}
+        aria-orientation={orientation}
+        aria-disabled={disabled ? "true" : undefined}
+        aria-labelledby={label ? `pm-slider-${uid}-label` : undefined}
+        aria-label={label ? undefined : ariaLabel || undefined}
+        style={vertical ? `bottom: ${pct}%` : `left: ${pct}%`}
+        {onkeydown}
+      ></div>
+    </div>
+    {#if after}{@render ticks("after")}{/if}
+  </div>
+</div>

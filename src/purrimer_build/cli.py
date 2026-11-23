@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 from . import __version__
-from .components import LAYERS, discover
+from .components import LAYERS, discover, with_dependencies
 from .engine import Build, package_templates
 from .fonts import build_static_fonts, copy_web_fonts
 from .model import Tokens
@@ -32,7 +32,15 @@ def cmd_build(args: argparse.Namespace) -> int:
     comps = discover(roots)
     if args.only:
         wanted = {n.strip() for n in args.only.split(",")}
-        comps = [c for c in comps if c.name in wanted]
+        unknown_names = sorted(wanted - {c.name for c in comps})
+        if unknown_names:
+            print(f"Unknown components: {', '.join(unknown_names)}", file=sys.stderr)
+            return 2
+        chosen = [c for c in comps if c.name in wanted]
+        comps = with_dependencies(chosen, comps)
+        extra = [c.name for c in comps if c.name not in wanted]
+        if extra:
+            print(f"Also building what they use: {', '.join(extra)}")
     tokens = Tokens.load(args.tokens)
     out: Path = args.out
     if args.clean and out.exists():

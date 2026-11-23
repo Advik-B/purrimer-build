@@ -1,0 +1,137 @@
+// {{ note }}
+// {{ c.summary }}
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
+
+namespace {{ ns }};
+
+// Page-level navigation: UnderlineNavItem children in a row, with an underline under the current one.
+public class UnderlineNav : ItemsControl
+{
+    public static readonly StyledProperty<int> SelectedIndexProperty =
+        AvaloniaProperty.Register<UnderlineNav, int>(nameof(SelectedIndex));
+
+    public static readonly RoutedEvent<RoutedEventArgs> SelectionChangedEvent =
+        RoutedEvent.Register<UnderlineNav, RoutedEventArgs>(nameof(SelectionChanged), RoutingStrategies.Bubble);
+
+    public int SelectedIndex
+    {
+        get => GetValue(SelectedIndexProperty);
+        set => SetValue(SelectedIndexProperty, value);
+    }
+
+    public event System.EventHandler<RoutedEventArgs>? SelectionChanged
+    {
+        add => AddHandler(SelectionChangedEvent, value);
+        remove => RemoveHandler(SelectionChangedEvent, value);
+    }
+
+    protected override bool NeedsContainerOverride(object? item, int index, out object? recycleKey) =>
+        NeedsContainer<UnderlineNavItem>(item, out recycleKey);
+
+    protected override Control CreateContainerForItemOverride(object? item, int index, object? recycleKey) => new UnderlineNavItem();
+
+    protected override void PrepareContainerForItemOverride(Control container, object? item, int index)
+    {
+        base.PrepareContainerForItemOverride(container, item, index);
+        if (container is UnderlineNavItem navItem)
+            navItem.IsCurrent = index == SelectedIndex;
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SelectedIndexProperty)
+        {
+            for (var i = 0; i < ItemCount; i++)
+                if (ContainerFromIndex(i) is UnderlineNavItem navItem)
+                    navItem.IsCurrent = i == SelectedIndex;
+            RaiseEvent(new RoutedEventArgs(SelectionChangedEvent, this));
+        }
+    }
+
+    internal void Pick(UnderlineNavItem item)
+    {
+        var index = IndexFromContainer(item);
+        if (index >= 0)
+            SelectedIndex = index;
+    }
+}
+
+// One page in an UnderlineNav: an optional Octicon, a label and an optional count.
+[PseudoClasses(":current")]
+public class UnderlineNavItem : TemplatedControl
+{
+    public static readonly StyledProperty<string?> LabelProperty =
+        AvaloniaProperty.Register<UnderlineNavItem, string?>(nameof(Label));
+
+    public static readonly StyledProperty<string?> IconNameProperty =
+        AvaloniaProperty.Register<UnderlineNavItem, string?>(nameof(IconName));
+
+    public static readonly StyledProperty<string?> CountProperty =
+        AvaloniaProperty.Register<UnderlineNavItem, string?>(nameof(Count));
+
+    public static readonly StyledProperty<bool> IsCurrentProperty =
+        AvaloniaProperty.Register<UnderlineNavItem, bool>(nameof(IsCurrent));
+
+    public string? Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public string? IconName
+    {
+        get => GetValue(IconNameProperty);
+        set => SetValue(IconNameProperty, value);
+    }
+
+    public string? Count
+    {
+        get => GetValue(CountProperty);
+        set => SetValue(CountProperty, value);
+    }
+
+    public bool IsCurrent
+    {
+        get => GetValue(IsCurrentProperty);
+        set => SetValue(IsCurrentProperty, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == IsCurrentProperty)
+            PseudoClasses.Set(":current", IsCurrent);
+        else if (change.Property == LabelProperty)
+            AutomationProperties.SetName(this, Label);
+    }
+
+    private void Pick() => this.FindLogicalAncestorOfType<UnderlineNav>()?.Pick(this);
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (e.InitialPressMouseButton == MouseButton.Left)
+        {
+            Pick();
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            Pick();
+            e.Handled = true;
+        }
+    }
+}

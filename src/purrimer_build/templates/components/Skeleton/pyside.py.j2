@@ -1,0 +1,122 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QLinearGradient, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..theme import theme
+
+LOOP = {"sleepy": {{ ms("duration-sleepy-loop") }}, "playful": {{ ms("duration-playful-loop") }}}
+LINE = 12
+LINE_PITCH = 20
+BLUR = 14
+
+
+def _mix(a: QColor, b: QColor, t: float) -> QColor:
+    return QColor(round(a.red() + (b.red() - a.red()) * t), round(a.green() + (b.green() - a.green()) * t),
+                  round(a.blue() + (b.blue() - a.blue()) * t), round(a.alpha() + (b.alpha() - a.alpha()) * t))
+
+
+def beam_gradient(rect: QRectF, base: QColor, beam: QColor, left: float) -> QLinearGradient:
+    """The fill with a soft band of light whose left edge sits `left` px into the shape."""
+    width = max(rect.width(), 1.0)
+    band = rect.width() * 0.3
+    centre = left + band / 2
+    inner = max(0.0, band / 2 - BLUR)
+    outer = band / 2 + BLUR
+    peak = 0.9 * min(1.0, band / (BLUR * 4))
+
+    def amount(x: float) -> float:
+        d = abs(x - centre)
+        if d >= outer:
+            return 0.0
+        if d <= inner:
+            return peak
+        return peak * (outer - d) / (outer - inner)
+
+    gradient = QLinearGradient(QPointF(rect.left(), 0), QPointF(rect.right(), 0))
+    for x in sorted({0.0, width, *(min(max(v, 0.0), width) for v in (centre - outer, centre - inner,
+                                                                       centre + inner, centre + outer))}):
+        gradient.setColorAt(x / width, _mix(base, beam, amount(x)))
+    return gradient
+
+
+class Skeleton(QWidget):
+    """Placeholder shapes for content that is loading. They animate while visible."""
+
+    def __init__(self, variant: str = "text", effect: str = "sunbeam", lines: int = 1, width: int | None = None,
+                 height: int | None = None, kind: str = "sleepy", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._variant = variant if variant in ("text", "block", "circle") else "text"
+        self._effect = effect if effect in ("sunbeam", "snore") else "sunbeam"
+        self._lines = max(1, lines) if self._variant == "text" else 1
+        self._width = width if width is not None else (40 if self._variant == "circle" else None)
+        if self._variant == "text":
+            self._height = LINE_PITCH * self._lines
+        elif self._variant == "circle":
+            self._height = height or self._width
+        else:
+            self._height = height or 64
+        self._loop = LOOP.get(kind, LOOP["sleepy"])
+        self._move = theme.easing({{ "easing-sleepy-move" | tok }})
+        self._drift = theme.easing({{ "easing-sleepy-drift" | tok }})
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self.update)
+        horizontal = QSizePolicy.Policy.Fixed if self._width else QSizePolicy.Policy.Expanding
+        self.setSizePolicy(horizontal, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(self._height)
+        if self._width:
+            self.setFixedWidth(self._width)
+        theme.changed.connect(self.update)
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._width or 240, self._height)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not theme.pause_loops:
+            self._timer.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._timer.stop()
+
+    def _shapes(self) -> list[tuple[QRectF, float]]:
+        w = float(self.width())
+        if self._variant == "text":
+            shapes = []
+            for i in range(self._lines):
+                line_w = w * 0.6 if self._lines > 1 and i == self._lines - 1 else w
+                shapes.append((QRectF(0, i * LINE_PITCH + 4, line_w, LINE), LINE / 2))
+            return shapes
+        if self._variant == "circle":
+            return [(QRectF(0, 0, w, float(self.height())), min(w, self.height()) / 2)]
+        return [(QRectF(0, 0, w, float(self.height())), {{ px("borderRadius-large") | num }})]
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        base = theme.color({{ "bgColor-neutral-muted" | tok }})
+        beam = theme.color({{ "borderColor-default" | tok }} if theme.dark else {{ "bgColor-default" | tok }})
+        now = 0 if theme.pause_loops else self._clock.elapsed()
+        if self._effect == "snore":
+            phase = (now % self._loop) / self._loop
+            breath = self._drift.valueForProgress(phase * 2 if phase < 0.5 else 2 - phase * 2)
+            painter.setOpacity(1 - 0.5 * breath)
+        for rect, radius in self._shapes():
+            if self._effect == "sunbeam":
+                sweep = self._loop * 0.55
+                p = self._move.valueForProgress((now % sweep) / sweep) if not theme.pause_loops else 1.2 / 4.4
+                band = rect.width() * 0.3
+                painter.setBrush(beam_gradient(rect, base, beam, -1.2 * band + 4.4 * band * p))
+            else:
+                painter.setBrush(base)
+            painter.drawRoundedRect(rect, radius, radius)

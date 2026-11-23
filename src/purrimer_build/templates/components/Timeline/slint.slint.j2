@@ -1,0 +1,82 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+// One event. icon is path commands (PurrimerIcons.git-commit-16, the default when empty); tone is accent, success,
+// done or danger. Set is-break for a gap between eras.
+export struct TimelineEvent {
+    content: string,
+    actor: string,
+    icon: string,
+    tone: string,
+    condensed: bool,
+    is-break: bool,
+}
+
+export component Timeline inherits VerticalLayout {
+    in property <[TimelineEvent]> items;
+
+    for item[i] in root.items: Rectangle {
+        property <bool> after-break: i > 0 && root.items[i - 1].is-break;
+        property <brush> fill: item.tone == "accent" ? {{ "bgColor-accent-emphasis" | tok }}
+            : item.tone == "success" ? {{ "bgColor-success-emphasis" | tok }}
+            : item.tone == "done" ? {{ "bgColor-done-emphasis" | tok }}
+            : item.tone == "danger" ? {{ "bgColor-danger-emphasis" | tok }} : transparent;
+        property <bool> toned: item.tone != "" && !item.condensed;
+        min-height: item.is-break ? 8px : item.condensed ? 24px : 64px;
+        preferred-height: item.is-break ? 8px : body.preferred-height + (item.condensed ? 8px : 38px);
+
+        if !item.is-break: Rectangle {
+            x: 16px;
+            y: after-break ? 16px : 0px;
+            width: 2px;
+            height: parent.height - self.y;
+            background: {{ "borderColor-muted" | tok }};
+        }
+        if !item.is-break: Rectangle {
+            x: item.condensed ? 9px : 1px;
+            y: item.condensed ? 6px : 16px;
+            width: item.condensed ? 16px : 32px;
+            height: self.width;
+            border-radius: self.width / 2;
+            background: item.condensed ? {{ "bgColor-default" | tok }} : toned ? fill : {{ "bgColor-muted" | tok }};
+            border-width: item.condensed ? 0px : 2px;
+            border-color: {{ "bgColor-default" | tok }};
+            Icon {
+                x: (parent.width - self.width) / 2;
+                y: (parent.height - self.height) / 2;
+                path: item.icon != "" ? item.icon : PurrimerIcons.git-commit-16;
+                color: toned ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-muted" | tok }};
+            }
+        }
+        body := HorizontalLayout {
+            x: item.condensed ? 33px : 41px;
+            y: item.condensed ? 4px : 22px;
+            width: parent.width - self.x;
+            visible: !item.is-break;
+            spacing: 4px;
+            alignment: start;
+            if item.actor != "": Text {
+                text: item.actor;
+                color: {{ "fgColor-default" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: 600;
+            }
+            Text {
+                text: item.content;
+                color: {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                wrap: word-wrap;
+                horizontal-stretch: 1;
+            }
+        }
+        if item.is-break: Rectangle {
+            background: {{ "bgColor-default" | tok }};
+            Rectangle { y: 0; height: 4px; background: {{ "borderColor-default" | tok }}; }
+        }
+    }
+}

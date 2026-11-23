@@ -1,0 +1,12 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:ActionList>
+    <pm:ActionListGroup Header="Repository" />
+    <pm:ActionListItem Label="Code" LeadingIcon="code" IsCurrent="True" />
+    <pm:ActionListItem Label="Issues" LeadingIcon="issue-opened" TrailingText="12" />
+    <pm:ActionListItem Label="Settings" LeadingIcon="gear" Description="Branches, collaborators, webhooks" />
+    <pm:ActionListDivider />
+    <pm:ActionListItem Label="Archive repository" LeadingIcon="archive" IsEnabled="False" />
+    <pm:ActionListItem Label="Delete repository" LeadingIcon="trash" Variant="danger" />
+  </pm:ActionList>
+</UserControl>

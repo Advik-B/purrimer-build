@@ -1,0 +1,70 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:UnderlineNav}" TargetType="pm:UnderlineNav">
+    <Setter Property="ItemsPanel">
+      <ItemsPanelTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="8" />
+      </ItemsPanelTemplate>
+    </Setter>
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:UnderlineNav">
+        <Border Height="{{ "control-xlarge-size" | tok }}" Padding="16,0" BorderBrush="{{ "borderColor-default" | tok }}"
+                BorderThickness="0,0,0,1">
+          <ItemsPresenter ItemsPanel="{TemplateBinding ItemsPanel}" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </ControlTheme>
+  <ControlTheme x:Key="{x:Type pm:UnderlineNavItem}" TargetType="pm:UnderlineNavItem">
+    <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    <Setter Property="FontSize" Value="14" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Cursor" Value="Hand" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:UnderlineNavItem">
+        <Panel Background="Transparent">
+          <Border Name="label" Height="28" Padding="8,0" VerticalAlignment="Center" CornerRadius="{{ "borderRadius-medium" | tok }}"
+                  BorderBrush="{{ "focus-outlineColor" | tok }}" Background="Transparent">
+            <Border.Transitions>
+              <Transitions>
+                <BrushTransition Property="Background" Duration="{{ "duration-fast" | tok }}" />
+              </Transitions>
+            </Border.Transitions>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <pm:Icon Name="icon" IconName="{TemplateBinding IconName}" Foreground="{{ "fgColor-muted" | tok }}" VerticalAlignment="Center"
+                       IsVisible="{TemplateBinding IconName, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+              <TextBlock Name="text" Text="{TemplateBinding Label}" VerticalAlignment="Center" />
+              <Border MinWidth="20" Height="18" Padding="6,0" CornerRadius="9" VerticalAlignment="Center"
+                      Background="{{ "bgColor-neutral-muted" | tok }}"
+                      IsVisible="{TemplateBinding Count, Converter={x:Static StringConverters.IsNotNullOrEmpty}}">
+                <TextBlock Text="{TemplateBinding Count}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center"
+                           VerticalAlignment="Center" />
+              </Border>
+            </StackPanel>
+          </Border>
+          <Border Name="underline" Height="{{ "borderWidth-thick" | tok }}" Margin="0,0,0,-1" VerticalAlignment="Bottom" CornerRadius="1"
+                  Background="{{ "bgColor-accent-emphasis" | tok }}" IsVisible="False" />
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^:pointerover /template/ Border#label">
+      <Setter Property="Background" Value="{{ "control-transparent-bgColor-hover" | tok }}" />
+    </Style>
+    <Style Selector="^:focus-visible /template/ Border#label">
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="^:current /template/ Border#underline">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
+    <Style Selector="^:current /template/ TextBlock#text">
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="^:current /template/ pm|Icon#icon">
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

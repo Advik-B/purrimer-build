@@ -105,8 +105,10 @@ def test_classless_css_uses_no_classes(built: Path) -> None:
 
 
 def test_class_based_css_leaves_plain_elements_alone(built: Path) -> None:
-    # purrimer.css and purrimer-components.css only style their own classes, the theme roots and @font-face.
+    # purrimer.css and purrimer-components.css only style their own classes, the theme roots, the motion scopes
+    # (which set custom properties only) and @font-face.
     for name in ("purrimer.css", "purrimer-components.css"):
         for selector in _selectors((built / "css" / name).read_text(encoding="utf-8")):
-            allowed = selector.startswith((":root", "[data-theme")) or re.search(r"\.(pm-|text-)", selector)
+            scopes = (":root", "[data-theme", "[data-motion")
+            allowed = selector.startswith(scopes) or re.search(r"\.(pm-|text-)", selector)
             assert allowed, f"{name}: {selector}"

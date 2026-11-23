@@ -1,0 +1,16 @@
+import { IconButton, PurrimerIcons, ToolTip } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    spacing: 8px;
+    padding-top: 40px;
+    alignment: start;
+    ToolTip { text: "Edit"; IconButton { icon: PurrimerIcons.pencil-16; label: "Edit"; } }
+    ToolTip { text: "Delete"; IconButton { icon: PurrimerIcons.trash-16; label: "Delete"; } }
+    ToolTip { text: "Copy to clipboard (Ctrl+C)"; open-on-start: true; IconButton { icon: PurrimerIcons.copy-16; label: "Copy"; } }
+    help := ToolTip {
+        text: "Tokens are named design decisions that every target reads.";
+        whats-this: true;
+        placement: "bottom";
+        IconButton { icon: PurrimerIcons.question-16; label: "What is this?"; clicked => { help.show(); } }
+    }
+}

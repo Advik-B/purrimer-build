@@ -28,7 +28,7 @@ public class IconButton : Button
         LabelProperty.Changed.AddClassHandler<IconButton>((b, e) =>
         {
             global::Avalonia.Automation.AutomationProperties.SetName(b, e.NewValue as string);
-            ToolTip.SetTip(b, e.NewValue);
+            global::Avalonia.Controls.ToolTip.SetTip(b, e.NewValue);
         });
     }
 

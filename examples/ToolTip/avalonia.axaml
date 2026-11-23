@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,40,0,0">
+    <pm:ToolTip Text="Edit"><pm:IconButton IconName="pencil" Label="Edit" /></pm:ToolTip>
+    <pm:ToolTip Text="Delete"><pm:IconButton IconName="trash" Label="Delete" /></pm:ToolTip>
+    <pm:ToolTip Text="Copy to clipboard (Ctrl+C)" IsOpen="True"><pm:IconButton IconName="copy" Label="Copy" /></pm:ToolTip>
+    <pm:ToolTip Text="Tokens are named design decisions that every target reads." WhatsThis="True" Placement="bottom">
+      <pm:IconButton IconName="question" Label="What is this?" />
+    </pm:ToolTip>
+  </StackPanel>
+</UserControl>

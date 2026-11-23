@@ -1,0 +1,23 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import Icon from "./Icon.svelte";
+
+  type Event = { content: string; actor?: string; icon?: string; tone?: {{ c.spec.tones | list | map("tojson") | join(" | ") }}; condensed?: boolean };
+  type Entry = Event | { break: true };
+
+  let { items = [] }: { items?: Entry[] } = $props();
+</script>
+
+<div class="pm-timeline">
+  {#each items as item}
+    {#if "break" in item}
+      <div class="pm-timeline__break" role="separator"></div>
+    {:else}
+      <div class={["pm-timeline__item", item.condensed && "pm-timeline__item--condensed"]}>
+        <div class={["pm-timeline__badge", item.tone && `pm-timeline__badge--${item.tone}`]}><Icon name={item.icon ?? "git-commit"} /></div>
+        <div class="pm-timeline__body">{#if item.actor}<strong>{item.actor}</strong>{" "}{/if}{item.content}</div>
+      </div>
+    {/if}
+  {/each}
+</div>

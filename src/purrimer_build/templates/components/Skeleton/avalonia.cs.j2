@@ -1,0 +1,196 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
+using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Media.Immutable;
+using Avalonia.Styling;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Placeholder shapes for content that is loading. They animate while in the visual tree.
+public class Skeleton : Control
+{
+    private const double Line = 12;
+    private const double LinePitch = 20;
+    private const double Blur = 14;
+
+    public static readonly StyledProperty<string> VariantProperty =
+        AvaloniaProperty.Register<Skeleton, string>(nameof(Variant), "text");
+
+    public static readonly StyledProperty<string> LoadingEffectProperty =
+        AvaloniaProperty.Register<Skeleton, string>(nameof(LoadingEffect), "sunbeam");
+
+    public static readonly StyledProperty<int> LinesProperty =
+        AvaloniaProperty.Register<Skeleton, int>(nameof(Lines), 1);
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Skeleton, string>(nameof(Kind), "sleepy");
+
+    public static readonly StyledProperty<IBrush?> BoneBrushProperty =
+        AvaloniaProperty.Register<Skeleton, IBrush?>(nameof(BoneBrush));
+
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private DispatcherTimer? _timer;
+    private Easing? _move;
+    private Easing? _drift;
+
+    static Skeleton()
+    {
+        AffectsRender<Skeleton>(BoneBrushProperty, LoadingEffectProperty, KindProperty);
+        AffectsMeasure<Skeleton>(VariantProperty, LinesProperty);
+        AutomationProperties.AccessibilityViewProperty.OverrideDefaultValue<Skeleton>(AccessibilityView.Raw);
+    }
+
+    // text, block or circle
+    public string Variant
+    {
+        get => GetValue(VariantProperty);
+        set => SetValue(VariantProperty, value);
+    }
+
+    // sunbeam or snore. Named LoadingEffect because Visual.Effect is a bitmap effect.
+    public string LoadingEffect
+    {
+        get => GetValue(LoadingEffectProperty);
+        set => SetValue(LoadingEffectProperty, value);
+    }
+
+    // Text only: the number of lines; the last of several is 60% wide.
+    public int Lines
+    {
+        get => GetValue(LinesProperty);
+        set => SetValue(LinesProperty, value);
+    }
+
+    // sleepy or playful
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    public IBrush? BoneBrush
+    {
+        get => GetValue(BoneBrushProperty);
+        set => SetValue(BoneBrushProperty, value);
+    }
+
+    private int Count => Variant == "text" ? Math.Max(1, Lines) : 1;
+    private double Loop => Kind == "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }};
+
+    protected override Size MeasureOverride(Size availableSize) => Variant switch
+    {
+        "text" => new Size(0, LinePitch * Count),
+        "circle" => new Size(40, double.IsNaN(Height) ? (double.IsNaN(Width) ? 40 : Width) : Height),
+        _ => new Size(0, 64),
+    };
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _move = this.TryFindResource("PmEasingSleepyMove", out var move) ? move as Easing : null;
+        _drift = this.TryFindResource("PmEasingSleepyDrift", out var drift) ? drift as Easing : null;
+        ActualThemeVariantChanged += OnThemeChanged;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => InvalidateVisual());
+        if (!PurrimerMotion.PauseLoops)
+            _timer.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        ActualThemeVariantChanged -= OnThemeChanged;
+        _timer?.Stop();
+        _timer = null;
+    }
+
+    private void OnThemeChanged(object? sender, EventArgs e) => InvalidateVisual();
+
+    private Color Beam()
+    {
+        var variant = ActualThemeVariant;
+        var dark = variant == ThemeVariant.Dark || variant.InheritVariant == ThemeVariant.Dark;
+        var key = dark ? "PmBorderColorDefault" : "PmBgColorDefault";
+        return this.TryFindResource(key, variant, out var found) && found is ISolidColorBrush brush ? brush.Color : Colors.White;
+    }
+
+    private static Color Mix(Color a, Color b, double t) => Color.FromArgb(
+        (byte)Math.Round(a.A + (b.A - a.A) * t), (byte)Math.Round(a.R + (b.R - a.R) * t),
+        (byte)Math.Round(a.G + (b.G - a.G) * t), (byte)Math.Round(a.B + (b.B - a.B) * t));
+
+    // The fill with a soft band of light whose left edge sits `left` px into a shape `width` wide.
+    private static IBrush BeamBrush(double width, Color baseColor, Color beam, double left)
+    {
+        width = Math.Max(width, 1);
+        var band = width * 0.3;
+        var centre = left + band / 2;
+        var inner = Math.Max(0, band / 2 - Blur);
+        var outer = band / 2 + Blur;
+        var peak = 0.9 * Math.Min(1, band / (Blur * 4));
+        double Amount(double x)
+        {
+            var d = Math.Abs(x - centre);
+            return d >= outer ? 0 : d <= inner ? peak : peak * (outer - d) / (outer - inner);
+        }
+        var xs = new[] { 0, width, centre - outer, centre - inner, centre + inner, centre + outer }
+            .Select(x => Math.Clamp(x, 0, width)).Distinct().OrderBy(x => x);
+        var stops = new List<ImmutableGradientStop>();
+        foreach (var x in xs)
+            stops.Add(new ImmutableGradientStop(x / width, Mix(baseColor, beam, Amount(x))));
+        return new ImmutableLinearGradientBrush(stops,
+            startPoint: new RelativePoint(0, 0, RelativeUnit.Relative), endPoint: new RelativePoint(1, 0, RelativeUnit.Relative));
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var width = Bounds.Width;
+        if (width <= 0)
+            return;
+        var now = PurrimerMotion.PauseLoops ? 0 : _clock.Elapsed.TotalMilliseconds;
+        var baseColor = (BoneBrush as ISolidColorBrush)?.Color ?? Colors.LightGray;
+        var opacity = 1.0;
+        if (LoadingEffect == "snore")
+        {
+            var phase = now % Loop / Loop;
+            var t = phase < 0.5 ? phase * 2 : 2 - phase * 2;
+            opacity = 1 - 0.5 * (_drift?.Ease(t) ?? t);
+        }
+        using var faded = context.PushOpacity(opacity);
+        var shapes = new List<(Rect Rect, double Radius)>();
+        if (Variant == "text")
+        {
+            for (var i = 0; i < Count; i++)
+            {
+                var lineWidth = Count > 1 && i == Count - 1 ? width * 0.6 : width;
+                shapes.Add((new Rect(0, i * LinePitch + 4, lineWidth, Line), Line / 2));
+            }
+        }
+        else if (Variant == "circle")
+            shapes.Add((new Rect(Bounds.Size), Math.Min(width, Bounds.Height) / 2));
+        else
+            shapes.Add((new Rect(Bounds.Size), {{ px("borderRadius-large") | num }}));
+        foreach (var (rect, radius) in shapes)
+        {
+            IBrush fill = BoneBrush ?? Brushes.LightGray;
+            if (LoadingEffect == "sunbeam")
+            {
+                var sweep = Loop * 0.55;
+                var p = PurrimerMotion.PauseLoops ? 1.2 / 4.4 : now % sweep / sweep;
+                if (!PurrimerMotion.PauseLoops)
+                    p = _move?.Ease(p) ?? p;
+                var band = rect.Width * 0.3;
+                fill = BeamBrush(rect.Width, baseColor, Beam(), -1.2 * band + 4.4 * band * p);
+            }
+            context.DrawRectangle(fill, null, new RoundedRect(rect, radius));
+        }
+    }
+}

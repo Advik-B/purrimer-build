@@ -1,0 +1,149 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// Overlapping initials for the people on an item; hover or keyboard focus spreads them out.
+public class AvatarStack : Control
+{
+    public static readonly StyledProperty<string?> NamesProperty =
+        AvaloniaProperty.Register<AvatarStack, string?>(nameof(Names));
+
+    public static readonly StyledProperty<int> MaxProperty =
+        AvaloniaProperty.Register<AvatarStack, int>(nameof(Max), {{ c.spec.props.max.default }});
+
+    public static readonly StyledProperty<double> SizeProperty =
+        AvaloniaProperty.Register<AvatarStack, double>(nameof(Size), {{ c.spec.props.size.default }});
+
+    // 0 tucked, 1 spread out; the control theme animates it on hover and keyboard focus.
+    public static readonly StyledProperty<double> SpreadProperty =
+        AvaloniaProperty.Register<AvatarStack, double>(nameof(Spread));
+
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        TextElement.FontFamilyProperty.AddOwner<AvatarStack>();
+
+    public static readonly StyledProperty<IBrush?> AvatarBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(AvatarBrush));
+
+    public static readonly StyledProperty<IBrush?> InitialsBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(InitialsBrush));
+
+    public static readonly StyledProperty<IBrush?> RingBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(RingBrush));
+
+    public static readonly StyledProperty<IBrush?> MoreBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(MoreBrush));
+
+    public static readonly StyledProperty<IBrush?> MoreTextBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(MoreTextBrush));
+
+    public static readonly StyledProperty<IBrush?> FocusBrushProperty =
+        AvaloniaProperty.Register<AvatarStack, IBrush?>(nameof(FocusBrush));
+
+    static AvatarStack()
+    {
+        AffectsRender<AvatarStack>(SpreadProperty, AvatarBrushProperty, InitialsBrushProperty, RingBrushProperty,
+            MoreBrushProperty, MoreTextBrushProperty, FocusBrushProperty, FontFamilyProperty);
+        AffectsMeasure<AvatarStack>(NamesProperty, MaxProperty, SizeProperty, SpreadProperty);
+    }
+
+    // Comma-separated names, first on top: "Mona Lisa, Hubot".
+    public string? Names
+    {
+        get => GetValue(NamesProperty);
+        set => SetValue(NamesProperty, value);
+    }
+
+    public int Max
+    {
+        get => GetValue(MaxProperty);
+        set => SetValue(MaxProperty, value);
+    }
+
+    public double Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    public double Spread
+    {
+        get => GetValue(SpreadProperty);
+        set => SetValue(SpreadProperty, value);
+    }
+
+    public FontFamily FontFamily
+    {
+        get => GetValue(FontFamilyProperty);
+        set => SetValue(FontFamilyProperty, value);
+    }
+
+    public IBrush? AvatarBrush { get => GetValue(AvatarBrushProperty); set => SetValue(AvatarBrushProperty, value); }
+    public IBrush? InitialsBrush { get => GetValue(InitialsBrushProperty); set => SetValue(InitialsBrushProperty, value); }
+    public IBrush? RingBrush { get => GetValue(RingBrushProperty); set => SetValue(RingBrushProperty, value); }
+    public IBrush? MoreBrush { get => GetValue(MoreBrushProperty); set => SetValue(MoreBrushProperty, value); }
+    public IBrush? MoreTextBrush { get => GetValue(MoreTextBrushProperty); set => SetValue(MoreTextBrushProperty, value); }
+    public IBrush? FocusBrush { get => GetValue(FocusBrushProperty); set => SetValue(FocusBrushProperty, value); }
+
+    private string[] People => (Names ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    private string[] Shown => People.Take(Max).ToArray();
+    private int Extra => People.Length - Shown.Length;
+    private double Step => Size * 0.4 + (Size * 0.6 + 4) * Spread;
+
+    private static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+
+    private FormattedText Text(string text, double size, IBrush? brush) =>
+        new(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            new Typeface(FontFamily, FontStyle.Normal, FontWeight.SemiBold), size, brush);
+
+    private double MoreWidth => Extra > 0 ? Math.Max(Size, Text($"+{Extra}", Math.Max(10, Math.Round(Size * 0.42)), null).Width + 8) : 0;
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == NamesProperty)
+            AutomationProperties.SetName(this, $"{People.Length} people");
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var width = Size + Math.Max(0, Shown.Length - 1) * Step;
+        if (Extra > 0)
+            width += 4 + MoreWidth;
+        return new Size(width + 2, Size + 2);
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var shown = Shown;
+        // Later avatars tuck behind earlier ones, so draw from the back.
+        for (var i = shown.Length - 1; i >= 0; i--)
+        {
+            var centre = new Point(1 + i * Step + Size / 2, 1 + Size / 2);
+            context.DrawEllipse(AvatarBrush, new Pen(RingBrush, 2), centre, Size / 2 + 0.5, Size / 2 + 0.5);
+            if (i == 0 || Spread > 0.5)
+            {
+                var text = Text(Initials(shown[i]), Math.Round(Size * 0.4), InitialsBrush);
+                context.DrawText(text, new Point(centre.X - text.Width / 2, centre.Y - text.Height / 2));
+            }
+        }
+        if (Extra > 0)
+        {
+            var rect = new Rect(1 + Math.Max(0, shown.Length - 1) * Step + Size + 4, 1, MoreWidth, Size);
+            context.DrawRectangle(MoreBrush, null, new RoundedRect(rect, Size / 2));
+            var text = Text($"+{Extra}", Math.Max(10, Math.Round(Size * 0.42)), MoreTextBrush);
+            context.DrawText(text, new Point(rect.Center.X - text.Width / 2, rect.Center.Y - text.Height / 2));
+        }
+        if (Classes.Contains(":focus-visible"))
+            context.DrawRectangle(null, new Pen(FocusBrush, 2), new RoundedRect(new Rect(Bounds.Size).Inflate(2), Bounds.Height / 2 + 2));
+    }
+}

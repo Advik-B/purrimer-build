@@ -1,0 +1,22 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+
+export type LoadingDotsProps = {
+  variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+  label?: string;
+  kind?: {{ c.spec.props.kind["values"] | map("tojson") | join(" | ") }};
+  class?: JSX.ClassValue;
+};
+
+export function LoadingDots(props: LoadingDotsProps): JSX.Element {
+  const snooze = () => props.variant === "snooze";
+  return (
+    <span class={["pm-dots", snooze() && "pm-dots--snooze", props.class]} role="status" data-motion={props.kind}>
+      <i aria-hidden="true" />
+      <i aria-hidden="true" />
+      <i aria-hidden="true" />
+      <span class="pm-sr-only">{props.label || (snooze() ? "Waiting" : "Loading")}</span>
+    </span>
+  );
+}

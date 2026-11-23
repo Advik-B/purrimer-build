@@ -1,0 +1,86 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+export component AvatarStack {
+    // Names, first on top.
+    in property <[string]> people;
+    // Initials for each name, in the same order; Slint has no string splitting, so pass them in.
+    in property <[string]> initials;
+    in property <int> max: {{ c.spec.props.max.default }};
+    in property <length> size: {{ c.spec.props.size.default }}px;
+
+    property <int> shown: Math.min(root.max, root.people.length);
+    property <int> extra: root.people.length - root.shown;
+    property <float> spread: touch.has-hover || focus.has-focus ? 1 : 0;
+    property <length> step: root.size * 0.4 + (root.size * 0.6 + 4px) * root.spread;
+    property <length> more-width: root.extra > 0 ? Math.max(root.size, more.preferred-width + 8px) : 0px;
+    animate spread { duration: {{ "duration-base" | tok }}; easing: {{ "easing-standard" | tok }}; }
+
+    width: root.size + Math.max(0, root.shown - 1) * root.step + (root.extra > 0 ? 4px + root.more-width : 0px) + 2px;
+    height: root.size + 2px;
+    accessible-role: groupbox;
+    accessible-label: root.people.length + " people";
+
+    // Later avatars sit lower so the first stays on top.
+    for i in root.shown: Rectangle {
+        property <int> back: root.shown - 1 - i;
+        x: 1px + self.back * root.step;
+        y: 1px;
+        width: root.size;
+        height: root.size;
+        border-radius: root.size / 2;
+        background: {{ "bgColor-accent-muted" | tok }};
+        border-width: 1px;
+        border-color: {{ "bgColor-default" | tok }};
+        accessible-role: image;
+        accessible-label: root.people[self.back];
+        Text {
+            text: root.initials[parent.back];
+            visible: parent.back == 0 || root.spread > 0.5;
+            color: {{ "fgColor-accent" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: round(root.size / 1px * 0.4) * 1px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    if root.extra > 0: Rectangle {
+        x: 1px + Math.max(0, root.shown - 1) * root.step + root.size + 4px;
+        y: 1px;
+        width: root.more-width;
+        height: root.size;
+        border-radius: root.size / 2;
+        background: {{ "bgColor-neutral-muted" | tok }};
+        accessible-role: text;
+        accessible-label: root.extra + " more";
+    }
+    more := Text {
+        x: 1px + Math.max(0, root.shown - 1) * root.step + root.size + 4px;
+        y: 1px;
+        width: root.more-width;
+        height: root.size;
+        visible: root.extra > 0;
+        text: "+" + root.extra;
+        color: {{ "fgColor-muted" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: Math.max(10px, round(root.size / 1px * 0.42) * 1px);
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea { }
+    focus := FocusScope { }
+    if focus.has-focus: Rectangle {
+        x: -2px;
+        y: -2px;
+        width: root.width + 4px;
+        height: root.height + 4px;
+        border-radius: self.height / 2;
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+}

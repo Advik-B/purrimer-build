@@ -1,0 +1,9 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { text = "", variant = "secondary", children }: { text?: string | number; variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }}; children?: Snippet } = $props();
+</script>
+
+<span class={["pm-counter", variant === "primary" && "pm-counter--primary"]}>{#if children}{@render children()}{:else}{text}{/if}</span>

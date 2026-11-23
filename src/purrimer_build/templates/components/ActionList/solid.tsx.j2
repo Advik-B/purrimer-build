@@ -1,0 +1,80 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Match, Show, Switch } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type ActionListItem = {
+  label?: string;
+  description?: string;
+  leadingIcon?: string;
+  trailingIcon?: string;
+  trailingText?: string;
+  current?: boolean;
+  selected?: boolean;
+  variant?: "default" | "danger";
+  disabled?: boolean;
+  group?: string;
+  divider?: boolean;
+  role?: JSX.HTMLAttributes<HTMLElement>["role"];
+  onSelect?: () => void;
+};
+
+export type ActionListProps = {
+  items?: ActionListItem[];
+  ariaLabel?: string;
+  role?: JSX.HTMLAttributes<HTMLElement>["role"];
+  onSelect?: (item: ActionListItem, index: number) => void;
+};
+
+export function ActionList(props: ActionListProps): JSX.Element {
+  const pick = (item: ActionListItem, i: number) => {
+    if (item.disabled) return;
+    item.onSelect?.();
+    props.onSelect?.(item, i);
+  };
+  return (
+    <ul class="pm-action-list" role={props.role} aria-label={props.ariaLabel || undefined}>
+      <For each={props.items ?? []}>
+        {(item, i) => (
+          <Switch>
+            <Match when={item.divider}><li class="pm-action-list__divider" role="separator" /></Match>
+            <Match when={item.group}><li class="pm-action-list__group" role="presentation">{item.group}</li></Match>
+            <Match when={true}>
+              <li
+                class={["pm-action-list__item", item.variant === "danger" && "pm-action-list__item--danger"]}
+                role={item.role ?? (item.selected != null ? "menuitemcheckbox" : undefined)}
+                tabindex={item.disabled ? -1 : 0}
+                aria-current={item.current ? "page" : undefined}
+                aria-checked={item.selected != null ? (item.selected ? "true" : "false") : undefined}
+                aria-disabled={item.disabled ? "true" : undefined}
+                onClick={() => pick(item, i())}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    pick(item, i());
+                  }
+                }}
+              >
+                <Show when={item.selected != null}>
+                  <span class="pm-action-list__leading pm-action-list__check"><Show when={item.selected}><Icon name="check" /></Show></span>
+                </Show>
+                <Show when={item.leadingIcon}>{(name) => <span class="pm-action-list__leading"><Icon name={name()} /></span>}</Show>
+                <span class="pm-action-list__content">
+                  {item.label}
+                  <Show when={item.description}><span class="pm-action-list__description">{item.description}</span></Show>
+                </span>
+                <Show
+                  when={item.trailingIcon}
+                  fallback={<Show when={item.trailingText}><span class="pm-action-list__trailing">{item.trailingText}</span></Show>}
+                >
+                  {(name) => <span class="pm-action-list__trailing"><Icon name={name()} /></span>}
+                </Show>
+              </li>
+            </Match>
+          </Switch>
+        )}
+      </For>
+    </ul>
+  );
+}

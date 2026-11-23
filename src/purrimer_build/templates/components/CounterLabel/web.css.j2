@@ -1,0 +1,15 @@
+.pm-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: {{ "bgColor-neutral-muted" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 600 12px/18px var(--font-sans);
+  white-space: nowrap;
+}
+.pm-counter--primary { background: {{ "bgColor-neutral-emphasis" | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }

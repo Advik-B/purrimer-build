@@ -1,0 +1,42 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+
+type Person = string | { name: string; src?: string };
+
+export type AvatarStackProps = { people?: Person[]; max?: number; size?: number };
+
+const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
+
+export function AvatarStack(props: AvatarStackProps): JSX.Element {
+  const size = () => props.size ?? {{ c.spec.props.size.default }};
+  const people = () => props.people ?? [];
+  const shown = () => people().slice(0, props.max ?? {{ c.spec.props.max.default }}).map((p) => (typeof p === "string" ? { name: p } : p));
+  const extra = () => people().length - shown().length;
+  return (
+    <span class="pm-avatar-stack" role="group" tabindex="0" aria-label={`${people().length} people`} style={`--pm-av: ${size()}px`}>
+      <For each={shown()}>
+        {(person, i) => (
+          <span
+            class="pm-avatar-stack__person"
+            role="img"
+            aria-label={person.name}
+            style={`width: ${size()}px; height: ${size()}px; font-size: ${Math.round(size() * 0.4)}px; z-index: ${shown().length - i() + 1}`}
+          >
+            <Show when={person.src} fallback={initials(person.name)}>{(src) => <img src={src()} alt="" />}</Show>
+          </span>
+        )}
+      </For>
+      <Show when={extra() > 0}>
+        <span
+          class="pm-avatar-stack__person pm-avatar-stack__more"
+          aria-label={`${extra()} more`}
+          style={`height: ${size()}px; font-size: ${Math.max(10, Math.round(size() * 0.42))}px`}
+        >
+          +{extra()}
+        </span>
+      </Show>
+    </span>
+  );
+}

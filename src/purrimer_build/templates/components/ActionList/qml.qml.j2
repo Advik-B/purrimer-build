@@ -1,0 +1,159 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Column {
+    id: root
+    // Rows: [{ label, description?, leadingIcon?, trailingIcon?, trailingText?, current?, selected?, variant?, disabled? }],
+    // plus { group } headings and { divider: true } rules.
+    property var items: []
+    signal triggered(int index, var item)
+
+    width: 240
+    padding: 8
+    spacing: 2
+
+    Repeater {
+        model: root.items
+        Item {
+            id: entry
+            required property int index
+            required property var modelData
+            readonly property bool isDivider: !!modelData.divider
+            readonly property bool isGroup: !!modelData.group
+            readonly property bool isItem: !isDivider && !isGroup
+            readonly property bool disabled: !!modelData.disabled
+            readonly property bool danger: modelData.variant === "danger"
+            readonly property bool current: !!modelData.current
+            readonly property bool checkable: modelData.selected !== undefined && modelData.selected !== null
+            readonly property color ink: disabled ? {{ "fgColor-disabled" | tok }} : danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }}
+            readonly property color muted: disabled ? {{ "fgColor-disabled" | tok }} : danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }}
+            width: root.width - 16
+            height: isDivider ? 13 : isGroup ? 30 : (modelData.description ? 48 : 32)
+            activeFocusOnTab: isItem && !disabled
+            Accessible.role: isItem ? (checkable ? Accessible.CheckBox : Accessible.MenuItem) : Accessible.Separator
+            Accessible.name: modelData.label || modelData.group || ""
+            Accessible.checked: !!modelData.selected
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                    root.triggered(entry.index, entry.modelData)
+                    event.accepted = true
+                }
+            }
+
+            Rectangle {
+                visible: entry.isDivider
+                x: -8
+                y: 6
+                width: root.width
+                height: 1
+                color: {{ "borderColor-muted" | tok }}
+            }
+
+            Text {
+                visible: entry.isGroup
+                x: 8
+                y: 6
+                height: 20
+                text: entry.modelData.group || ""
+                verticalAlignment: Text.AlignVCenter
+                font.family: {{ "text-caption" | tok }}.family
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+                color: {{ "fgColor-muted" | tok }}
+            }
+
+            Rectangle {
+                visible: entry.isItem
+                anchors.fill: parent
+                radius: {{ "borderRadius-medium" | tok }}
+                color: entry.disabled ? "transparent"
+                     : tap.pressed || entry.current ? {{ "control-transparent-bgColor-selected" | tok }}
+                     : hover.hovered ? (entry.danger ? {{ "bgColor-danger-muted" | tok }} : {{ "control-transparent-bgColor-hover" | tok }})
+                     : "transparent"
+                border.width: entry.activeFocus ? {{ "borderWidth-thick" | tok }} : 0
+                border.color: {{ "focus-outlineColor" | tok }}
+                Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+            }
+
+            Rectangle {
+                visible: entry.isItem && entry.current
+                x: -8
+                y: (parent.height - height) / 2
+                width: 4
+                height: 24
+                radius: 2
+                color: {{ "bgColor-accent-emphasis" | tok }}
+            }
+
+            Row {
+                visible: entry.isItem
+                x: 8
+                y: 6
+                width: parent.width - 16
+                spacing: 8
+                Item {
+                    visible: entry.checkable
+                    width: 16
+                    height: 20
+                    Icon { y: 2; name: "check"; color: entry.ink; visible: !!entry.modelData.selected }
+                }
+                Icon {
+                    visible: !!entry.modelData.leadingIcon
+                    y: 2
+                    name: entry.modelData.leadingIcon || ""
+                    color: entry.muted
+                }
+                Column {
+                    width: parent.width - x - (trailingIcon.visible ? 24 : trailingText.visible ? trailingText.implicitWidth + 8 : 0)
+                    Text {
+                        width: parent.width
+                        height: 20
+                        text: entry.modelData.label || ""
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                        font.family: {{ "text-body-medium" | tok }}.family
+                        font.pixelSize: 14
+                        font.weight: entry.current ? Font.DemiBold : Font.Normal
+                        color: entry.ink
+                    }
+                    Text {
+                        visible: !!entry.modelData.description
+                        width: parent.width
+                        height: 16
+                        text: entry.modelData.description || ""
+                        elide: Text.ElideRight
+                        font.family: {{ "text-caption" | tok }}.family
+                        font.pixelSize: 12
+                        color: entry.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }}
+                    }
+                }
+                Icon {
+                    id: trailingIcon
+                    visible: !!entry.modelData.trailingIcon
+                    y: 2
+                    name: entry.modelData.trailingIcon || ""
+                    color: entry.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }}
+                }
+                Text {
+                    id: trailingText
+                    visible: !entry.modelData.trailingIcon && !!entry.modelData.trailingText
+                    height: 20
+                    text: entry.modelData.trailingText || ""
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: {{ "text-caption" | tok }}.family
+                    font.pixelSize: 12
+                    color: entry.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }}
+                }
+            }
+
+            HoverHandler { id: hover; enabled: entry.isItem && !entry.disabled; cursorShape: Qt.PointingHandCursor }
+            TapHandler {
+                id: tap
+                enabled: entry.isItem && !entry.disabled
+                onTapped: root.triggered(entry.index, entry.modelData)
+            }
+        }
+    }
+}

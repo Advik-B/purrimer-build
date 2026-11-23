@@ -1,0 +1,153 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Animation.Easings;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// A turning arc on a faint track. It animates while it is in the visual tree.
+public class Spinner : Control
+{
+    // One turn, in ms. Playful also stretches the arc over 1.75 turns.
+    private const double SleepyTurn = {{ ms("duration-sleepy-loop") * 0.4 }};
+    private const double PlayfulTurn = {{ ms("duration-playful-loop") * 0.6 }};
+
+    public static readonly StyledProperty<string> SizeProperty =
+        AvaloniaProperty.Register<Spinner, string>(nameof(Size), "medium");
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Spinner, string>(nameof(Kind), "sleepy");
+
+    public static readonly StyledProperty<string> LabelProperty =
+        AvaloniaProperty.Register<Spinner, string>(nameof(Label), "{{ c.spec.props.label.default }}");
+
+    public static readonly StyledProperty<IBrush?> ArcBrushProperty =
+        AvaloniaProperty.Register<Spinner, IBrush?>(nameof(ArcBrush));
+
+    public static readonly StyledProperty<IBrush?> TrackBrushProperty =
+        AvaloniaProperty.Register<Spinner, IBrush?>(nameof(TrackBrush));
+
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private DispatcherTimer? _timer;
+    private Easing? _ease;
+
+    static Spinner()
+    {
+        AffectsRender<Spinner>(ArcBrushProperty, TrackBrushProperty, KindProperty);
+        AffectsMeasure<Spinner>(SizeProperty);
+    }
+
+    // small (16px), medium (32px) or large (64px)
+    public string Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    // sleepy or playful
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    // Announced to screen readers.
+    public string Label
+    {
+        get => GetValue(LabelProperty);
+        set => SetValue(LabelProperty, value);
+    }
+
+    public IBrush? ArcBrush
+    {
+        get => GetValue(ArcBrushProperty);
+        set => SetValue(ArcBrushProperty, value);
+    }
+
+    public IBrush? TrackBrush
+    {
+        get => GetValue(TrackBrushProperty);
+        set => SetValue(TrackBrushProperty, value);
+    }
+
+    private double PixelSize => Size switch
+    {
+        "small" => {{ c.spec.sizes.small }},
+        "large" => {{ c.spec.sizes.large }},
+        _ => {{ c.spec.sizes.medium }},
+    };
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == LabelProperty)
+            AutomationProperties.SetName(this, Label);
+    }
+
+    protected override Size MeasureOverride(Size availableSize) => new(PixelSize, PixelSize);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        AutomationProperties.SetName(this, Label);
+        _ease = this.TryFindResource("PmEasingSleepyMove", out var found) ? found as Easing : null;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => InvalidateVisual());
+        if (!PurrimerMotion.PauseLoops)
+            _timer.Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _timer?.Stop();
+        _timer = null;
+    }
+
+    // Start angle (clockwise from three o'clock) and length, in degrees.
+    private (double Start, double Length) Arc()
+    {
+        var now = PurrimerMotion.PauseLoops ? 0 : _clock.Elapsed.TotalMilliseconds;
+        var playful = Kind == "playful";
+        var turn = playful ? PlayfulTurn : SleepyTurn;
+        var spin = now % turn / turn * 360;
+        if (!playful || PurrimerMotion.PauseLoops)
+            return (spin, 26 * 3.6);
+        var cycle = turn * 1.75;
+        var t = now % cycle / cycle;
+        var (l0, o0, l1, o1) = t < 0.5 ? (8.0, 0.0, 60.0, -16.0) : (60.0, -16.0, 8.0, -92.0);
+        var p = t % 0.5 * 2;
+        p = _ease?.Ease(p) ?? p;
+        var length = l0 + (l1 - l0) * p;
+        var offset = o0 + (o1 - o0) * p;
+        return (spin - offset * 3.6, length * 3.6);
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var size = Math.Min(Bounds.Width, Bounds.Height);
+        if (size <= 0)
+            return;
+        var stroke = size / 8;
+        var radius = (size - stroke) / 2;
+        var center = new Point(size / 2, size / 2);
+        context.DrawEllipse(null, new Pen(TrackBrush, stroke), center, radius, radius);
+        var (start, length) = Arc();
+        var a0 = start * Math.PI / 180;
+        var a1 = (start + length) * Math.PI / 180;
+        var geometry = new StreamGeometry();
+        using (var g = geometry.Open())
+        {
+            g.BeginFigure(new Point(center.X + radius * Math.Cos(a0), center.Y + radius * Math.Sin(a0)), false);
+            g.ArcTo(new Point(center.X + radius * Math.Cos(a1), center.Y + radius * Math.Sin(a1)),
+                new Size(radius, radius), 0, length > 180, SweepDirection.Clockwise);
+            g.EndFigure(false);
+        }
+        context.DrawGeometry(null, new Pen(ArcBrush, stroke, lineCap: PenLineCap.Round), geometry);
+    }
+}

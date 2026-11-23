@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:UnderlineNav SelectedIndex="0">
+    <pm:UnderlineNavItem Label="Code" IconName="code" />
+    <pm:UnderlineNavItem Label="Issues" IconName="issue-opened" Count="12" />
+    <pm:UnderlineNavItem Label="Pull requests" IconName="git-pull-request" Count="3" />
+    <pm:UnderlineNavItem Label="Actions" IconName="play" />
+  </pm:UnderlineNav>
+</UserControl>

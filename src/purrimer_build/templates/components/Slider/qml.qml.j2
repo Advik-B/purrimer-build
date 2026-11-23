@@ -1,0 +1,177 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+import QtQuick.Templates as T
+
+Column {
+    id: root
+    property string label
+    property alias value: control.value
+    property alias from: control.from
+    property alias to: control.to
+    property alias stepSize: control.stepSize
+    property real pageStep: {{ c.spec.props.pageStep.default }}
+    property string orientation: "horizontal"
+    property string tickPosition: "none"
+    property real tickInterval: 0
+    property int length: 0
+    property bool showValue: false
+    property string suffix
+    property bool disabled: false
+    signal moved(real value)
+    signal released(real value)
+
+    readonly property bool vertical: orientation === "vertical"
+    readonly property bool ticksBefore: tickPosition === "both" || tickPosition === (vertical ? "left" : "above")
+    readonly property bool ticksAfter: tickPosition === "both" || tickPosition === (vertical ? "right" : "below")
+    // The track and its tick rows are centred together across the 28px control.
+    readonly property real centre: (28 - (4 + 10 * ((ticksBefore ? 1 : 0) + (ticksAfter ? 1 : 0)))) / 2 + (ticksBefore ? 10 : 0) + 2
+    readonly property var marks: {
+        const every = tickInterval > 0 ? tickInterval : pageStep
+        const out = []
+        if (tickPosition === "none" || every <= 0 || control.to <= control.from) return out
+        for (let t = control.from; t <= control.to + 1e-9; t += every) out.push((t - control.from) / (control.to - control.from))
+        return out
+    }
+
+    spacing: 4
+
+    Item {
+        width: root.vertical ? Math.max(head.implicitWidth, 28) : control.width
+        height: 20
+        visible: root.label !== "" || root.showValue
+        Row {
+            id: head
+            spacing: 8
+            Text {
+                text: root.label
+                font.family: {{ "text-body-medium" | tok }}.family
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                color: {{ "fgColor-default" | tok }}
+            }
+        }
+        Text {
+            anchors.right: parent.right
+            visible: root.showValue
+            text: Math.round(control.value * 1000) / 1000 + root.suffix
+            font: {{ "text-body-medium" | tok }}
+            color: {{ "fgColor-muted" | tok }}
+        }
+    }
+
+    T.Slider {
+        id: control
+        orientation: root.vertical ? Qt.Vertical : Qt.Horizontal
+        from: {{ c.spec.props.min.default }}
+        to: {{ c.spec.props.max.default }}
+        stepSize: {{ c.spec.props.step.default }}
+        snapMode: T.Slider.SnapAlways
+        enabled: !root.disabled
+        width: root.vertical ? 28 : (root.length > 0 ? root.length : (root.width > 0 ? root.width : 240))
+        height: root.vertical ? (root.length > 0 ? root.length : 160) : 28
+        leftPadding: root.vertical ? 0 : 8
+        rightPadding: root.vertical ? 0 : 8
+        topPadding: root.vertical ? 8 : 0
+        bottomPadding: root.vertical ? 8 : 0
+        hoverEnabled: true
+        focusPolicy: Qt.StrongFocus
+        Accessible.name: root.label
+        onMoved: root.moved(value)
+        onPressedChanged: if (!pressed) root.released(value)
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_PageUp) value = Math.min(to, value + root.pageStep)
+            else if (event.key === Qt.Key_PageDown) value = Math.max(from, value - root.pageStep)
+            else if (event.key === Qt.Key_Home) value = from
+            else if (event.key === Qt.Key_End) value = to
+            else return
+            event.accepted = true
+            root.moved(value)
+        }
+
+        background: Item {
+            x: control.leftPadding
+            y: control.topPadding
+            width: control.availableWidth
+            height: control.availableHeight
+
+            Rectangle {
+                id: track
+                x: root.vertical ? root.centre - 2 : 0
+                y: root.vertical ? 0 : root.centre - 2
+                width: root.vertical ? 4 : parent.width
+                height: root.vertical ? parent.height : 4
+                radius: 2
+                color: {{ "controlTrack-bgColor-rest" | tok }}
+                Rectangle {
+                    x: 0
+                    y: root.vertical ? parent.height * (1 - control.visualPosition) : 0
+                    width: root.vertical ? 4 : parent.width * control.visualPosition
+                    height: root.vertical ? parent.height * control.visualPosition : 4
+                    radius: 2
+                    color: control.enabled ? {{ "bgColor-accent-emphasis" | tok }} : {{ "fgColor-disabled" | tok }}
+                }
+            }
+
+            Repeater {
+                model: root.ticksBefore ? root.marks : []
+                Rectangle {
+                    required property real modelData
+                    color: {{ "borderColor-emphasis" | tok }}
+                    width: root.vertical ? 6 : 1
+                    height: root.vertical ? 1 : 6
+                    x: root.vertical ? root.centre - 12 : modelData * track.width - 0.5
+                    y: root.vertical ? track.height * (1 - modelData) - 0.5 : root.centre - 12
+                }
+            }
+            Repeater {
+                model: root.ticksAfter ? root.marks : []
+                Rectangle {
+                    required property real modelData
+                    color: {{ "borderColor-emphasis" | tok }}
+                    width: root.vertical ? 6 : 1
+                    height: root.vertical ? 1 : 6
+                    x: root.vertical ? root.centre + 6 : modelData * track.width - 0.5
+                    y: root.vertical ? track.height * (1 - modelData) - 0.5 : root.centre + 6
+                }
+            }
+        }
+
+        handle: Item {
+            readonly property bool active: control.enabled && (control.hovered || control.pressed)
+            x: root.vertical ? root.centre - 8 : control.leftPadding + control.visualPosition * control.availableWidth - 8
+            y: root.vertical ? control.topPadding + control.visualPosition * control.availableHeight - 8 : root.centre - 8
+            width: 16
+            height: 16
+
+            RectangularShadow {
+                anchors.fill: thumb
+                visible: control.enabled
+                radius: thumb.radius
+                offset.y: parent.active ? {{ "shadow-resting-medium" | tok }}[0].y : {{ "shadow-resting-small" | tok }}[0].y
+                blur: parent.active ? {{ "shadow-resting-medium" | tok }}[0].blur : {{ "shadow-resting-small" | tok }}[0].blur
+                color: parent.active ? {{ "shadow-resting-medium" | tok }}[0].color : {{ "shadow-resting-small" | tok }}[0].color
+            }
+            Rectangle {
+                id: thumb
+                anchors.fill: parent
+                radius: {{ "borderRadius-small" | tok }}
+                color: control.enabled ? {{ "controlKnob-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }}
+                border.width: {{ "borderWidth-thin" | tok }}
+                border.color: !control.enabled ? {{ "borderColor-default" | tok }} : parent.active ? {{ "borderColor-accent-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }}
+                Behavior on border.color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+            }
+            Rectangle {
+                anchors.fill: parent
+                anchors.margins: -4
+                radius: thumb.radius + 4
+                color: "transparent"
+                border.width: {{ "borderWidth-thick" | tok }}
+                border.color: {{ "focus-outlineColor" | tok }}
+                visible: control.visualFocus
+            }
+        }
+    }
+}

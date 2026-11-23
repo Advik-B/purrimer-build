@@ -1,0 +1,36 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { HTMLTextareaAttributes } from "svelte/elements";
+  import Icon from "./Icon.svelte";
+
+  type Props = Omit<HTMLTextareaAttributes, "value"> & {
+    label: string;
+    value?: string;
+    caption?: string;
+    error?: string;
+  };
+
+  let { label, value = $bindable(""), caption = "", error = "", rows = {{ c.spec.props.rows.default }}, disabled = false, id, class: className = "", ...rest }: Props = $props();
+  const uid = $props.id();
+  const inputId = $derived(id ?? `pm-textarea-${uid}`);
+</script>
+
+<div class={["pm-textarea", error && "pm-textarea--invalid", className]}>
+  <label class="pm-textarea__label" for={inputId}>{label}</label>
+  <textarea
+    {...rest}
+    id={inputId}
+    class="pm-textarea__input"
+    bind:value
+    {rows}
+    {disabled}
+    aria-invalid={error ? "true" : undefined}
+    aria-describedby={error || caption ? `${inputId}-note` : undefined}
+  ></textarea>
+  {#if error}
+    <span class="pm-textarea__error" id="{inputId}-note"><Icon name="alert-fill" />{error}</span>
+  {:else if caption}
+    <span class="pm-textarea__caption" id="{inputId}-note">{caption}</span>
+  {/if}
+</div>

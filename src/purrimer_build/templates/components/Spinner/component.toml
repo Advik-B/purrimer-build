@@ -1,0 +1,26 @@
+name = "Spinner"
+group = "Status"
+order = 37
+summary = "A rotating arc for waits under about ten seconds."
+
+[props.size]
+type = "enum"
+default = "medium"
+doc = "small 16px, medium 32px, large 64px; the web targets also take a number."
+values = ["small", "medium", "large"]
+
+[props.label]
+type = "string"
+default = "Loading"
+doc = "Announced to screen readers."
+
+[props.kind]
+type = "enum"
+default = "sleepy"
+doc = "Motion kind. Sleepy turns once every 1.6s with a steady arc; playful turns faster and the arc stretches."
+values = ["sleepy", "playful"]
+
+[sizes]
+small = 16
+medium = 32
+large = 64

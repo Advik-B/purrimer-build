@@ -1,0 +1,26 @@
+.pm-textarea { display: flex; flex-direction: column; gap: 4px; }
+.pm-textarea__label { font: 600 14px/20px var(--font-sans); color: {{ "fgColor-default" | tok }}; }
+.pm-textarea__input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 80px;
+  margin: 0;
+  padding: 5px 8px;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "control-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-inset" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 400 14px/20px var(--font-sans);
+  resize: vertical;
+  transition: border-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-textarea__input::placeholder { color: {{ "fgColor-muted" | tok }}; }
+.pm-textarea__input:focus { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: -1px; border-color: {{ "focus-outlineColor" | tok }}; }
+.pm-textarea__caption { font: 400 12px/16px var(--font-sans); color: {{ "fgColor-muted" | tok }}; }
+.pm-textarea__error { display: flex; gap: 4px; align-items: center; font: 600 12px/16px var(--font-sans); color: {{ "fgColor-danger" | tok }}; }
+.pm-textarea__error svg { width: 12px; height: 12px; fill: currentColor; }
+.pm-textarea--invalid .pm-textarea__input { border-color: {{ "borderColor-danger-emphasis" | tok }}; }
+.pm-textarea__input:disabled { background: {{ "bgColor-disabled" | tok }}; border-color: {{ "borderColor-default" | tok }}; color: {{ "fgColor-disabled" | tok }}; box-shadow: none; cursor: not-allowed; }
+[data-density="touch"] .pm-textarea__input { padding: 9px 12px; font-size: 16px; line-height: 24px; resize: none; }

@@ -1,0 +1,18 @@
+import { CounterLabel, Purrimer } from "purrimer-components.slint";
+
+component Count inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> count;
+    in property <string> variant: "secondary";
+    spacing: 6px;
+    Text { text: root.label; color: Purrimer.fg-color-default; font-size: 14px; vertical-alignment: center; }
+    CounterLabel { text: root.count; variant: root.variant; y: (parent.height - self.height) / 2; }
+}
+
+export component Example inherits HorizontalLayout {
+    spacing: 16px;
+    alignment: start;
+    Count { label: "Issues"; count: "12"; }
+    Count { label: "Pull requests"; count: "1.2k"; }
+    Count { label: "Review"; count: "3"; variant: "primary"; }
+}

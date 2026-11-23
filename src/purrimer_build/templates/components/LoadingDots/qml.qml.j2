@@ -1,0 +1,64 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Item {
+    id: root
+    property string variant: "steps"
+    property string label
+    property string kind: "sleepy"
+    property color color: {{ "fgColor-muted" | tok }}
+    readonly property bool snooze: variant === "snooze"
+    readonly property bool playful: kind === "playful"
+    readonly property int stepCycle: playful ? {{ (ms("duration-playful-loop") * 0.7) | int }} : {{ (ms("duration-sleepy-loop") * 0.45) | int }}
+    readonly property int snoozeCycle: playful ? {{ (ms("duration-playful-loop") * 0.75) | int }} : {{ (ms("duration-sleepy-loop") * 0.75) | int }}
+    readonly property real dist: playful ? 18 : 8
+    readonly property real peak: playful ? 1.14 : 1.03
+    // Time in ms. Paused, the dots rest on the same snapshot as the web's resting style.
+    property real now: snooze ? snoozeCycle * 0.5 : stepCycle * 0.45
+
+    implicitWidth: snooze ? 28 : 26
+    implicitHeight: snooze ? 24 : 20
+    Accessible.role: Accessible.Indicator
+    Accessible.name: label || (snooze ? "Waiting" : "Loading")
+
+    function drift(x) { return x * x * (3 - 2 * x) }
+    function wave(x) { return playful ? 1 - Math.pow(1 - x, 3) : drift(x) }
+    function stepLift(phase) {
+        if (phase < 0.3) return wave(phase / 0.3)
+        if (phase < 0.6) return 1 - wave((phase - 0.3) / 0.3)
+        return 0
+    }
+    function snoozeOpacity(phase) {
+        return phase < 0.3 ? 0.9 * drift(phase / 0.3) : 0.9 * (1 - drift((phase - 0.3) / 0.7))
+    }
+
+    NumberAnimation on now {
+        running: root.visible && !Purrimer.pauseLoops
+        from: 0
+        to: 3600000
+        duration: 3600000
+        loops: Animation.Infinite
+    }
+
+    Repeater {
+        model: 3
+        Rectangle {
+            id: dot
+            required property int index
+            readonly property real size: root.snooze ? [7, 5, 4][index] : 6
+            readonly property real phase: root.snooze ? ((root.now / root.snoozeCycle - index / 3) % 1 + 1) % 1
+                                                      : ((root.now / root.stepCycle - 0.15 * index) % 1 + 1) % 1
+            readonly property real p: root.snooze ? root.drift(phase) : root.stepLift(phase)
+            width: size
+            height: size
+            radius: size / 2
+            color: root.color
+            x: root.snooze ? 4 + p * (root.dist * 0.8 + 4) : index * 10
+            y: root.snooze ? 22 - size - p * (root.dist * 2 + 8) : 7 - 0.4 * root.dist * p
+            opacity: root.snooze ? root.snoozeOpacity(phase) : 0.35 + 0.65 * p
+            scale: root.snooze ? 0.6 + 0.5 * p : 1 + (root.peak - 1) * p
+        }
+    }
+}

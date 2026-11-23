@@ -1,0 +1,171 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+import { ActionList, ActionListEntry } from "action-list.slint";
+
+component Face inherits HorizontalLayout {
+    in property <string> label;
+    in property <string> icon;
+    in property <brush> ink;
+    spacing: 8px;
+    alignment: center;
+    if root.icon == "": Text {
+        text: root.label;
+        color: root.ink;
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 14px;
+        font-weight: 600;
+        vertical-alignment: center;
+    }
+    Icon {
+        path: root.icon != "" ? root.icon : PurrimerIcons.triangle-down-16;
+        color: root.ink;
+        y: (parent.height - self.height) / 2;
+    }
+}
+
+export component ActionMenu inherits Rectangle {
+    in property <string> label;
+    // Path commands for an icon-only anchor, such as PurrimerIcons.kebab-horizontal-16.
+    in property <string> icon;
+    // default, primary or invisible
+    in property <string> variant: "default";
+    in property <[ActionListEntry]> items;
+    in property <bool> close-on-select: true;
+    // Opens the menu once the component is shown.
+    in property <bool> open-on-start;
+    callback triggered(int);
+    property <length> r: {{ "borderRadius-medium" | tok }};
+    property <length> big: {{ "borderRadius-large" | tok }};
+    property <length> menu-width: clamp(root.width + 2 * root.r, 192px, 320px);
+    property <bool> hovered: touch.has-hover;
+
+    function show-menu() {
+        popup.show();
+    }
+
+    height: {{ "control-medium-size" | tok }};
+    min-width: {{ "control-medium-size" | tok }};
+    preferred-width: root.icon != "" ? {{ "control-medium-size" | tok }} : face.preferred-width + 24px;
+    border-radius: root.r;
+    background: root.variant == "primary" ? (root.hovered ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }})
+        : root.variant == "invisible" ? (root.hovered ? {{ "control-transparent-bgColor-hover" | tok }} : transparent)
+        : (root.hovered ? {{ "button-default-bgColor-hover" | tok }} : {{ "button-default-bgColor-rest" | tok }});
+    border-width: root.variant == "invisible" ? 0px : {{ "borderWidth-thin" | tok }};
+    border-color: root.variant == "primary" ? self.background : {{ "button-default-borderColor-rest" | tok }};
+    animate background { duration: {{ "duration-fast" | tok }}; }
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-expandable: true;
+    accessible-action-default => { root.show-menu(); }
+    init => {
+        if (root.open-on-start) {
+            root.show-menu();
+        }
+    }
+
+    face := Face {
+        label: root.label;
+        icon: root.icon;
+        ink: root.variant == "primary" ? {{ "fgColor-onEmphasis" | tok }} : root.icon != "" ? {{ "fgColor-muted" | tok }} : {{ "fgColor-default" | tok }};
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.show-menu(); }
+    }
+
+    focus := FocusScope {
+        key-pressed(event) => {
+            if (event.text == "\n" || event.text == " " || event.text == Key.DownArrow) {
+                root.show-menu();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -4px;
+        y: -4px;
+        width: parent.width + 8px;
+        height: parent.height + 8px;
+        border-radius: root.r + 4px;
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+
+    popup := PopupWindow {
+        x: 0;
+        y: 0;
+        width: root.menu-width;
+        height: root.height - 1px + list.preferred-height + 1px;
+        close-policy: close-on-click-outside;
+
+        // One shadow under the menu's body; Slint paths cast none.
+        Rectangle {
+            y: root.height - 1px;
+            height: parent.height - self.y;
+            border-radius: root.big;
+            background: {{ "overlay-bgColor" | tok }};
+            drop-shadow-offset-y: 6px;
+            drop-shadow-blur: 14px;
+            drop-shadow-color: {{ "overlay-backdrop-bgColor" | tok }};
+        }
+
+        // The open shape: the anchor's top, a concave fillet where it meets the menu, and the menu's body.
+        Path {
+            property <float> w: self.width / 1px;
+            property <float> h: self.height / 1px;
+            property <float> aw: root.width / 1px - 0.5;
+            property <float> top: root.height / 1px - 1;
+            property <float> rr: root.r / 1px;
+            property <float> bb: root.big / 1px;
+            width: parent.width;
+            height: parent.height;
+            viewbox-width: self.w;
+            viewbox-height: self.h;
+            fill: {{ "overlay-bgColor" | tok }};
+            stroke: {{ "borderColor-default" | tok }};
+            stroke-width: {{ "borderWidth-thin" | tok }};
+            MoveTo { x: 0.5; y: 0.5 + parent.rr; }
+            ArcTo { x: 0.5 + parent.rr; y: 0.5; radius-x: parent.rr; radius-y: parent.rr; sweep: true; }
+            LineTo { x: parent.aw - parent.rr; y: 0.5; }
+            ArcTo { x: parent.aw; y: 0.5 + parent.rr; radius-x: parent.rr; radius-y: parent.rr; sweep: true; }
+            LineTo { x: parent.aw; y: parent.top - parent.rr; }
+            ArcTo { x: parent.aw + parent.rr; y: parent.top; radius-x: parent.rr; radius-y: parent.rr; sweep: false; }
+            LineTo { x: parent.w - 0.5 - parent.bb; y: parent.top; }
+            ArcTo { x: parent.w - 0.5; y: parent.top + parent.bb; radius-x: parent.bb; radius-y: parent.bb; sweep: true; }
+            LineTo { x: parent.w - 0.5; y: parent.h - 0.5 - parent.bb; }
+            ArcTo { x: parent.w - 0.5 - parent.bb; y: parent.h - 0.5; radius-x: parent.bb; radius-y: parent.bb; sweep: true; }
+            LineTo { x: 0.5 + parent.bb; y: parent.h - 0.5; }
+            ArcTo { x: 0.5; y: parent.h - 0.5 - parent.bb; radius-x: parent.bb; radius-y: parent.bb; sweep: true; }
+            Close { }
+        }
+
+        Face {
+            x: 0;
+            y: 0;
+            width: root.width;
+            height: root.height;
+            label: root.label;
+            icon: root.icon;
+            ink: {{ "fgColor-default" | tok }};
+        }
+
+        list := ActionList {
+            x: 1px;
+            y: root.height - 1px;
+            width: parent.width - 2px;
+            items: root.items;
+            triggered(index) => {
+                root.triggered(index);
+                if (root.close-on-select) {
+                    popup.close();
+                }
+            }
+        }
+    }
+}

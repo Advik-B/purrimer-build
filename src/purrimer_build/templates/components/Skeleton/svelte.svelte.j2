@@ -1,0 +1,34 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  let { variant = "text", effect = "sunbeam", lines = 1, width, height, kind, class: className = "" }: {
+    variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }};
+    effect?: {{ c.spec.props.effect["values"] | map("tojson") | join(" | ") }};
+    lines?: number;
+    width?: number | string;
+    height?: number | string;
+    kind?: {{ c.spec.props.kind["values"] | map("tojson") | join(" | ") }};
+    class?: string;
+  } = $props();
+
+  const css = (v: number | string | undefined) => (typeof v === "number" ? `${v}px` : v);
+  const count = $derived(variant === "text" ? Math.max(1, lines) : 1);
+</script>
+
+{#snippet bone(w: number | string | undefined)}
+  <span
+    class={["pm-skeleton", `pm-skeleton--${variant}`, `pm-skeleton--${effect}`, className]}
+    data-motion={kind}
+    aria-hidden="true"
+    style:width={css(w)}
+    style:height={css(variant === "circle" ? (height ?? w) : height)}
+  ></span>
+{/snippet}
+
+{#if count === 1}
+  {@render bone(width)}
+{:else}
+  <span class="pm-skeleton-lines" aria-hidden="true">
+    {#each { length: count } as _, i}{@render bone(i === count - 1 ? "60%" : width)}{/each}
+  </span>
+{/if}

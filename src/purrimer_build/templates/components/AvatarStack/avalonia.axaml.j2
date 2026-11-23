@@ -1,0 +1,29 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:AvatarStack}" TargetType="pm:AvatarStack">
+    <Setter Property="AvatarBrush" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="InitialsBrush" Value="{{ "fgColor-accent" | tok }}" />
+    <Setter Property="RingBrush" Value="{{ "bgColor-default" | tok }}" />
+    <Setter Property="MoreBrush" Value="{{ "bgColor-neutral-muted" | tok }}" />
+    <Setter Property="MoreTextBrush" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="FocusBrush" Value="{{ "focus-outlineColor" | tok }}" />
+    <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
+    <Setter Property="Focusable" Value="True" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+    <Setter Property="Transitions">
+      <Transitions>
+        <DoubleTransition Property="Spread" Duration="{{ "duration-base" | tok }}" Easing="{{ "easing-standard" | tok }}" />
+      </Transitions>
+    </Setter>
+    <Style Selector="^:pointerover">
+      <Setter Property="Spread" Value="1" />
+    </Style>
+    <Style Selector="^:focus-visible">
+      <Setter Property="Spread" Value="1" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

@@ -1,0 +1,39 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:ToolTip}" TargetType="pm:ToolTip">
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Top" />
+    <Setter Property="Template">
+      <ControlTemplate TargetType="pm:ToolTip">
+        <Panel>
+          <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" />
+          <Popup Name="PART_Popup" ShouldUseOverlayLayer="True" IsLightDismissEnabled="{TemplateBinding WhatsThis}">
+            <Border Name="bubble" Margin="0,0,0,0" MaxWidth="240" Padding="8,4" CornerRadius="{{ "borderRadius-small" | tok }}"
+                    Background="{{ "bgColor-emphasis" | tok }}">
+              <TextBlock Name="text" Text="{TemplateBinding Text}" TextWrapping="Wrap" FontFamily="{{ "sans" | font }}" FontSize="12"
+                         LineHeight="16" Foreground="{{ "fgColor-onEmphasis" | tok }}" />
+            </Border>
+          </Popup>
+        </Panel>
+      </ControlTemplate>
+    </Setter>
+    <Style Selector="^[WhatsThis=True] /template/ Border#bubble">
+      <Setter Property="MaxWidth" Value="280" />
+      <Setter Property="Padding" Value="14,12" />
+      <Setter Property="Margin" Value="8" />
+      <Setter Property="CornerRadius" Value="{{ "borderRadius-large" | tok }}" />
+      <Setter Property="Background" Value="{{ "overlay-bgColor" | tok }}" />
+      <Setter Property="BorderBrush" Value="{{ "borderColor-default" | tok }}" />
+      <Setter Property="BorderThickness" Value="{{ "borderWidth-thin" | tokx("Thickness") }}" />
+      <Setter Property="BoxShadow" Value="{{ "shadow-floating-small" | tok }}" />
+    </Style>
+    <Style Selector="^[WhatsThis=True] /template/ TextBlock#text">
+      <Setter Property="FontSize" Value="14" />
+      <Setter Property="LineHeight" Value="20" />
+      <Setter Property="Foreground" Value="{{ "fgColor-default" | tok }}" />
+    </Style>
+  </ControlTheme>
+</ResourceDictionary>

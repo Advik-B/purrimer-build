@@ -1,0 +1,11 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:LoadingDots}" TargetType="pm:LoadingDots">
+    <Setter Property="DotBrush" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </ControlTheme>
+</ResourceDictionary>

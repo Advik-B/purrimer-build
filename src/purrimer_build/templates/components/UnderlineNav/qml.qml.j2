@@ -1,0 +1,126 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Item {
+    id: root
+    // Items: [{ label, icon?, count? }]
+    property var items: []
+    property int current: 0
+    signal selected(int index)
+
+    implicitWidth: row.implicitWidth + 32
+    implicitHeight: {{ "control-xlarge-size" | tok }}
+    Accessible.role: Accessible.PageTabList
+
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: {{ "borderWidth-thin" | tok }}
+        color: {{ "borderColor-default" | tok }}
+    }
+
+    Row {
+        id: row
+        x: 16
+        height: parent.height
+        spacing: 8
+        Repeater {
+            model: root.items
+            Item {
+                id: entry
+                required property int index
+                required property var modelData
+                readonly property bool isCurrent: index === root.current
+                width: label.implicitWidth
+                height: row.height
+                activeFocusOnTab: true
+                Accessible.role: Accessible.PageTab
+                Accessible.name: modelData.label
+                Accessible.selected: isCurrent
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                        root.current = index
+                        root.selected(index)
+                        event.accepted = true
+                    }
+                }
+
+                Rectangle {
+                    id: label
+                    y: (parent.height - height) / 2
+                    implicitWidth: content.implicitWidth + 16
+                    width: implicitWidth
+                    height: 28
+                    radius: {{ "borderRadius-medium" | tok }}
+                    color: hover.hovered ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+                    border.width: entry.activeFocus ? {{ "borderWidth-thick" | tok }} : 0
+                    border.color: {{ "focus-outlineColor" | tok }}
+                    Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+
+                    Row {
+                        id: content
+                        x: 8
+                        height: parent.height
+                        spacing: 8
+                        Icon {
+                            visible: !!entry.modelData.icon
+                            name: entry.modelData.icon || ""
+                            color: entry.isCurrent ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: entry.modelData.label
+                            font.family: {{ "text-body-medium" | tok }}.family
+                            font.pixelSize: 14
+                            font.weight: entry.isCurrent ? Font.DemiBold : Font.Normal
+                            color: {{ "fgColor-default" | tok }}
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        CounterBadge {
+                            visible: entry.modelData.count !== undefined && entry.modelData.count !== null
+                            text: String(entry.modelData.count)
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+                }
+
+                Rectangle {
+                    visible: entry.isCurrent
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: {{ "borderWidth-thick" | tok }}
+                    radius: height / 2
+                    color: {{ "bgColor-accent-emphasis" | tok }}
+                }
+
+                HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+                TapHandler {
+                    onTapped: {
+                        root.current = entry.index
+                        root.selected(entry.index)
+                    }
+                }
+            }
+        }
+    }
+
+    component CounterBadge: Rectangle {
+        property alias text: count.text
+        implicitWidth: Math.max(20, count.implicitWidth + 12)
+        implicitHeight: 18
+        radius: 9
+        color: {{ "bgColor-neutral-muted" | tok }}
+        Text {
+            id: count
+            anchors.centerIn: parent
+            font.family: {{ "text-caption" | tok }}.family
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            color: {{ "fgColor-default" | tok }}
+        }
+    }
+}

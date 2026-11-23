@@ -28,6 +28,8 @@ class Theme(QObject):
         super().__init__()
         self._name = T.THEMES[0]
         self._fonts_loaded = False
+        # Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
+        self.pause_loops = False
 
     @property
     def name(self) -> str:

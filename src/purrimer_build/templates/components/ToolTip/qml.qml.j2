@@ -1,0 +1,95 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Templates as T
+
+Item {
+    id: root
+    // The trigger: one focusable item, such as an IconButton.
+    default property alias content: holder.data
+    property string text
+    property string placement: "top"
+    property int delay: {{ c.spec.props.delay.default }}
+    property bool whatsThis: false
+    property bool disabled: false
+    property alias open: bubble.visible
+
+    // Keyboard focus anywhere inside the wrapper counts as focus on the trigger.
+    readonly property bool focusInside: {
+        let item = Window.activeFocusItem
+        while (item) {
+            if (item === root) return true
+            item = item.parent
+        }
+        return false
+    }
+
+    implicitWidth: holder.childrenRect.width
+    implicitHeight: holder.childrenRect.height
+    onFocusInsideChanged: if (!whatsThis) { if (focusInside) show(); else bubble.close() }
+
+    function show() {
+        if (!disabled) bubble.open()
+    }
+
+    Item { id: holder; anchors.fill: parent }
+
+    Timer { id: timer; interval: root.delay; onTriggered: root.show() }
+
+    HoverHandler {
+        enabled: !root.whatsThis
+        onHoveredChanged: {
+            if (hovered) timer.restart()
+            else { timer.stop(); bubble.close() }
+        }
+    }
+
+    TapHandler {
+        enabled: root.whatsThis
+        gesturePolicy: TapHandler.ReleaseWithinBounds
+        grabPermissions: PointerHandler.ApprovesTakeOverByAnything
+        onTapped: bubble.visible ? bubble.close() : root.show()
+    }
+
+    T.Popup {
+        id: bubble
+        readonly property real gap: 6
+        readonly property real px: root.whatsThis ? 14 : 8
+        readonly property real py: root.whatsThis ? 12 : 4
+        x: root.placement === "left" ? -width - gap : root.placement === "right" ? root.width + gap : (root.width - width) / 2
+        y: root.placement === "top" ? -height - gap : root.placement === "bottom" ? root.height + gap : (root.height - height) / 2
+        width: Math.min(root.whatsThis ? 280 : 240, label.implicitWidth + 2 * px)
+        implicitHeight: label.implicitHeight + 2 * py
+        padding: 0
+        leftPadding: px
+        rightPadding: px
+        topPadding: py
+        bottomPadding: py
+        closePolicy: root.whatsThis ? T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutsideParent : T.Popup.CloseOnEscape
+
+        enter: Transition {
+            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: {{ "duration-base" | tok }} }
+        }
+
+        contentItem: Text {
+            id: label
+            text: root.text
+            Accessible.role: root.whatsThis ? Accessible.Note : Accessible.ToolTip
+            Accessible.name: root.text
+            wrapMode: Text.Wrap
+            font.family: (root.whatsThis ? {{ "text-body-medium" | tok }} : {{ "text-caption" | tok }}).family
+            font.pixelSize: root.whatsThis ? 14 : 12
+            lineHeight: root.whatsThis ? 20 : 16
+            lineHeightMode: Text.FixedHeight
+            color: root.whatsThis ? {{ "fgColor-default" | tok }} : {{ "fgColor-onEmphasis" | tok }}
+        }
+
+        background: Rectangle {
+            radius: root.whatsThis ? {{ "borderRadius-large" | tok }} : {{ "borderRadius-small" | tok }}
+            color: root.whatsThis ? {{ "overlay-bgColor" | tok }} : {{ "bgColor-emphasis" | tok }}
+            border.width: root.whatsThis ? {{ "borderWidth-thin" | tok }} : 0
+            border.color: {{ "borderColor-default" | tok }}
+        }
+    }
+}

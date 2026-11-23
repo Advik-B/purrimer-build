@@ -56,6 +56,8 @@ Window {
     color: Purrimer.bgColorDefault
     flags: Qt.FramelessWindowHint
     Binding { target: Purrimer; property: "theme"; value: "%(theme)s" }
+    // Spinners and other loops stop on their first frame, so screenshots do not change from run to run.
+    Binding { target: Purrimer; property: "pauseLoops"; value: true }
     Loader { objectName: "example"; %(place)s; source: "%(source)s" }
 }
 """

@@ -1,0 +1,86 @@
+// {{ note }}
+// {{ c.summary }}
+using System.Collections.Generic;
+using Avalonia;
+using Avalonia.Controls.Primitives;
+
+namespace {{ ns }};
+
+// A solid pill with an Octicon and a word: Open, Closed, Merged, Draft.
+public class StateLabel : TemplatedControl
+{
+    private static readonly Dictionary<string, string> Icons = new()
+    {
+{% for status, name in c.spec.icons.items() %}
+        ["{{ status }}"] = "{{ name }}",
+{% endfor %}
+    };
+
+    private static readonly Dictionary<string, string> Tones = new()
+    {
+{% for status, tone in c.spec.tones.items() %}
+        ["{{ status }}"] = "{{ tone }}",
+{% endfor %}
+    };
+
+    public static readonly StyledProperty<string?> TextProperty =
+        AvaloniaProperty.Register<StateLabel, string?>(nameof(Text));
+
+    public static readonly StyledProperty<string> StatusProperty =
+        AvaloniaProperty.Register<StateLabel, string>(nameof(Status), "open");
+
+    public static readonly StyledProperty<string> SizeProperty =
+        AvaloniaProperty.Register<StateLabel, string>(nameof(Size), "medium");
+
+    public static readonly DirectProperty<StateLabel, string> IconNameProperty =
+        AvaloniaProperty.RegisterDirect<StateLabel, string>(nameof(IconName), o => o.IconName);
+
+    public static readonly DirectProperty<StateLabel, string> ToneProperty =
+        AvaloniaProperty.RegisterDirect<StateLabel, string>(nameof(Tone), o => o.Tone);
+
+    private string _iconName = Icons["open"];
+    private string _tone = Tones["open"];
+
+    public string? Text
+    {
+        get => GetValue(TextProperty);
+        set => SetValue(TextProperty, value);
+    }
+
+    // open, closed, merged, draft, pullOpen or pullClosed
+    public string Status
+    {
+        get => GetValue(StatusProperty);
+        set => SetValue(StatusProperty, value);
+    }
+
+    // medium (32px) or small (28px)
+    public string Size
+    {
+        get => GetValue(SizeProperty);
+        set => SetValue(SizeProperty, value);
+    }
+
+    public string IconName
+    {
+        get => _iconName;
+        private set => SetAndRaise(IconNameProperty, ref _iconName, value);
+    }
+
+    // success, danger, done or neutral: the fill, derived from Status.
+    public string Tone
+    {
+        get => _tone;
+        private set => SetAndRaise(ToneProperty, ref _tone, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == StatusProperty)
+        {
+            IconName = Icons.GetValueOrDefault(Status, Icons["open"]);
+            Tone = Tones.GetValueOrDefault(Status, "neutral");
+        }
+    }
+}

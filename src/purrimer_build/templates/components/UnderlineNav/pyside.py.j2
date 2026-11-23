@@ -1,0 +1,160 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtCore import QEvent, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..theme import theme
+
+
+@dataclass
+class NavItem:
+    label: str
+    icon: str | None = None
+    count: str | int | None = None
+
+
+class UnderlineNav(QWidget):
+    """A row of page-level tabs with an underline under the current one. Arrow keys move, Enter or Space picks."""
+
+    currentChanged = Signal(int)
+
+    def __init__(self, items: list[NavItem | str], current: int = 0, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._items = [item if isinstance(item, NavItem) else NavItem(item) for item in items]
+        self._current = current
+        self._hover = -1
+        self._focus = current
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(round(theme.length({{ "control-xlarge-size" | tok }})))
+        self.setAccessibleName("Navigation")
+        theme.changed.connect(self.update)
+
+    def current(self) -> int:
+        return self._current
+
+    def set_current(self, index: int) -> None:
+        if 0 <= index < len(self._items) and index != self._current:
+            self._current = index
+            self._focus = index
+            self.update()
+            self.currentChanged.emit(index)
+
+    def _font(self, bold: bool) -> QFont:
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setWeight(QFont.Weight.DemiBold if bold else QFont.Weight.Normal)
+        return font
+
+    def _count_font(self) -> QFont:
+        font = theme.font({{ "text-caption" | tok }})
+        font.setWeight(QFont.Weight.DemiBold)
+        return font
+
+    def _count_width(self, item: NavItem) -> int:
+        return max(20, QFontMetrics(self._count_font()).horizontalAdvance(str(item.count)) + 12)
+
+    def _item_width(self, i: int) -> int:
+        item = self._items[i]
+        # Measure in the bold face so the row does not shift when the current item changes.
+        width = 16 + QFontMetrics(self._font(True)).horizontalAdvance(item.label)
+        if item.icon:
+            width += 24
+        if item.count is not None:
+            width += 8 + self._count_width(item)
+        return width
+
+    def _rects(self) -> list[QRectF]:
+        rects, x = [], 16.0
+        for i in range(len(self._items)):
+            w = self._item_width(i)
+            rects.append(QRectF(x, 0, w, self.height()))
+            x += w + 8
+        return rects
+
+    def sizeHint(self) -> QSize:
+        rects = self._rects()
+        return QSize(round(rects[-1].right() + 16) if rects else 32, self.height())
+
+    def _at(self, x: float) -> int:
+        for i, rect in enumerate(self._rects()):
+            if rect.left() <= x <= rect.right():
+                return i
+        return -1
+
+    def mouseMoveEvent(self, event) -> None:
+        hover = self._at(event.position().x())
+        if hover != self._hover:
+            self._hover = hover
+            self.setCursor(Qt.CursorShape.PointingHandCursor if hover >= 0 else Qt.CursorShape.ArrowCursor)
+            self.update()
+
+    def leaveEvent(self, event: QEvent) -> None:
+        self._hover = -1
+        self.update()
+
+    def mousePressEvent(self, event) -> None:
+        index = self._at(event.position().x())
+        if index >= 0:
+            self.set_current(index)
+
+    def keyPressEvent(self, event) -> None:
+        key = event.key()
+        if key in (Qt.Key.Key_Left, Qt.Key.Key_Right):
+            step = -1 if key == Qt.Key.Key_Left else 1
+            self._focus = (self._focus + step) % len(self._items)
+            self.update()
+        elif key in (Qt.Key.Key_Return, Qt.Key.Key_Enter, Qt.Key.Key_Space):
+            self.set_current(self._focus)
+        else:
+            super().keyPressEvent(event)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        h = self.height()
+        painter.fillRect(QRectF(0, h - 1, self.width(), 1), theme.color({{ "borderColor-default" | tok }}))
+        for i, rect in enumerate(self._rects()):
+            item = self._items[i]
+            current = i == self._current
+            label = QRectF(rect.left(), (h - 28) / 2, rect.width(), 28)
+            if i == self._hover:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(theme.color({{ "control-transparent-bgColor-hover" | tok }}))
+                painter.drawRoundedRect(label, {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+            x = rect.left() + 8
+            if item.icon:
+                color = theme.color({{ "fgColor-default" | tok }} if current else {{ "fgColor-muted" | tok }})
+                paint_icon(painter, QRectF(x, (h - 16) / 2, 16, 16), item.icon, color)
+                x += 24
+            font = self._font(current)
+            painter.setFont(font)
+            painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+            text_w = QFontMetrics(font).horizontalAdvance(item.label)
+            painter.drawText(QRectF(x, 0, text_w + 2, h), Qt.AlignmentFlag.AlignVCenter, item.label)
+            x += text_w
+            if item.count is not None:
+                x += 8 + (QFontMetrics(self._font(True)).horizontalAdvance(item.label) - text_w)
+                badge = QRectF(x, (h - 18) / 2, self._count_width(item), 18)
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(theme.color({{ "bgColor-neutral-muted" | tok }}))
+                painter.drawRoundedRect(badge, 9, 9)
+                painter.setFont(self._count_font())
+                painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+                painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, str(item.count))
+            if current:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }}))
+                painter.drawRoundedRect(QRectF(rect.left(), h - 2, rect.width(), 2), 1, 1)
+            if self.hasFocus() and i == self._focus:
+                painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRoundedRect(label.adjusted(1, 1, -1, -1), {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})

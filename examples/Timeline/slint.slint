@@ -1,0 +1,14 @@
+import { Timeline, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Timeline {
+        items: [
+            { actor: "mona", content: "opened this pull request", icon: PurrimerIcons.git-pull-request-16, tone: "success" },
+            { actor: "hubot", content: "added 3 commits", icon: PurrimerIcons.git-commit-16, condensed: true },
+            { actor: "ada", content: "approved these changes", icon: PurrimerIcons.check-16, tone: "accent" },
+            { is-break: true },
+            { actor: "mona", content: "merged into main", icon: PurrimerIcons.git-merge-16, tone: "done" },
+        ];
+    }
+}

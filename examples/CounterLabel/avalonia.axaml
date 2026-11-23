@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="6">
+    <TextBlock Text="Issues" VerticalAlignment="Center" />
+    <pm:CounterLabel Text="12" />
+    <TextBlock Text="Pull requests" Margin="10,0,0,0" VerticalAlignment="Center" />
+    <pm:CounterLabel Text="1.2k" />
+    <TextBlock Text="Review" Margin="10,0,0,0" VerticalAlignment="Center" />
+    <pm:CounterLabel Text="3" Variant="primary" />
+  </StackPanel>
+</UserControl>

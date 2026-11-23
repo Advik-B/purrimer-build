@@ -1,0 +1,48 @@
+{## The resting styles are a snapshot of the loop (the middle dot at its peak, the bubbles spread out), so the dots
+   still read as dots wherever animations are switched off. ##}
+.pm-dots { display: inline-flex; align-items: center; gap: 4px; height: 20px; color: {{ "fgColor-muted" | tok }}; vertical-align: middle; }
+.pm-dots > i {
+  width: 6px;
+  height: 6px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: currentColor;
+  opacity: 0.675;
+  transform: translateY(calc(var(--pm-m-pose-dist) * -0.2)) scale(calc(0.5 + var(--pm-m-pose-peak) / 2));
+  animation: pm-dots-step var(--pm-m-dots-dur) var(--pm-m-wave) infinite both;
+}
+.pm-dots > i:nth-child(2) { opacity: 1; transform: translateY(calc(var(--pm-m-pose-dist) * -0.4)) scale(var(--pm-m-pose-peak)); animation-delay: calc(var(--pm-m-dots-dur) * 0.15); }
+.pm-dots > i:nth-child(3) { animation-delay: calc(var(--pm-m-dots-dur) * 0.3); }
+.pm-dots--snooze { position: relative; width: 28px; height: 24px; gap: 0; }
+.pm-dots--snooze > i {
+  position: absolute;
+  left: 4px;
+  bottom: 2px;
+  width: 7px;
+  height: 7px;
+  opacity: 0.643;
+  transform: translate(calc((var(--pm-m-pose-dist) * 0.8 + 4px) * 0.5), calc((var(--pm-m-pose-dist) * 2 + 8px) * -0.5)) scale(0.85);
+  animation: pm-dots-snooze calc(var(--pm-m-loop) * 0.75) {{ "easing-sleepy-drift" | tok }} infinite both;
+}
+.pm-dots--snooze > i:nth-child(2) {
+  width: 5px;
+  height: 5px;
+  opacity: 0.5;
+  transform: translate(calc((var(--pm-m-pose-dist) * 0.8 + 4px) / 6), calc((var(--pm-m-pose-dist) * 2 + 8px) / -6)) scale(0.683);
+  animation-delay: calc(var(--pm-m-loop) * 0.25);
+}
+.pm-dots--snooze > i:nth-child(3) {
+  width: 4px;
+  height: 4px;
+  opacity: 0.214;
+  transform: translate(calc((var(--pm-m-pose-dist) * 0.8 + 4px) * 0.833), calc((var(--pm-m-pose-dist) * 2 + 8px) * -0.833)) scale(1.017);
+  animation-delay: calc(var(--pm-m-loop) * 0.5);
+}
+@keyframes pm-dots-step {
+  0%, 60%, 100% { opacity: 0.35; transform: none; }
+  30% { opacity: 1; transform: translateY(calc(var(--pm-m-dist) * -0.4)) scale(var(--pm-m-peak)); }
+}
+@keyframes pm-dots-snooze {
+  0% { opacity: 0; transform: translate(0, 0) scale(0.6); }
+  30% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(calc(var(--pm-m-dist) * 0.8 + 4px), calc(var(--pm-m-dist) * -2 - 8px)) scale(1.1); }
+}

@@ -1,0 +1,40 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createUniqueId, omit } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+
+export type TextareaProps = Omit<JSX.TextareaHTMLAttributes<HTMLTextAreaElement>, "class" | "value" | "onInput"> & {
+  label: string;
+  value?: string;
+  onValue?: (value: string) => void;
+  caption?: string;
+  error?: string;
+  class?: JSX.ClassValue;
+};
+
+export function Textarea(props: TextareaProps): JSX.Element {
+  const rest = omit(props, "label", "value", "onValue", "caption", "error", "class", "id", "rows");
+  const id = props.id ?? `pm-textarea-${createUniqueId()}`;
+  return (
+    <div class={["pm-textarea", props.error && "pm-textarea--invalid", props.class]}>
+      <label class="pm-textarea__label" for={id}>{props.label}</label>
+      <textarea
+        {...rest}
+        id={id}
+        class="pm-textarea__input"
+        rows={props.rows ?? {{ c.spec.props.rows.default }}}
+        value={props.value ?? ""}
+        aria-invalid={props.error ? "true" : undefined}
+        aria-describedby={props.error || props.caption ? `${id}-note` : undefined}
+        onInput={(e) => props.onValue?.(e.currentTarget.value)}
+      />
+      <Show
+        when={props.error}
+        fallback={<Show when={props.caption}><span class="pm-textarea__caption" id={`${id}-note`}>{props.caption}</span></Show>}
+      >
+        <span class="pm-textarea__error" id={`${id}-note`}><Icon name="alert-fill" />{props.error}</span>
+      </Show>
+    </div>
+  );
+}

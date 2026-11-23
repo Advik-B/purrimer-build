@@ -1,0 +1,10 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Timeline>
+    <pm:TimelineItem Actor="mona" Content="opened this pull request" IconName="git-pull-request" Tone="success" />
+    <pm:TimelineItem Actor="hubot" Content="added 3 commits" IconName="git-commit" IsCondensed="True" />
+    <pm:TimelineItem Actor="ada" Content="approved these changes" IconName="check" Tone="accent" />
+    <pm:TimelineItem IsBreak="True" />
+    <pm:TimelineItem Actor="mona" Content="merged into main" IconName="git-merge" Tone="done" />
+  </pm:Timeline>
+</UserControl>

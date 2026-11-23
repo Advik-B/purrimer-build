@@ -18,9 +18,12 @@ Adding a component means adding a folder. Missing layers are reported by `purrim
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from .naming import kebab, snake
 
 LAYERS = {
     "web.css": "web.css.j2",
@@ -73,6 +76,30 @@ class Component:
     def covers(self, target: str) -> bool:
         return all(self.has(layer) for layer in TARGET_LAYERS[target])
 
+    def uses(self, names: set[str]) -> set[str]:
+        """Other components this one's templates import or instantiate, so a subset build can include them."""
+        found: set[str] = set(self.spec.get("requires", []))
+        by_snake = {snake(n): n for n in names}
+        by_kebab = {kebab(n): n for n in names}
+        for layer, filename in LAYERS.items():
+            path = self.folder / filename
+            if not path.exists():
+                continue
+            text = path.read_text(encoding="utf-8")
+            if layer in ("svelte", "solid"):
+                found |= {m for m in re.findall(r'from "\./(\w+)(?:\.svelte)?"', text) if m in names}
+            elif layer == "pyside":
+                found |= {by_snake[m] for m in re.findall(r"from \.(\w+) import", text) if m in by_snake}
+            elif layer == "slint":
+                found |= {by_kebab[m] for m in re.findall(r'from "([\w-]+)\.slint"', text) if m in by_kebab}
+            elif layer == "qml":
+                found |= {m for m in re.findall(r"^\s*(\w+) \{", text, re.M) if m in names}
+            elif layer.startswith("avalonia"):
+                found |= {m for m in re.findall(r"pm:(\w+)", text) if m in names}
+                found |= {m for m in re.findall(r"\b(\w+)\.\w+Event\b", text) if m in names}
+        found.discard(self.name)
+        return found
+
 
 def load_component(folder: Path) -> Component:
     spec = tomllib.loads((folder / "component.toml").read_text(encoding="utf-8"))
@@ -85,6 +112,20 @@ def load_component(folder: Path) -> Component:
     if name != folder.name:
         raise ValueError(f"{folder}: component name {name!r} must match its folder name")
     return Component(name, spec.get("group", "Other"), spec.get("summary", ""), folder, props, spec)
+
+
+def with_dependencies(chosen: list[Component], everything: list[Component]) -> list[Component]:
+    """The chosen components plus every component they use, directly or not, in registry order."""
+    by_name = {c.name: c for c in everything}
+    names = set(by_name)
+    wanted = {c.name for c in chosen}
+    queue = list(wanted)
+    while queue:
+        for dep in by_name[queue.pop()].uses(names):
+            if dep not in wanted:
+                wanted.add(dep)
+                queue.append(dep)
+    return [c for c in everything if c.name in wanted]
 
 
 def discover(roots: list[Path]) -> list[Component]:

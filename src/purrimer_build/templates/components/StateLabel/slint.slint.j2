@@ -1,0 +1,43 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+export component StateLabel inherits Rectangle {
+    in property <string> text;
+    // open, closed, merged, draft, pullOpen or pullClosed
+    in property <string> status: "open";
+    // medium or small
+    in property <string> size: "medium";
+    property <length> pad: root.size == "small" ? 8px : 12px;
+
+    height: root.size == "small" ? 28px : 32px;
+    preferred-width: row.preferred-width + 2 * root.pad;
+    border-radius: self.height / 2;
+    background: root.status == "open" || root.status == "pullOpen" ? {{ "bgColor-success-emphasis" | tok }}
+        : root.status == "closed" || root.status == "pullClosed" ? {{ "bgColor-danger-emphasis" | tok }}
+        : root.status == "merged" ? {{ "bgColor-done-emphasis" | tok }} : {{ "bgColor-neutral-emphasis" | tok }};
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+
+    row := HorizontalLayout {
+        padding-left: root.pad;
+        padding-right: root.pad;
+        spacing: 4px;
+        alignment: center;
+        Icon {
+            path: {% for status, name in c.spec.icons.items() if status != "open" %}root.status == "{{ status }}" ? PurrimerIcons.{{ name }}-16 : {% endfor %}PurrimerIcons.{{ c.spec.icons.open }}-16;
+            color: {{ "fgColor-onEmphasis" | tok }};
+            y: (parent.height - self.height) / 2;
+        }
+        Text {
+            text: root.text;
+            color: {{ "fgColor-onEmphasis" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}

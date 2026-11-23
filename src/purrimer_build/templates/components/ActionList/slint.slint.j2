@@ -1,0 +1,145 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+// One row. Icons are path commands such as PurrimerIcons.pencil-16. Set checkable for a check column (selected
+// ticks it), group for a heading row, or divider for a rule.
+export struct ActionListEntry {
+    label: string,
+    description: string,
+    leading-icon: string,
+    trailing-icon: string,
+    trailing-text: string,
+    current: bool,
+    checkable: bool,
+    selected: bool,
+    danger: bool,
+    disabled: bool,
+    group: string,
+    divider: bool,
+}
+
+export component ActionList inherits VerticalLayout {
+    in property <[ActionListEntry]> items;
+    callback triggered(int);
+
+    padding: 8px;
+    spacing: 2px;
+    accessible-role: list;
+
+    for item[i] in root.items: Rectangle {
+        property <bool> is-item: !item.divider && item.group == "";
+        property <brush> ink: item.disabled ? {{ "fgColor-disabled" | tok }} : item.danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-default" | tok }};
+        property <brush> muted: item.disabled ? {{ "fgColor-disabled" | tok }} : item.danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-muted" | tok }};
+        height: item.divider ? 13px : item.group != "" ? 30px : item.description != "" ? 48px : 32px;
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: !is-item || item.disabled ? transparent
+            : touch.pressed || item.current ? {{ "control-transparent-bgColor-selected" | tok }}
+            : touch.has-hover ? (item.danger ? {{ "bgColor-danger-muted" | tok }} : {{ "control-transparent-bgColor-hover" | tok }})
+            : transparent;
+        border-width: focus.has-focus ? {{ "borderWidth-thick" | tok }} : 0px;
+        border-color: {{ "focus-outlineColor" | tok }};
+        animate background { duration: {{ "duration-fast" | tok }}; }
+        accessible-role: list-item;
+        accessible-label: item.label;
+        accessible-checkable: item.checkable;
+        accessible-checked: item.selected;
+        accessible-enabled: !item.disabled;
+
+        if item.divider: Rectangle {
+            x: -8px;
+            y: 6px;
+            width: root.width;
+            height: 1px;
+            background: {{ "borderColor-muted" | tok }};
+        }
+        if item.group != "": Text {
+            x: 8px;
+            y: 6px;
+            height: 20px;
+            text: item.group;
+            vertical-alignment: center;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-caption" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        if is-item && item.current: Rectangle {
+            x: -8px;
+            y: (parent.height - 24px) / 2;
+            width: 4px;
+            height: 24px;
+            border-radius: 2px;
+            background: {{ "bgColor-accent-emphasis" | tok }};
+        }
+        if is-item: HorizontalLayout {
+            padding-left: 8px;
+            padding-right: 8px;
+            padding-top: 6px;
+            padding-bottom: 6px;
+            spacing: 8px;
+            if item.checkable: Rectangle {
+                width: 16px;
+                height: 20px;
+                if item.selected: Icon { y: 2px; path: PurrimerIcons.check-16; color: ink; }
+            }
+            if item.leading-icon != "": Rectangle {
+                width: 16px;
+                height: 20px;
+                Icon { y: 2px; path: item.leading-icon; color: muted; }
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: start;
+                Text {
+                    height: 20px;
+                    text: item.label;
+                    vertical-alignment: center;
+                    overflow: elide;
+                    color: ink;
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    font-weight: item.current ? 600 : 400;
+                }
+                if item.description != "": Text {
+                    height: 16px;
+                    text: item.description;
+                    overflow: elide;
+                    color: item.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }};
+                    font-family: {{ "text-caption" | tok }}.font-family;
+                    font-size: 12px;
+                }
+            }
+            if item.trailing-icon != "": Rectangle {
+                width: 16px;
+                height: 20px;
+                Icon { y: 2px; path: item.trailing-icon; color: item.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }}; }
+            }
+            if item.trailing-icon == "" && item.trailing-text != "": Text {
+                height: 20px;
+                text: item.trailing-text;
+                vertical-alignment: center;
+                color: item.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-muted" | tok }};
+                font-family: {{ "text-caption" | tok }}.font-family;
+                font-size: 12px;
+            }
+        }
+        touch := TouchArea {
+            enabled: is-item && !item.disabled;
+            mouse-cursor: pointer;
+            clicked => { root.triggered(i); }
+        }
+        focus := FocusScope {
+            enabled: is-item && !item.disabled;
+            key-pressed(event) => {
+                if (event.text == "\n" || event.text == " ") {
+                    root.triggered(i);
+                    return accept;
+                }
+                reject
+            }
+        }
+    }
+}

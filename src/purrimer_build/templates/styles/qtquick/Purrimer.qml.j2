@@ -8,6 +8,8 @@ QtObject {
 
     // One of: {% for t in themes %}"{{ t }}" ({{ labels[t] }}){{ ", " if not loop.last }}{% endfor %}.
     property string theme: "{{ themes[0] }}"
+    // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
+    property bool pauseLoops: false
     readonly property var themes: {{ themes | tojson }}
     readonly property bool dark: {% for t in tokens.dark_themes %}theme === "{{ t }}"{{ " || " if not loop.last }}{% endfor %}
 

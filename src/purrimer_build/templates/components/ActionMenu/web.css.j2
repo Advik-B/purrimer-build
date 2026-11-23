@@ -1,0 +1,83 @@
+.pm-action-menu { --pm-action-menu-r: {{ "borderRadius-medium" | tok }}; position: relative; display: inline-block; }
+.pm-action-menu__anchor {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: {{ "control-medium-gap" | tok }};
+  box-sizing: border-box;
+  height: {{ "control-medium-size" | tok }};
+  padding: 0 {{ "control-medium-paddingInline-normal" | tok }};
+  border: {{ "borderWidth-thin" | tok }} solid {{ "button-default-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "button-default-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-resting-xsmall" | tok }};
+  color: {{ "fgColor-default" | tok }};
+  font: 600 14px/20px var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-action-menu__anchor svg { width: 16px; height: 16px; flex: none; fill: currentColor; }
+.pm-action-menu__anchor:hover { background: {{ "button-default-bgColor-hover" | tok }}; }
+.pm-action-menu__anchor:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+.pm-action-menu__anchor--icon { width: {{ "control-medium-size" | tok }}; padding: 0; color: {{ "fgColor-muted" | tok }}; }
+.pm-action-menu__anchor--primary { background: {{ "button-primary-bgColor-rest" | tok }}; border-color: {{ "button-primary-bgColor-rest" | tok }}; color: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-action-menu__anchor--primary:hover { background: {{ "button-primary-bgColor-hover" | tok }}; border-color: {{ "button-primary-bgColor-hover" | tok }}; }
+.pm-action-menu__anchor--invisible { background: transparent; border-color: transparent; box-shadow: none; }
+.pm-action-menu__anchor--invisible:hover { background: {{ "control-transparent-bgColor-hover" | tok }}; }
+/* Open, the anchor and the overlay are one surface: the anchor takes the overlay's fill and hairline, loses its bottom
+   corners and flares into the overlay's top edge with a concave fillet. The whole outline casts one shadow. */
+.pm-action-menu--open { z-index: 10; filter: drop-shadow(0 6px 14px {{ "overlay-backdrop-bgColor" | tok }}); }
+.pm-action-menu--open > .pm-action-menu__anchor,
+.pm-action-menu--open > .pm-action-menu__anchor:hover {
+  z-index: 2;
+  padding-bottom: {{ "borderWidth-thin" | tok }};
+  border-color: {{ "borderColor-default" | tok }};
+  border-bottom-width: 0;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  background: {{ "overlay-bgColor" | tok }};
+  box-shadow: none;
+  color: {{ "fgColor-default" | tok }};
+}
+.pm-action-menu--open > .pm-action-menu__anchor::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 100%;
+  width: var(--pm-action-menu-r);
+  height: var(--pm-action-menu-r);
+  pointer-events: none;
+  background: radial-gradient(circle at 100% 0,
+    transparent calc(var(--pm-action-menu-r) - {{ "borderWidth-thin" | tok }} - 0.5px),
+    {{ "borderColor-default" | tok }} calc(var(--pm-action-menu-r) - {{ "borderWidth-thin" | tok }}),
+    {{ "borderColor-default" | tok }} calc(var(--pm-action-menu-r) - 0.5px),
+    {{ "overlay-bgColor" | tok }} var(--pm-action-menu-r));
+}
+.pm-action-menu__overlay {
+  position: absolute;
+  top: calc(100% - {{ "borderWidth-thin" | tok }});
+  left: 0;
+  z-index: 1;
+  box-sizing: border-box;
+  min-width: max(192px, calc(100% + var(--pm-action-menu-r) * 2));
+  max-width: 320px;
+  overflow: hidden;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }};
+  border-radius: 0 {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }} {{ "borderRadius-large" | tok }};
+  background: {{ "overlay-bgColor" | tok }};
+  animation: pm-action-menu-drop {{ "duration-base" | tok }} {{ "easing-standard" | tok }} both;
+}
+@keyframes pm-action-menu-drop {
+  from { clip-path: inset(0 0 100% 0); }
+  to { clip-path: inset(0 0 0 0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-action-menu__overlay { animation-name: pm-action-menu-fade; }
+}
+@keyframes pm-action-menu-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

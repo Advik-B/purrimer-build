@@ -1,0 +1,19 @@
+name = "AvatarStack"
+group = "People"
+order = 71
+summary = "Overlapping avatars for the people on an item; the stack spreads out on hover and focus."
+
+[props.people]
+type = "list"
+default = []
+doc = "Names, first on top; the web targets also take { name, src }."
+
+[props.max]
+type = "int"
+default = 4
+doc = "Avatars shown before the rest collapse into a \"+N\" avatar."
+
+[props.size]
+type = "int"
+default = 20
+doc = "Avatar diameter in px."
