@@ -81,7 +81,8 @@ T.Popup {
                 }
                 const a = control.samples[0]
                 const b = control.samples[control.samples.length - 1]
-                const v = a && b && b.t > a.t ? (b.x - a.x) / (b.t - a.t) : 0
+                // Moves that arrive in a burst say nothing about speed, so a flick needs samples at least 20ms apart.
+                const v = a && b && b.t - a.t >= 20 ? (b.x - a.x) / (b.t - a.t) : 0
                 const flick = Math.abs(v) > 0.6 && (v > 0) === (control.dx > 0)
                 if (control.dx !== 0 && (Math.abs(control.dx) >= control.width * 0.3 || flick)) {
                     control.leaving = true

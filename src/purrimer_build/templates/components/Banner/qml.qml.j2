@@ -156,7 +156,8 @@ Item {
             const dx = slide.value
             const a = root.samples[0]
             const b = root.samples[root.samples.length - 1]
-            const v = a && b && b.t > a.t ? (b.x - a.x) / (b.t - a.t) : 0
+            // Moves that arrive in a burst say nothing about speed, so a flick needs samples at least 20ms apart.
+            const v = a && b && b.t - a.t >= 20 ? (b.x - a.x) / (b.t - a.t) : 0
             const flick = Math.abs(v) > 0.6 && (v > 0) === (dx > 0) && Math.abs(dx) > 20
             if (dx !== 0 && (root.armed || flick)) {
                 root.releasedAt = dx
