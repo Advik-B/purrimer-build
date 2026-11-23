@@ -16,6 +16,8 @@
 | --- | --- |
 | [Button](Button.md) | A labelled button for actions, in default, primary, danger and invisible variants. |
 | [IconButton](IconButton.md) | A square button holding one Octicon; its label is the accessible name. |
+| [ActionList](ActionList.md) | A vertical list of interactive rows for navigation, selection and menus. |
+| [ActionMenu](ActionMenu.md) | A button that opens a menu of actions; open, the button and the menu are one shape. |
 
 ## Forms
 
@@ -26,6 +28,8 @@
 | [Radio](Radio.md) | One choice of a group; give every radio of a group the same name. |
 | [Toggle](Toggle.md) | A switch for a setting that applies at once. |
 | [Select](Select.md) | A field that opens a list of options; the open list joins the field. |
+| [Textarea](Textarea.md) | A multi-line input with the same label, caption and validation rules as TextField. |
+| [Slider](Slider.md) | Picks a value from a continuous range by dragging a squircle thumb. |
 
 ## Status
 
@@ -35,6 +39,12 @@
 | [Chip](Chip.md) | A filled pastel tag for soft categories, optionally removable. |
 | [Banner](Banner.md) | A message across a region with an icon, title, text and optional dismiss. |
 | [ProgressBar](ProgressBar.md) | A track that fills to show progress, or sweeps while it is unknown. |
+| [CounterLabel](CounterLabel.md) | A small rounded count beside a label, tab or button. |
+| [StateLabel](StateLabel.md) | A solid pill that states where an issue or pull request stands, with an Octicon and a word. |
+| [Timeline](Timeline.md) | A vertical history of events on an item: commits, reviews, state changes. |
+| [Spinner](Spinner.md) | A rotating arc for waits under about ten seconds. |
+| [LoadingDots](LoadingDots.md) | Three dots for short inline waits, or three drifting bubbles while waiting on a person. |
+| [Skeleton](Skeleton.md) | Placeholder shapes that hold the layout while content loads, with a slow sunbeam or a sleepy breath. |
 
 ## Containers
 
@@ -42,6 +52,12 @@
 | --- | --- |
 | [Card](Card.md) | A raised surface with a hairline, a soft lift and optional title. |
 | [Dialog](Dialog.md) | A modal surface over a scrim, with a title, body and right-aligned buttons. |
+
+## Overlays
+
+| Component | Summary |
+| --- | --- |
+| [ToolTip](ToolTip.md) | A short label on hover and focus; with whatsThis, a click-to-open explanation. |
 
 ## Mobile
 
@@ -62,10 +78,12 @@
 | --- | --- |
 | [SegmentedControl](SegmentedControl.md) | Two to five segments that switch a view; the selected one lifts. |
 | [Tabs](Tabs.md) | Document tabs whose current tab joins the panel under it. |
+| [UnderlineNav](UnderlineNav.md) | Page-level navigation between sibling views, with an underline on the current one. |
 
 ## People
 
 | Component | Summary |
 | --- | --- |
 | [Avatar](Avatar.md) | A person's picture, or their initials on a tinted circle. |
+| [AvatarStack](AvatarStack.md) | Overlapping avatars for the people on an item; the stack spreads out on hover and focus. |
 
