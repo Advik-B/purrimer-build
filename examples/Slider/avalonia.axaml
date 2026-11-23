@@ -4,5 +4,15 @@
     <pm:Slider Label="Volume" Value="40" ShowValue="True" Suffix="%" />
     <pm:Slider Label="Zoom" Value="50" SmallChange="5" LargeChange="25" TickPosition="below" />
     <pm:Slider Label="Balance" Value="70" IsEnabled="False" />
+    <pm:Slider Label="Price" IsRange="True" Maximum="200" SmallChange="10" LowValue="40" HighValue="120"
+               ShowValue="True" Suffix=" €" />
+    <pm:Slider Label="Text size" Minimum="1" Maximum="4" Value="2" ShowValue="True">
+      <pm:Slider.Marks>
+        <pm:SliderMark Value="1" Label="S" />
+        <pm:SliderMark Value="2" Label="M" />
+        <pm:SliderMark Value="3" Label="L" />
+        <pm:SliderMark Value="4" Label="XL" />
+      </pm:Slider.Marks>
+    </pm:Slider>
   </StackPanel>
 </UserControl>

@@ -5,6 +5,9 @@ import QtQuick
 import QtQuick.Effects
 import QtQuick.Templates as T
 
+// Inside a touch scope (an ancestor with pmTouchScope: true, such as MobileScreen), or whenever range or marks is
+// set, the slider uses its touch design: a 28px thumb that grows while held, a value bubble, detents, mark labels and,
+// with range, a second thumb for low and high (rangeMoved). The touch design is always horizontal.
 Column {
     id: root
     property string label
@@ -20,15 +23,84 @@ Column {
     property bool showValue: false
     property string suffix
     property bool disabled: false
+    // Two thumbs for low and high, which cannot pass each other.
+    property bool range: false
+    property real low: control.from
+    property real high: control.to
+    // Named detents, as numbers or { value, label }. With marks, a stepSize of 0 snaps to the marks alone.
+    property var marks: []
+    // Found from the ancestors when the slider is placed; set it to force the touch design on or off.
+    property bool touchScope: false
+    readonly property bool touch: range || marks.length > 0 || touchScope
     signal moved(real value)
     signal released(real value)
+    signal rangeMoved(real low, real high)
+
+    Component.onCompleted: touchScope = Purrimer.inTouchScope(root)
+    onParentChanged: touchScope = Purrimer.inTouchScope(root)
+
+    // The touch design's value model.
+    readonly property var markList: {
+        const out = []
+        for (const m of marks) {
+            const mark = typeof m === "number" ? { value: m, label: "" } : { value: m.value, label: m.label || "" }
+            if (mark.value >= control.from && mark.value <= control.to)
+                out.push(mark)
+        }
+        return out.sort((a, b) => a.value - b.value)
+    }
+    readonly property real snapStep: markList.length > 0 && control.stepSize === 0 ? 0 : control.stepSize
+    readonly property var detents: {
+        const out = []
+        if (markList.length > 0) {
+            for (const m of markList) out.push(m.value)
+        } else if (snapStep > 0 && (control.to - control.from) / snapStep <= 20) {
+            for (let v = control.from; v <= control.to + snapStep / 2; v += snapStep) out.push(Math.round(v * 1e6) / 1e6)
+        }
+        return out
+    }
+    function fractionOf(v) {
+        return control.to > control.from ? (Math.min(Math.max(v, control.from), control.to) - control.from) / (control.to - control.from) : 0
+    }
+    function snap(v) {
+        const c = Math.min(Math.max(v, control.from), control.to)
+        if (snapStep > 0)
+            return Math.min(control.to, Math.round((control.from + Math.round((c - control.from) / snapStep) * snapStep) * 1e6) / 1e6)
+        if (markList.length === 0)
+            return c
+        let best = markList[0].value
+        for (const m of markList) if (Math.abs(m.value - c) < Math.abs(best - c)) best = m.value
+        return best
+    }
+    function valueOf(i) {
+        return range ? (i === 0 ? low : high) : control.value
+    }
+    function limitsOf(i) {
+        return !range ? [control.from, control.to] : i === 0 ? [control.from, high] : [low, control.to]
+    }
+    function format(v) {
+        for (const m of markList) if (m.value === v && m.label !== "") return m.label
+        return (Math.round(v * 1000) / 1000) + suffix
+    }
+    function setAt(i, v) {
+        if (valueOf(i) === v)
+            return
+        if (!range) {
+            control.value = v
+            moved(v)
+        } else {
+            if (i === 0) low = v
+            else high = v
+            rangeMoved(low, high)
+        }
+    }
 
     readonly property bool vertical: orientation === "vertical"
     readonly property bool ticksBefore: tickPosition === "both" || tickPosition === (vertical ? "left" : "above")
     readonly property bool ticksAfter: tickPosition === "both" || tickPosition === (vertical ? "right" : "below")
     // The track and its tick rows are centred together across the 28px control.
     readonly property real centre: (28 - (4 + 10 * ((ticksBefore ? 1 : 0) + (ticksAfter ? 1 : 0)))) / 2 + (ticksBefore ? 10 : 0) + 2
-    readonly property var marks: {
+    readonly property var tickMarks: {
         const every = tickInterval > 0 ? tickInterval : pageStep
         const out = []
         if (tickPosition === "none" || every <= 0 || control.to <= control.from) return out
@@ -41,7 +113,7 @@ Column {
     Item {
         width: root.vertical ? Math.max(head.implicitWidth, 28) : control.width
         height: 20
-        visible: root.label !== "" || root.showValue
+        visible: !root.touch && (root.label !== "" || root.showValue)
         Row {
             id: head
             spacing: 8
@@ -64,6 +136,7 @@ Column {
 
     T.Slider {
         id: control
+        visible: !root.touch
         orientation: root.vertical ? Qt.Vertical : Qt.Horizontal
         from: {{ c.spec.props.min.default }}
         to: {{ c.spec.props.max.default }}
@@ -116,7 +189,7 @@ Column {
             }
 
             Repeater {
-                model: root.ticksBefore ? root.marks : []
+                model: root.ticksBefore ? root.tickMarks : []
                 Rectangle {
                     required property real modelData
                     color: {{ "borderColor-emphasis" | tok }}
@@ -127,7 +200,7 @@ Column {
                 }
             }
             Repeater {
-                model: root.ticksAfter ? root.marks : []
+                model: root.ticksAfter ? root.tickMarks : []
                 Rectangle {
                     required property real modelData
                     color: {{ "borderColor-emphasis" | tok }}
@@ -171,6 +244,332 @@ Column {
                 border.width: {{ "borderWidth-thick" | tok }}
                 border.color: {{ "focus-outlineColor" | tok }}
                 visible: control.visualFocus
+            }
+        }
+    }
+
+    // Touch design.
+    Item {
+        width: root.length > 0 ? root.length : (root.width > 0 ? root.width : 240)
+        height: 24
+        visible: root.touch && (root.label !== "" || root.showValue)
+        Text {
+            text: root.label
+            font.family: {{ "text-body-medium" | tok }}.family
+            font.pixelSize: 16
+            font.weight: Font.DemiBold
+            color: root.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-default" | tok }}
+            anchors.verticalCenter: parent.verticalCenter
+        }
+        Text {
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.showValue
+            text: root.range ? root.format(root.low) + " to " + root.format(root.high) : root.format(control.value)
+            font: {{ "text-body-medium" | tok }}
+            color: {{ "fgColor-muted" | tok }}
+        }
+    }
+
+    Item {
+        id: touchBar
+        readonly property real gutter: 14
+        readonly property real span: Math.max(1, width - gutter * 2)
+        readonly property bool labelled: root.markList.some(m => m.label !== "")
+        property int pressed: -1
+        property bool pointerFocus: false
+        // Untyped, so the delegate's own members (shown, follow, settle) can be reached.
+        function thumbAt(i) {
+            return thumbs.itemAt(i)
+        }
+        visible: root.touch
+        width: root.length > 0 ? root.length : (root.width > 0 ? root.width : 240)
+        height: {{ "touch-target-min" | tok }} + (labelled ? 16 : 0)
+
+        // Where each thumb is drawn, as a fraction of the rail; the thumbs keep it up to date.
+        property var shownAt: [0, 0]
+        readonly property real fillFrom: root.range ? shownAt[0] : 0
+        readonly property real fillTo: root.range ? shownAt[1] : shownAt[0]
+        function setShown(i, f) {
+            const next = shownAt.slice()
+            next[i] = f
+            shownAt = next
+        }
+
+        Rectangle {
+            id: rail
+            x: touchBar.gutter
+            y: {{ "touch-target-min" | tok }} / 2 - 3
+            width: touchBar.span
+            height: 6
+            radius: 3
+            color: {{ "controlTrack-bgColor-rest" | tok }}
+            Rectangle {
+                x: touchBar.fillFrom * rail.width
+                width: (touchBar.fillTo - touchBar.fillFrom) * rail.width
+                height: 6
+                radius: 3
+                color: root.disabled ? {{ "borderColor-emphasis" | tok }} : {{ "bgColor-accent-emphasis" | tok }}
+            }
+            Repeater {
+                model: root.detents
+                Rectangle {
+                    required property real modelData
+                    readonly property real f: root.fractionOf(modelData)
+                    x: f * rail.width - 2
+                    y: 1
+                    width: 4
+                    height: 4
+                    radius: 1
+                    color: f >= touchBar.fillFrom - 1e-4 && f <= touchBar.fillTo + 1e-4 ? {{ "fgColor-onEmphasis" | tok }} : {{ "borderColor-emphasis" | tok }}
+                }
+            }
+        }
+
+        Repeater {
+            model: touchBar.labelled ? root.markList : []
+            Text {
+                required property var modelData
+                readonly property bool on: root.range ? (modelData.value === root.low || modelData.value === root.high) : modelData.value === control.value
+                visible: modelData.label !== ""
+                x: touchBar.gutter + root.fractionOf(modelData.value) * touchBar.span - width / 2
+                y: {{ "touch-target-min" | tok }} - 4
+                height: 20
+                verticalAlignment: Text.AlignVCenter
+                text: modelData.label
+                font.family: {{ "text-body-medium" | tok }}.family
+                font.pixelSize: 14
+                font.weight: on ? Font.DemiBold : Font.Normal
+                color: on ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+            }
+        }
+
+        // Pressing a thumb drags at once; pressing the track drags once the pointer moves sideways, and a tap jumps
+        // there. A vertical move is left to scrolling.
+        MouseArea {
+            id: input
+            property int grabbed: -1
+            property bool active: false
+            property real startX: 0
+            property real startY: 0
+            width: parent.width
+            height: {{ "touch-target-min" | tok }}
+            enabled: !root.disabled
+            preventStealing: active
+            cursorShape: Qt.PointingHandCursor
+            function valueAt(x) {
+                return control.from + Math.min(Math.max((x - touchBar.gutter) / touchBar.span, 0), 1) * (control.to - control.from)
+            }
+            onPressed: (mouse) => {
+                const xs = [0, 1].slice(0, root.range ? 2 : 1).map(i => touchBar.gutter + touchBar.thumbAt(i).shown * touchBar.span)
+                const hit = xs.map((x, i) => [Math.abs(mouse.x - x), i]).filter(p => p[0] <= {{ "touch-target-min" | tok }} / 2).sort((a, b) => a[0] - b[0])
+                let i = 0
+                if (hit.length > 0)
+                    i = hit[0][1]
+                else if (root.range)
+                    i = xs[0] === xs[1] ? (mouse.x < xs[0] ? 0 : 1) : (Math.abs(mouse.x - xs[0]) <= Math.abs(mouse.x - xs[1]) ? 0 : 1)
+                grabbed = i
+                active = hit.length > 0
+                startX = mouse.x
+                startY = mouse.y
+                const item = touchBar.thumbAt(i)
+                touchBar.pointerFocus = true
+                item.forceActiveFocus(Qt.MouseFocusReason)
+                touchBar.pointerFocus = false
+                item.tabbed = false
+                item.moved = false
+                if (active)
+                    touchBar.pressed = i
+            }
+            onPositionChanged: (mouse) => {
+                if (grabbed < 0)
+                    return
+                if (!active) {
+                    const mx = Math.abs(mouse.x - startX)
+                    const my = Math.abs(mouse.y - startY)
+                    if (mx < 10 && my < 10)
+                        return
+                    if (my > mx) {
+                        grabbed = -1
+                        return
+                    }
+                    active = true
+                    touchBar.pressed = grabbed
+                }
+                const lim = root.limitsOf(grabbed)
+                const raw = valueAt(mouse.x)
+                const v = Math.min(Math.max(root.snap(raw), lim[0]), lim[1])
+                let shown = Math.min(Math.max(raw, lim[0]), lim[1])
+                for (const m of root.markList) {
+                    if (Math.abs(root.fractionOf(m.value) - root.fractionOf(shown)) * touchBar.span <= 10)
+                        shown = m.value
+                }
+                if (root.snapStep <= 0 || shown === control.from || shown === control.to)
+                    shown = v
+                touchBar.thumbAt(grabbed).follow(root.fractionOf(shown))
+                root.setAt(grabbed, v)
+            }
+            onReleased: (mouse) => {
+                const i = grabbed
+                if (i < 0)
+                    return
+                if (!active) {
+                    const lim = root.limitsOf(i)
+                    root.setAt(i, Math.min(Math.max(root.snap(valueAt(mouse.x)), lim[0]), lim[1]))
+                }
+                finish(i)
+            }
+            onCanceled: if (grabbed >= 0) finish(grabbed)
+            function finish(i) {
+                grabbed = -1
+                active = false
+                touchBar.pressed = -1
+                touchBar.thumbAt(i).settle()
+                root.released(root.valueOf(i))
+            }
+        }
+
+        Repeater {
+            id: thumbs
+            model: root.range ? 2 : 1
+            Item {
+                id: touchThumb
+                required property int index
+                readonly property real value: root.valueOf(index)
+                readonly property bool held: touchBar.pressed === index
+                readonly property bool keyboard: touchThumb.activeFocus && (touchThumb.tabbed || touchThumb.moved)
+                property bool moved: false
+                // Focus that did not come from a press, such as Tab.
+                property bool tabbed: false
+                property real shown: spring.value
+                x: touchBar.gutter + shown * touchBar.span - width / 2
+                width: {{ "touch-target-min" | tok }}
+                height: {{ "touch-target-min" | tok }}
+                activeFocusOnTab: !root.disabled
+                Accessible.role: Accessible.Slider
+                Accessible.name: root.range ? (index === 0 ? "Minimum " : "Maximum ") + root.label : root.label
+                Accessible.description: root.format(value)
+
+                function follow(f) {
+                    spring.set(f)
+                }
+                function settle() {
+                    spring.to(root.fractionOf(value), 0)
+                }
+                onValueChanged: if (touchBar.pressed !== index) settle()
+                onShownChanged: touchBar.setShown(index, shown)
+                onActiveFocusChanged: {
+                    tabbed = activeFocus && !touchBar.pointerFocus
+                    if (!activeFocus)
+                        moved = false
+                }
+                Component.onCompleted: {
+                    spring.set(root.fractionOf(value))
+                    touchBar.setShown(index, shown)
+                }
+
+                PmSpring { id: spring; precision: 0.0005 }
+
+                Keys.onPressed: (event) => {
+                    if (root.disabled)
+                        return
+                    const v = touchThumb.value
+                    const lim = root.limitsOf(touchThumb.index)
+                    const up = event.key === Qt.Key_Right || event.key === Qt.Key_Up
+                    const down = event.key === Qt.Key_Left || event.key === Qt.Key_Down
+                    let next = null
+                    if (up || down) {
+                        if (root.snapStep > 0) {
+                            next = v + (up ? root.snapStep : -root.snapStep)
+                        } else {
+                            const at = Math.max(0, root.detents.indexOf(root.snap(v)))
+                            next = root.detents[Math.min(Math.max(at + (up ? 1 : -1), 0), root.detents.length - 1)]
+                        }
+                    } else if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
+                        next = v + (event.key === Qt.Key_PageUp ? root.pageStep : -root.pageStep)
+                    } else if (event.key === Qt.Key_Home) {
+                        next = lim[0]
+                    } else if (event.key === Qt.Key_End) {
+                        next = lim[1]
+                    } else {
+                        return
+                    }
+                    event.accepted = true
+                    touchThumb.moved = true
+                    next = Math.min(Math.max(root.snap(next), lim[0]), lim[1])
+                    if (next !== v) {
+                        root.setAt(touchThumb.index, next)
+                        root.released(next)
+                    }
+                }
+
+                Item {
+                    anchors.centerIn: parent
+                    width: 28
+                    height: 28
+                    scale: touchThumb.held && !Purrimer.pauseLoops ? 1.2 : 1
+                    Behavior on scale { SpringAnimation { spring: 5; damping: 0.35; epsilon: 0.001 } }
+                    RectangularShadow {
+                        anchors.fill: knob
+                        visible: !root.disabled
+                        radius: knob.radius
+                        offset.y: {{ "shadow-resting-medium" | tok }}[0].y
+                        blur: {{ "shadow-resting-medium" | tok }}[0].blur
+                        color: {{ "shadow-resting-medium" | tok }}[0].color
+                    }
+                    Rectangle {
+                        id: knob
+                        anchors.fill: parent
+                        radius: {{ "borderRadius-medium" | tok }}
+                        color: root.disabled ? {{ "bgColor-disabled" | tok }} : {{ "controlKnob-bgColor-rest" | tok }}
+                        border.width: {{ "borderWidth-thin" | tok }}
+                        border.color: {{ "control-borderColor-rest" | tok }}
+                    }
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -4
+                        radius: knob.radius + 4
+                        color: "transparent"
+                        border.width: {{ "borderWidth-thick" | tok }}
+                        border.color: {{ "focus-outlineColor" | tok }}
+                        visible: touchThumb.keyboard && !touchThumb.held
+                    }
+                }
+
+                // The value bubble rises above the thumb while it is held or moved from the keyboard.
+                Item {
+                    readonly property bool shown: touchThumb.held || touchThumb.keyboard
+                    x: (parent.width - width) / 2
+                    y: -4 - height + (shown ? 0 : 6)
+                    width: bubbleText.implicitWidth + 20
+                    height: 28
+                    opacity: shown ? 1 : 0
+                    z: 10
+                    Behavior on opacity { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
+                    Behavior on y { SpringAnimation { spring: 5; damping: 0.35; epsilon: 0.01 } }
+                    RectangularShadow {
+                        anchors.fill: bubble
+                        radius: bubble.radius
+                        offset.y: {{ "shadow-floating-small" | tok }}[0].y
+                        blur: {{ "shadow-floating-small" | tok }}[0].blur
+                        color: {{ "shadow-floating-small" | tok }}[0].color
+                    }
+                    Rectangle {
+                        id: bubble
+                        anchors.fill: parent
+                        radius: {{ "borderRadius-medium" | tok }}
+                        color: {{ "bgColor-emphasis" | tok }}
+                        Text {
+                            id: bubbleText
+                            anchors.centerIn: parent
+                            text: root.format(touchThumb.value)
+                            font.family: {{ "text-stat-small" | tok }}.family
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            color: {{ "fgColor-onEmphasis" | tok }}
+                        }
+                    }
+                }
             }
         }
     }

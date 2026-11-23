@@ -1,7 +1,8 @@
 name = "Slider"
 group = "Forms"
 order = 26
-summary = "Picks a value from a continuous range by dragging a squircle thumb."
+summary = "Picks a value, or a low and high pair, from a range by dragging a squircle thumb."
+slint_exports = ["Slider", "SliderMark"]
 
 [props.label]
 type = "string"
@@ -11,7 +12,7 @@ doc = "Label above the slider; without one, pass an accessible name."
 [props.value]
 type = "number"
 default = 0
-doc = "Current value."
+doc = "Current value; with range, the [low, high] pair (low and high on the native targets)."
 
 [props.min]
 type = "number"
@@ -26,7 +27,7 @@ doc = "Highest value."
 [props.step]
 type = "number"
 default = 1
-doc = "Arrow-key step; values snap to it."
+doc = "Arrow-key step; values snap to it. With marks, 0 snaps to the marks alone."
 
 [props.pageStep]
 type = "number"
@@ -58,7 +59,7 @@ doc = "Track length in px; 0 fills the width, or 160px when vertical."
 [props.showValue]
 type = "bool"
 default = false
-doc = "Shows the value at the end of the label row."
+doc = "Shows the value at the end of the label row; a range reads \"low to high\"."
 
 [props.suffix]
 type = "string"
@@ -69,3 +70,13 @@ doc = "Text after the shown value, such as \"%\"."
 type = "bool"
 default = false
 doc = "Greys the slider and ignores input."
+
+[props.range]
+type = "bool"
+default = false
+doc = "Two thumbs for a low and a high value that cannot pass each other. Always uses the touch design."
+
+[props.marks]
+type = "list"
+default = []
+doc = "Named detents, { value, label? }: the thumb snaps to them within 10px and their labels sit under the track. Always uses the touch design."

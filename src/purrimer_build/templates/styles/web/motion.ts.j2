@@ -1502,3 +1502,207 @@ export function wireDismissSwipe(parts: DismissParts, commit = 0.3): () => void 
     el.removeEventListener("click", click, true);
   };
 }
+
+// Slider on touch: the value model shared by the Svelte and Solid sliders, and the drag on the track.
+
+export interface SliderMark {
+  value: number;
+  label?: string;
+}
+
+export interface SliderModel {
+  min: number;
+  max: number;
+  // 0 snaps to the marks alone.
+  step: number;
+  marks: SliderMark[];
+  range: boolean;
+}
+
+// With step and no more than this many steps, every step is a detent with a dot on the rail.
+const DETENT_MAX = 20;
+// Named marks pull the thumb in when the finger comes this close, in px.
+const MAGNET = 10;
+
+export function sliderMarks(marks: (number | SliderMark)[], min: number, max: number): SliderMark[] {
+  return marks
+    .map((m) => (typeof m === "number" ? { value: m } : m))
+    .filter((m) => m.value >= min && m.value <= max)
+    .sort((a, b) => a.value - b.value);
+}
+
+function decimals(n: number): number {
+  const s = String(n);
+  return s.includes(".") ? s.length - s.indexOf(".") - 1 : 0;
+}
+
+export function sliderDetents(m: SliderModel): number[] {
+  if (m.marks.length) return m.marks.map((k) => k.value);
+  const out: number[] = [];
+  if (m.step > 0 && (m.max - m.min) / m.step <= DETENT_MAX) {
+    for (let v = m.min; v <= m.max + m.step / 2; v += m.step) out.push(Number(v.toFixed(decimals(m.step))));
+  }
+  return out;
+}
+
+export function sliderSnap(m: SliderModel, v: number): number {
+  const c = Math.min(Math.max(v, m.min), m.max);
+  if (m.step > 0 || !m.marks.length) {
+    const step = m.step > 0 ? m.step : 1;
+    return Math.min(m.max, Number((m.min + Math.round((c - m.min) / step) * step).toFixed(decimals(step))));
+  }
+  let best = m.marks[0].value;
+  for (const k of m.marks) if (Math.abs(k.value - c) < Math.abs(best - c)) best = k.value;
+  return best;
+}
+
+export function sliderFraction(m: SliderModel, v: number): number {
+  return m.max > m.min ? (Math.min(Math.max(v, m.min), m.max) - m.min) / (m.max - m.min) : 0;
+}
+
+// A thumb's own limits: in a range each stops at the other.
+export function sliderLimits(m: SliderModel, values: number[], i: number): [number, number] {
+  if (!m.range) return [m.min, m.max];
+  return i === 0 ? [m.min, values[1]] : [values[0], m.max];
+}
+
+// The value after a key press on thumb i, or null for a key the slider does not take.
+export function sliderKey(m: SliderModel, values: number[], i: number, key: string, pageStep: number): number | null {
+  const v = values[i];
+  const [lo, hi] = sliderLimits(m, values, i);
+  const detents = sliderDetents(m);
+  const up = key === "ArrowRight" || key === "ArrowUp";
+  const down = key === "ArrowLeft" || key === "ArrowDown";
+  let next: number | null = null;
+  if (up || down) {
+    if (m.step > 0) next = v + (up ? m.step : -m.step);
+    else {
+      const at = Math.max(0, detents.indexOf(sliderSnap(m, v)));
+      next = detents[Math.min(Math.max(at + (up ? 1 : -1), 0), detents.length - 1)];
+    }
+  } else if (key === "PageUp" || key === "PageDown") {
+    next = v + (key === "PageUp" ? pageStep : -pageStep);
+  } else if (key === "Home") {
+    next = lo;
+  } else if (key === "End") {
+    next = hi;
+  }
+  if (next === null) return null;
+  return Math.min(Math.max(sliderSnap(m, next), lo), hi);
+}
+
+export interface TouchSliderParts {
+  // Takes the pointer; thumbs inside it carry data-thumb="0" or "1".
+  control: HTMLElement;
+  // The rail the fractions are measured along.
+  track: HTMLElement;
+  model: () => SliderModel;
+  values: () => number[];
+  disabled: () => boolean;
+  // The thumb under the finger, or -1 once it lifts.
+  onPress: (i: number) => void;
+  // Where thumb i is drawn while the finger drives it, or null to settle onto its value.
+  onDrag: (i: number, fraction: number | null) => void;
+  onValue: (i: number, value: number) => void;
+  onRelease: () => void;
+}
+
+// Pressing a thumb drags at once; pressing the track drags once the finger moves sideways, and a tap jumps there.
+// A vertical move is left to scrolling. The phone ticks at each detent it crosses and harder at either end.
+export function wireTouchSlider(parts: TouchSliderParts): () => void {
+  const { control, track } = parts;
+  let g: { id: number; i: number; x: number; y: number; rect: DOMRect; active: boolean; last: number } | null = null;
+
+  const fractionAt = (x: number, rect: DOMRect) => Math.min(Math.max((x - rect.left) / (rect.width || 1), 0), 1);
+
+  const tick = (m: SliderModel, from: number, to: number) => {
+    if (from === to) return;
+    if (to === m.min || to === m.max) {
+      buzz(16);
+      return;
+    }
+    if (sliderDetents(m).some((d) => d !== from && (d - from) * (d - to) <= 0)) buzz();
+  };
+
+  const down = (e: PointerEvent) => {
+    if (parts.disabled() || e.button > 0) return;
+    const m = parts.model();
+    const values = parts.values();
+    const rect = track.getBoundingClientRect();
+    const f = fractionAt(e.clientX, rect);
+    const thumb = (e.target as Element).closest?.("[data-thumb]");
+    let i = thumb ? Number(thumb.getAttribute("data-thumb")) : 0;
+    if (!thumb && m.range) {
+      const a = sliderFraction(m, values[0]);
+      const b = sliderFraction(m, values[1]);
+      i = a === b ? (f < a ? 0 : 1) : Math.abs(f - a) <= Math.abs(f - b) ? 0 : 1;
+    }
+    g = { id: e.pointerId, i, x: e.clientX, y: e.clientY, rect, active: !!thumb, last: values[i] };
+    // The thumb takes focus from the press itself, so no keyboard ring shows for a finger or mouse.
+    if (thumb) parts.onPress(i);
+    try {
+      control.setPointerCapture(e.pointerId);
+    } catch {
+      // Without capture the drag still tracks while the pointer stays over the slider.
+    }
+  };
+
+  const move = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    if (!g.active) {
+      const mx = Math.abs(e.clientX - g.x);
+      const my = Math.abs(e.clientY - g.y);
+      if (mx < 10 && my < 10) return;
+      if (my > mx) {
+        g = null;
+        return;
+      }
+      g.active = true;
+      parts.onPress(g.i);
+    }
+    const m = parts.model();
+    const [lo, hi] = sliderLimits(m, parts.values(), g.i);
+    const raw = m.min + fractionAt(e.clientX, g.rect) * (m.max - m.min);
+    const v = Math.min(Math.max(sliderSnap(m, raw), lo), hi);
+    let shown = Math.min(Math.max(raw, lo), hi);
+    for (const k of m.marks) {
+      if (Math.abs(sliderFraction(m, k.value) - sliderFraction(m, shown)) * g.rect.width <= MAGNET) shown = k.value;
+    }
+    if (!(m.step > 0) || shown === m.min || shown === m.max) shown = v;
+    parts.onDrag(g.i, sliderFraction(m, shown));
+    if (v !== g.last) {
+      tick(m, g.last, v);
+      g.last = v;
+      parts.onValue(g.i, v);
+    }
+  };
+
+  const up = (e: PointerEvent, cancelled: boolean) => {
+    if (!g || g.id !== e.pointerId) return;
+    const done = g;
+    g = null;
+    parts.onPress(-1);
+    parts.onDrag(done.i, null);
+    if (!done.active && cancelled) return;
+    if (!done.active) {
+      const m = parts.model();
+      const [lo, hi] = sliderLimits(m, parts.values(), done.i);
+      const v = Math.min(Math.max(sliderSnap(m, m.min + fractionAt(e.clientX, done.rect) * (m.max - m.min)), lo), hi);
+      if (v !== parts.values()[done.i]) parts.onValue(done.i, v);
+    }
+    parts.onRelease();
+  };
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+
+  control.addEventListener("pointerdown", down);
+  control.addEventListener("pointermove", move);
+  control.addEventListener("pointerup", onUp);
+  control.addEventListener("pointercancel", onCancel);
+  return () => {
+    control.removeEventListener("pointerdown", down);
+    control.removeEventListener("pointermove", move);
+    control.removeEventListener("pointerup", onUp);
+    control.removeEventListener("pointercancel", onCancel);
+  };
+}

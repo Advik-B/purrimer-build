@@ -58,10 +58,15 @@ def test_qml_does_not_find_handlers_through_children(built: Path) -> None:
 
 def test_slint_layout_components_do_not_lay_out_input_areas(built: Path) -> None:
     # A TouchArea or FocusScope directly inside a layout gets a zero-width cell: clicks miss and the row shifts.
+    # Only the layout components' own bodies count: a file can also hold helper components that are not layouts.
     for path in (built / "slint" / "components").glob("*.slint"):
         text = path.read_text(encoding="utf-8")
-        if re.search(r"export component \w+ inherits (Horizontal|Vertical)Layout", text):
-            assert not re.search(r"^    (\w+ := )?(TouchArea|FocusScope) \{", text, re.M), path
+        starts = list(re.finditer(r"^(?:export )?component \w+ inherits (\w+) \{", text, re.M))
+        for i, start in enumerate(starts):
+            if start.group(1) not in ("HorizontalLayout", "VerticalLayout"):
+                continue
+            body = text[start.end() : starts[i + 1].start() if i + 1 < len(starts) else len(text)]
+            assert not re.search(r"^    (\w+ := )?(TouchArea|FocusScope) \{", body, re.M), path
 
 
 def test_list_item_padding_stays_inside_its_width(built: Path) -> None:

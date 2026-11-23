@@ -16,6 +16,14 @@
     <Setter Property="FocusBrush" Value="{{ "focus-outlineColor" | tok }}" />
     <Setter Property="RestShadow" Value="{{ "shadow-resting-small" | tok }}" />
     <Setter Property="ActiveShadow" Value="{{ "shadow-resting-medium" | tok }}" />
+    <Setter Property="TouchDisabledFillBrush" Value="{{ "borderColor-emphasis" | tok }}" />
+    <Setter Property="DetentOnBrush" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    <Setter Property="BubbleBrush" Value="{{ "bgColor-emphasis" | tok }}" />
+    <Setter Property="BubbleTextBrush" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    <Setter Property="BubbleShadow" Value="{{ "shadow-floating-small" | tok }}" />
+    <Setter Property="BubbleFontFamily" Value="{{ "numeric" | font }}" />
+    <Setter Property="MarkBrush" Value="{{ "fgColor-muted" | tok }}" />
+    <Setter Property="MarkOnBrush" Value="{{ "fgColor-default" | tok }}" />
     <Setter Property="Cursor" Value="Hand" />
   </ControlTheme>
   <ControlTheme x:Key="{x:Type pm:Slider}" TargetType="pm:Slider">
@@ -26,14 +34,21 @@
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:Slider">
         <StackPanel Spacing="4">
-          <Grid ColumnDefinitions="*,Auto" IsVisible="{TemplateBinding HasHead}">
-            <TextBlock Text="{TemplateBinding Label}" FontWeight="SemiBold" />
+          <Grid Name="head" ColumnDefinitions="*,Auto" IsVisible="{TemplateBinding HasHead}">
+            <TextBlock Name="label" Text="{TemplateBinding Label}" FontWeight="SemiBold" VerticalAlignment="Center" />
             <TextBlock Grid.Column="1" Text="{TemplateBinding ValueText}" Foreground="{{ "fgColor-muted" | tok }}"
-                       IsVisible="{TemplateBinding ShowValue}" />
+                       IsVisible="{TemplateBinding ShowValue}" VerticalAlignment="Center" />
           </Grid>
           <pm:SliderBar Name="PART_Bar" />
         </StackPanel>
       </ControlTemplate>
     </Setter>
+    <!-- The touch design's head is a 24px line with a 16px label. -->
+    <Style Selector="^:touch /template/ Grid#head">
+      <Setter Property="Height" Value="24" />
+    </Style>
+    <Style Selector="^:touch /template/ TextBlock#label">
+      <Setter Property="FontSize" Value="16" />
+    </Style>
   </ControlTheme>
 </ResourceDictionary>

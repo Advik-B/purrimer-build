@@ -53,3 +53,109 @@
 .pm-slider--disabled .pm-slider__control { cursor: not-allowed; }
 .pm-slider--disabled .pm-slider__fill { background: {{ "fgColor-disabled" | tok }}; }
 .pm-slider--disabled .pm-slider__thumb { border-color: {{ "borderColor-default" | tok }}; background: {{ "bgColor-disabled" | tok }}; box-shadow: none; }
+/* Touch design: inside a touch scope, or with range or marks. A 28px squircle thumb in a 44px hit area that grows
+   while held, a 6px rail with detent dots, a value bubble above the thumb, and mark labels under the track. */
+.pm-slider--touch .pm-slider__head { align-items: baseline; gap: 12px; }
+.pm-slider--touch .pm-slider__label { font-size: 16px; line-height: 24px; }
+.pm-slider--touch .pm-slider__control { display: block; min-height: 0; padding: 0 14px; touch-action: pan-y; }
+.pm-slider__lane { position: relative; height: {{ "touch-target-min" | tok }}; }
+.pm-slider__rail {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 3px;
+  background: {{ "controlTrack-bgColor-rest" | tok }};
+}
+.pm-slider__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: {{ "bgColor-accent-emphasis" | tok }};
+  transition: left var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), width var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease);
+}
+.pm-slider__detent {
+  position: absolute;
+  top: 50%;
+  z-index: 1;
+  width: 4px;
+  height: 4px;
+  border-radius: 1px;
+  background: {{ "borderColor-emphasis" | tok }};
+  translate: -50% -50%;
+}
+.pm-slider__detent--on { background: {{ "fgColor-onEmphasis" | tok }}; }
+.pm-slider__hit {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: {{ "touch-target-min" | tok }};
+  height: {{ "touch-target-min" | tok }};
+  margin: calc({{ "touch-target-min" | tok }} / -2) 0 0 calc({{ "touch-target-min" | tok }} / -2);
+  outline: none;
+  touch-action: none;
+  transition: left var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease);
+}
+.pm-slider__hit--dragging,
+.pm-slider__bar--dragging { transition: none; }
+.pm-slider__knob {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  border: {{ "borderWidth-thin" | tok }} solid {{ "control-borderColor-rest" | tok }};
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "controlKnob-bgColor-rest" | tok }};
+  box-shadow: {{ "shadow-resting-medium" | tok }};
+  transition: scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
+}
+.pm-slider__hit--pressed .pm-slider__knob { scale: 1.2; transition-duration: {{ "duration-fast" | tok }}; }
+.pm-slider__hit:focus-visible .pm-slider__knob { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }
+/* The value bubble rises above the finger while the thumb is held or moved from the keyboard. */
+.pm-slider__bubble {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  padding: 4px 10px;
+  border-radius: {{ "borderRadius-medium" | tok }};
+  background: {{ "bgColor-emphasis" | tok }};
+  box-shadow: {{ "shadow-floating-small" | tok }};
+  color: {{ "fgColor-onEmphasis" | tok }};
+  font: 600 14px/20px var(--font-numeric, var(--font-sans));
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  translate: -50% 6px;
+  transition: opacity {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, translate var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
+}
+.pm-slider__hit--pressed .pm-slider__bubble,
+.pm-slider__hit:focus-visible .pm-slider__bubble { opacity: 1; translate: -50% 0; }
+.pm-slider__marks { position: relative; height: 20px; margin-top: -4px; }
+.pm-slider__mark {
+  position: absolute;
+  top: 0;
+  font: 400 14px/20px var(--font-sans);
+  white-space: nowrap;
+  color: {{ "fgColor-muted" | tok }};
+  translate: -50% 0;
+}
+.pm-slider__mark--on { font-weight: 600; color: {{ "fgColor-default" | tok }}; }
+.pm-slider--touch.pm-slider--disabled .pm-slider__label { color: {{ "fgColor-disabled" | tok }}; }
+.pm-slider--disabled .pm-slider__bar { background: {{ "borderColor-emphasis" | tok }}; }
+.pm-slider--disabled .pm-slider__knob { background: {{ "bgColor-disabled" | tok }}; box-shadow: none; }
+@supports (corner-shape: squircle) {
+  .pm-slider__knob { border-radius: calc({{ "borderRadius-medium" | tok }} * 1.4); corner-shape: squircle; }
+  .pm-slider__bubble { border-radius: calc({{ "borderRadius-medium" | tok }} * 1.5); corner-shape: squircle; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-slider__hit--pressed .pm-slider__knob { scale: none; }
+  .pm-slider__hit,
+  .pm-slider__bar,
+  .pm-slider__bubble { transition-duration: {{ "duration-reduced" | tok }}; transition-timing-function: {{ "easing-standard" | tok }}; }
+}

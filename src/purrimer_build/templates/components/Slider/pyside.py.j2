@@ -4,10 +4,13 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen
+from dataclasses import dataclass
+
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 from PySide6.QtWidgets import QAbstractSlider, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from ..motion import Spring, in_touch_scope
 from ..theme import theme
 
 THUMB = 16
@@ -179,22 +182,419 @@ class _Bar(QAbstractSlider):
             painter.drawRoundedRect(thumb.adjusted(-3, -3, 3, 3), radius + 3, radius + 3)
 
 
+@dataclass
+class SliderMark:
+    """A named detent: the thumb snaps to it within 10px and its label sits under the track."""
+
+    value: int
+    label: str = ""
+
+
+# Touch design measures.
+HIT = {{ px("touch-target-min") | int }}
+KNOB = 28
+RAIL = 6
+GUTTER = 14
+MARKS = 16
+# With a step and no more than this many steps, every step is a detent with a dot on the rail.
+DETENT_MAX = 20
+# Named marks pull the thumb in when the pointer comes this close, in px.
+MAGNET = 10
+
+
+def _paint_shadow(painter: QPainter, rect: QRectF, radius: float, token: str) -> None:
+    """Each layer's blur is approximated by stacked rings that fade outward."""
+    for layer in theme.shadow_layers(token):
+        if layer["inset"]:
+            continue
+        blur = layer["blur"]
+        steps = max(1, min(6, round(blur)))
+        for k in range(steps):
+            color = QColor(layer["color"])
+            color.setAlphaF(color.alphaF() / steps)
+            painter.setBrush(color)
+            grow = layer["spread"] + (blur / 2) * ((k + 1) / steps * 2 - 1)
+            painter.drawRoundedRect(rect.translated(layer["x"], layer["y"]).adjusted(-grow, -grow, grow, grow),
+                                    max(0.0, radius + grow), max(0.0, radius + grow))
+
+
+PAD_X = 16
+PAD_TOP = 8
+PAD_BOTTOM = 26
+
+
+class _Bubble(QWidget):
+    """The value bubble over a held thumb. It lives on the window so it can rise above the slider."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        # The theme's stylesheet would otherwise fill the box around the bubble.
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+        self.setStyleSheet("background: transparent")
+        self.text = ""
+        self.amount = 0.0
+        self.font_ = theme.font({{ "text-stat-small" | tok }})
+        self.font_.setPixelSize(14)
+        self.font_.setWeight(QFont.Weight.DemiBold)
+        self.hide()
+
+    def place(self, anchor: QPointF, text: str, amount: float) -> None:
+        """anchor is the bubble's bottom centre in the parent's coordinates, before it rises."""
+        self.text = text
+        self.amount = amount
+        width = QFontMetricsF(self.font_).horizontalAdvance(text) + 20
+        # Room around the body for its floating shadow, which reaches 20px below it.
+        self.setGeometry(round(anchor.x() - width / 2 - PAD_X), round(anchor.y() - 28 - PAD_TOP),
+                         round(width) + PAD_X * 2, 28 + PAD_TOP + PAD_BOTTOM)
+        self.setVisible(amount > 0.01)
+        self.raise_()
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setOpacity(self.amount)
+        body = QRectF(PAD_X, PAD_TOP + (1 - self.amount) * 6, self.width() - PAD_X * 2, 28)
+        radius = {{ px("borderRadius-medium") | num }}
+        painter.setPen(Qt.PenStyle.NoPen)
+        _paint_shadow(painter, body, radius, {{ "shadow-floating-small" | tok }})
+        painter.setBrush(theme.color({{ "bgColor-emphasis" | tok }}))
+        painter.drawRoundedRect(body, radius, radius)
+        painter.setFont(self.font_)
+        painter.setPen(theme.color({{ "fgColor-onEmphasis" | tok }}))
+        painter.drawText(body, Qt.AlignmentFlag.AlignCenter, self.text)
+
+
+class _TouchBar(QWidget):
+    """The touch design: a 28px squircle thumb in a 44px hit area that grows while held, a 6px rail with detent dots,
+    a value bubble over the held thumb, mark labels under the track and, with range, a second thumb."""
+
+    changed = Signal()
+    released = Signal()
+
+    def __init__(self, minimum: int, maximum: int, step: int, page_step: int, values: list[int],
+                 marks: list[SliderMark], range_: bool, length: int, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.minimum = minimum
+        self.maximum = maximum
+        self.marks = sorted((m for m in marks if minimum <= m.value <= maximum), key=lambda m: m.value)
+        # 0 snaps to the marks alone.
+        self.step = 0 if self.marks and step == 0 else max(1, step)
+        self.page_step = page_step
+        self.range = range_
+        self.values = [self._clamp(v) for v in values]
+        self.format = lambda v: str(v)
+        self._length = length
+        self._pressed = -1
+        self._focus = 0
+        self._keyboard = False
+        self._drag: dict | None = None
+        self._shown = [Spring(self._fraction(v), precision=0.0005, parent=self) for v in self.values]
+        self._scale = [Spring(1.0, precision=0.0005, parent=self) for _ in self.values]
+        self._lift = [Spring(0.0, precision=0.005, parent=self) for _ in self.values]
+        for spring in (*self._shown, *self._scale, *self._lift):
+            spring.changed.connect(lambda _v: self._refresh())
+        self._bubble: _Bubble | None = None
+        self._font = theme.font({{ "text-body-medium" | tok }})
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed if length else QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(HIT + (MARKS if any(m.label for m in self.marks) else 0))
+        theme.changed.connect(self.update)
+
+    def sizeHint(self) -> QSize:
+        return QSize(self._length or 240, self.height())
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(self._length or 120, self.height())
+
+    def _clamp(self, v: float) -> int:
+        return int(min(max(v, self.minimum), self.maximum))
+
+    def _fraction(self, v: float) -> float:
+        span = self.maximum - self.minimum
+        return (min(max(v, self.minimum), self.maximum) - self.minimum) / span if span else 0.0
+
+    def _lane(self) -> tuple[float, float]:
+        return GUTTER, max(1.0, self.width() - GUTTER * 2)
+
+    def detents(self) -> list[int]:
+        if self.marks:
+            return [m.value for m in self.marks]
+        if self.step and (self.maximum - self.minimum) / self.step <= DETENT_MAX:
+            return list(range(self.minimum, self.maximum + 1, self.step))
+        return []
+
+    def snap(self, v: float) -> int:
+        c = min(max(v, self.minimum), self.maximum)
+        if self.step:
+            return min(self.maximum, self.minimum + round((c - self.minimum) / self.step) * self.step)
+        return min((m.value for m in self.marks), key=lambda m: abs(m - c))
+
+    def limits(self, i: int) -> tuple[int, int]:
+        if not self.range:
+            return self.minimum, self.maximum
+        return (self.minimum, self.values[1]) if i == 0 else (self.values[0], self.maximum)
+
+    def set_values(self, values: list[int], animate: bool = False) -> None:
+        for i, v in enumerate(values):
+            self.values[i] = self._clamp(v)
+            if animate:
+                self._shown[i].to(self._fraction(self.values[i]))
+            else:
+                self._shown[i].set(self._fraction(self.values[i]))
+        self.update()
+
+    def _set(self, i: int, v: int) -> None:
+        if self.values[i] == v:
+            return
+        self.values[i] = v
+        self.changed.emit()
+        self.update()
+
+    def _thumb_x(self, i: int) -> float:
+        start, length = self._lane()
+        return start + self._shown[i].value * length
+
+    def _value_at(self, x: float) -> float:
+        start, length = self._lane()
+        return self.minimum + min(max((x - start) / length, 0.0), 1.0) * (self.maximum - self.minimum)
+
+    def _refresh(self) -> None:
+        self.update()
+        self._place_bubble()
+
+    def _place_bubble(self) -> None:
+        window = self.window()
+        if window is None or window is self:
+            return
+        if self._bubble is None or self._bubble.parentWidget() is not window:
+            self._bubble = _Bubble(window)
+        i = self._pressed if self._pressed >= 0 else self._focus
+        amount = self._lift[i].value
+        anchor = self.mapTo(window, QPoint(round(self._thumb_x(i)), 0))
+        self._bubble.place(QPointF(anchor.x(), anchor.y() - 4), self.format(self.values[i]), amount)
+
+    def _show_bubble(self) -> None:
+        for i, lift in enumerate(self._lift):
+            on = i == self._pressed or (self._pressed < 0 and self._keyboard and self.hasFocus() and i == self._focus)
+            lift.to(1.0 if on else 0.0)
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        if self._bubble is not None:
+            self._bubble.hide()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or not self.isEnabled():
+            return super().mousePressEvent(event)
+        x = event.position().x()
+        hit = [i for i in range(len(self.values)) if abs(x - self._thumb_x(i)) <= HIT / 2]
+        if hit:
+            i = min(hit, key=lambda k: abs(x - self._thumb_x(k)))
+        elif self.range:
+            a, b = self._thumb_x(0), self._thumb_x(1)
+            i = (0 if x < a else 1) if a == b else (0 if abs(x - a) <= abs(x - b) else 1)
+        else:
+            i = 0
+        self._keyboard = False
+        self._focus = i
+        self._drag = {"i": i, "x": x, "y": event.position().y(), "active": bool(hit), "last": self.values[i]}
+        if hit:
+            self._press(i)
+
+    def _press(self, i: int) -> None:
+        self._pressed = i
+        if not theme.pause_loops:
+            self._scale[i].to(1.2)
+        self._show_bubble()
+        self.update()
+
+    def mouseMoveEvent(self, event) -> None:
+        drag = self._drag
+        if drag is None:
+            return super().mouseMoveEvent(event)
+        pos = event.position()
+        if not drag["active"]:
+            mx, my = abs(pos.x() - drag["x"]), abs(pos.y() - drag["y"])
+            if mx < 10 and my < 10:
+                return
+            if my > mx:
+                self._drag = None
+                event.ignore()
+                return
+            drag["active"] = True
+            self._press(drag["i"])
+        i = drag["i"]
+        lo, hi = self.limits(i)
+        raw = self._value_at(pos.x())
+        v = min(max(self.snap(raw), lo), hi)
+        shown = min(max(raw, lo), hi)
+        _, length = self._lane()
+        for m in self.marks:
+            if abs(self._fraction(m.value) - self._fraction(shown)) * length <= MAGNET:
+                shown = m.value
+        if not self.step or shown in (self.minimum, self.maximum):
+            shown = v
+        self._shown[i].set(self._fraction(shown))
+        self._set(i, v)
+
+    def mouseReleaseEvent(self, event) -> None:
+        drag, self._drag = self._drag, None
+        if drag is None:
+            return super().mouseReleaseEvent(event)
+        i = drag["i"]
+        if not drag["active"]:
+            lo, hi = self.limits(i)
+            self._set(i, min(max(self.snap(self._value_at(event.position().x())), lo), hi))
+        self._pressed = -1
+        self._scale[i].to(1.0)
+        self._shown[i].to(self._fraction(self.values[i]))
+        self._show_bubble()
+        self.update()
+        self.released.emit()
+
+    def focusInEvent(self, event) -> None:
+        super().focusInEvent(event)
+        self._keyboard = event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason)
+        if self._keyboard and self.range:
+            self._focus = 1 if event.reason() == Qt.FocusReason.BacktabFocusReason else 0
+        self._show_bubble()
+        self.update()
+
+    def focusOutEvent(self, event) -> None:
+        super().focusOutEvent(event)
+        self._keyboard = False
+        self._show_bubble()
+        self.update()
+
+    def focusNextPrevChild(self, forward: bool) -> bool:
+        # Tab moves between the two thumbs of a range before it leaves the slider.
+        if self.range and self.hasFocus() and ((forward and self._focus == 0) or (not forward and self._focus == 1)):
+            self._focus = 1 if forward else 0
+            self._keyboard = True
+            self._show_bubble()
+            self.update()
+            return True
+        return super().focusNextPrevChild(forward)
+
+    def keyPressEvent(self, event) -> None:
+        if not self.isEnabled():
+            return super().keyPressEvent(event)
+        i = self._focus
+        v = self.values[i]
+        lo, hi = self.limits(i)
+        key = event.key()
+        up = key in (Qt.Key.Key_Right, Qt.Key.Key_Up)
+        down = key in (Qt.Key.Key_Left, Qt.Key.Key_Down)
+        if up or down:
+            if self.step:
+                target = v + (self.step if up else -self.step)
+            else:
+                detents = self.detents()
+                at = detents.index(self.snap(v))
+                target = detents[min(max(at + (1 if up else -1), 0), len(detents) - 1)]
+        elif key in (Qt.Key.Key_PageUp, Qt.Key.Key_PageDown):
+            target = v + (self.page_step if key == Qt.Key.Key_PageUp else -self.page_step)
+        elif key == Qt.Key.Key_Home:
+            target = lo
+        elif key == Qt.Key.Key_End:
+            target = hi
+        else:
+            return super().keyPressEvent(event)
+        self._keyboard = True
+        target = min(max(self.snap(target), lo), hi)
+        if target != v:
+            self._set(i, target)
+            self._shown[i].to(self._fraction(target))
+            self.released.emit()
+        self._show_bubble()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        enabled = self.isEnabled()
+        start, length = self._lane()
+        cy = HIT / 2
+        fracs = [spring.value for spring in self._shown]
+        lo, hi = (fracs[0], fracs[1]) if self.range else (0.0, fracs[0])
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "controlTrack-bgColor-rest" | tok }}))
+        painter.drawRoundedRect(QRectF(start, cy - RAIL / 2, length, RAIL), RAIL / 2, RAIL / 2)
+        painter.setBrush(theme.color({{ "bgColor-accent-emphasis" | tok }} if enabled else {{ "borderColor-emphasis" | tok }}))
+        painter.drawRoundedRect(QRectF(start + lo * length, cy - RAIL / 2, (hi - lo) * length, RAIL), RAIL / 2, RAIL / 2)
+        for d in self.detents():
+            f = self._fraction(d)
+            inside = lo - 1e-4 <= f <= hi + 1e-4
+            painter.setBrush(theme.color({{ "fgColor-onEmphasis" | tok }} if inside else {{ "borderColor-emphasis" | tok }}))
+            painter.drawRoundedRect(QRectF(start + f * length - 2, cy - 2, 4, 4), 1, 1)
+        radius = {{ px("borderRadius-medium") | num }}
+        for i in range(len(self.values)):
+            x = start + fracs[i] * length
+            painter.save()
+            painter.translate(x, cy)
+            scale = self._scale[i].value
+            painter.scale(scale, scale)
+            knob = QRectF(-KNOB / 2, -KNOB / 2, KNOB, KNOB)
+            painter.setPen(Qt.PenStyle.NoPen)
+            if enabled:
+                _paint_shadow(painter, knob, radius, {{ "shadow-resting-medium" | tok }})
+            painter.setPen(QPen(theme.color({{ "control-borderColor-rest" | tok }}), 1))
+            painter.setBrush(theme.color({{ "controlKnob-bgColor-rest" | tok }} if enabled else {{ "bgColor-disabled" | tok }}))
+            painter.drawRoundedRect(knob.adjusted(0.5, 0.5, -0.5, -0.5), radius, radius)
+            if enabled and self.hasFocus() and self._keyboard and i == self._focus:
+                painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), 2))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawRoundedRect(knob.adjusted(-3, -3, 3, 3), radius + 3, radius + 3)
+            painter.restore()
+        labelled = [m for m in self.marks if m.label]
+        if labelled:
+            painter.setFont(self._font)
+            metrics = QFontMetricsF(self._font)
+            for m in labelled:
+                on = m.value in self.values
+                font = QFont(self._font)
+                font.setWeight(QFont.Weight.DemiBold if on else QFont.Weight.Normal)
+                painter.setFont(font)
+                painter.setPen(theme.color({{ "fgColor-default" | tok }} if on else {{ "fgColor-muted" | tok }}))
+                w = metrics.horizontalAdvance(m.label) + 4
+                x = start + self._fraction(m.value) * length
+                painter.drawText(QRectF(x - w / 2, HIT - 4, w, 20), Qt.AlignmentFlag.AlignCenter, m.label)
+
+
 class Slider(QWidget):
-    """A labelled slider with an optional value read-out."""
+    """A labelled slider with an optional value read-out.
+
+    It uses its touch design inside a touch scope (an ancestor with the pmTouchScope property, such as MobileScreen),
+    or whenever `range` or `marks` is set: a 28px thumb that grows while held, a value bubble, detents, and with
+    `range` a second thumb for low and high (`values()`, `set_values()`, `rangeChanged`). The touch design is always
+    horizontal.
+    """
 
     valueChanged = Signal(int)
+    rangeChanged = Signal(int, int)
     sliderReleased = Signal()
 
     def __init__(self, label: str = "", value: int = {{ c.spec.props.value.default }}, minimum: int = {{ c.spec.props.min.default }},
                  maximum: int = {{ c.spec.props.max.default }}, step: int = {{ c.spec.props.step.default }}, page_step: int = {{ c.spec.props.pageStep.default }},
                  orientation: str = "horizontal", tick_position: str = "none", tick_interval: int = 0, length: int = 0,
-                 show_value: bool = False, suffix: str = "", parent: QWidget | None = None) -> None:
+                 show_value: bool = False, suffix: str = "", range: bool = False, low: int | None = None,
+                 high: int | None = None, marks: list[SliderMark] | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._suffix = suffix
+        self._label_text = label
+        self._range = range
+        self._marks = list(marks or [])
+        self._args = (minimum, maximum, step, page_step, length)
+        self._low = minimum if low is None else low
+        self._high = maximum if high is None else high
+        self.touch: _TouchBar | None = None
         vertical = orientation == "vertical"
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
+        self._layout = layout
         head = QHBoxLayout()
         head.setContentsMargins(0, 0, 0, 0)
         self.label = QLabel(label)
@@ -221,13 +621,78 @@ class Slider(QWidget):
         self.bar.valueChanged.connect(self._changed)
         self.bar.sliderReleased.connect(self.sliderReleased)
         self._changed(self.bar.value())
+        if range or self._marks:
+            self._use_touch()
+
+    def _format(self, value: int) -> str:
+        for m in self._marks:
+            if m.value == value and m.label:
+                return m.label
+        return f"{value}{self._suffix}"
+
+    def _use_touch(self) -> None:
+        if self.touch is not None:
+            return
+        minimum, maximum, step, page_step, length = self._args
+        values = [self._low, self._high] if self._range else [self.bar.value()]
+        self.touch = _TouchBar(minimum, maximum, step, page_step, values, self._marks, self._range, length)
+        self.touch.format = self._format
+        self.touch.setAccessibleName(self._label_text)
+        self.touch.changed.connect(self._touch_changed)
+        self.touch.released.connect(self.sliderReleased)
+        self.bar.hide()
+        self._layout.addWidget(self.touch)
+        font = theme.font({{ "text-body-medium" | tok }})
+        font.setPixelSize(16)
+        font.setBold(True)
+        self.label.setFont(font)
+        # The touch head is a 24px line, as on the web.
+        self.label.setFixedHeight(24)
+        self._show_touch_value()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.touch is None and in_touch_scope(self):
+            self._use_touch()
+
+    def _show_touch_value(self) -> None:
+        values = self.touch.values
+        self.value_label.setText(f"{self._format(values[0])} to {self._format(values[1])}" if self._range
+                                 else self._format(values[0]))
+
+    def _touch_changed(self) -> None:
+        self._show_touch_value()
+        values = self.touch.values
+        if self._range:
+            self.rangeChanged.emit(values[0], values[1])
+        else:
+            self.bar.blockSignals(True)
+            self.bar.setValue(values[0])
+            self.bar.blockSignals(False)
+            self.valueChanged.emit(values[0])
 
     def _changed(self, value: int) -> None:
         self.value_label.setText(f"{value}{self._suffix}")
         self.valueChanged.emit(value)
 
     def value(self) -> int:
-        return self.bar.value()
+        return self.touch.values[0] if self.touch is not None and not self._range else self.bar.value()
 
     def set_value(self, value: int) -> None:
-        self.bar.setValue(value)
+        if self.touch is not None and not self._range:
+            self.touch.set_values([value])
+            self._touch_changed()
+        else:
+            self.bar.setValue(value)
+
+    def values(self) -> tuple[int, int]:
+        """The low and high values of a range."""
+        if self.touch is not None and self._range:
+            return self.touch.values[0], self.touch.values[1]
+        return self._low, self._high
+
+    def set_values(self, low: int, high: int) -> None:
+        self._low, self._high = min(low, high), max(low, high)
+        if self.touch is not None and self._range:
+            self.touch.set_values([self._low, self._high])
+            self._touch_changed()

@@ -1,12 +1,24 @@
 // {{ note }}
 // {{ c.summary }}
-import { For, Show, createMemo, createSignal, createUniqueId } from "solid-js";
+import { For, Show, createEffect, createMemo, createSignal, createUniqueId, onCleanup } from "solid-js";
 import type { JSX } from "@solidjs/web";
+import {
+  inTouchScope,
+  sliderDetents,
+  sliderFraction,
+  sliderKey,
+  sliderLimits,
+  sliderMarks,
+  wireTouchSlider,
+  type SliderMark,
+  type SliderModel,
+} from "../motion";
 
 export type SliderProps = {
   label?: string;
   ariaLabel?: string;
-  value?: number;
+  // With range, the [low, high] pair.
+  value?: number | [number, number];
   min?: number;
   max?: number;
   step?: number;
@@ -19,18 +31,181 @@ export type SliderProps = {
   suffix?: string;
   valueText?: (value: number) => string;
   disabled?: boolean;
-  onChange?: (value: number) => void;
-  onRelease?: (value: number) => void;
+  // Two thumbs; value becomes [low, high]. Always the touch design.
+  range?: boolean;
+  // Named detents the thumb snaps to. Always the touch design.
+  marks?: (number | SliderMark)[];
+  onChange?: (value: number | [number, number]) => void;
+  onRelease?: (value: number | [number, number]) => void;
 };
 
+// Touch design: inside a touch scope, or whenever range or marks is set. Always horizontal.
 export function Slider(props: SliderProps): JSX.Element {
+  const [root, setRoot] = createSignal<HTMLElement>();
+  const [scoped, setScoped] = createSignal(false);
+  createEffect(root, (el) => {
+    if (el) setScoped(inTouchScope(el));
+  });
+  const touch = () => !!props.range || (props.marks?.length ?? 0) > 0 || scoped();
+  return (
+    <Show when={touch()} fallback={<DesktopSlider of={props} onRoot={setRoot} />}>
+      <TouchSlider of={props} />
+    </Show>
+  );
+}
+
+// The designs take the Slider's props object whole rather than spread, so its getters stay live.
+function TouchSlider(outer: { of: SliderProps }): JSX.Element {
+  const props = outer.of;
+  const id = createUniqueId();
+  const min = () => props.min ?? {{ c.spec.props.min.default }};
+  const max = () => props.max ?? {{ c.spec.props.max.default }};
+  const model = createMemo((): SliderModel => {
+    const marks = sliderMarks(props.marks ?? [], min(), max());
+    const step = props.step ?? {{ c.spec.props.step.default }};
+    return { min: min(), max: max(), step: marks.length && step === 0 ? 0 : step || 1, marks, range: !!props.range };
+  });
+  const page = () => props.pageStep ?? Math.max(model().step || 1, Math.round((max() - min()) / 10));
+  const initial = (): number[] => {
+    const v = props.value;
+    if (props.range) return Array.isArray(v) ? [v[0], v[1]] : [min(), max()];
+    return [typeof v === "number" ? v : Array.isArray(v) ? v[0] : min()];
+  };
+  const [values, setValues] = createSignal(initial);
+  const [pressed, setPressed] = createSignal(-1);
+  const [drags, setDrags] = createSignal<(number | null)[]>([null, null]);
+  const detents = createMemo(() => sliderDetents(model()));
+  const fracs = () => values().map((v, i) => drags()[i] ?? sliderFraction(model(), v));
+  const fillFrom = () => (props.range ? fracs()[0] : 0);
+  const fillTo = () => (props.range ? fracs()[1] : fracs()[0]);
+  // Signal writes land after the handler that makes them, so the newest pair is kept here for onChange and onRelease.
+  let latest = values();
+  createEffect(values, (v) => {
+    latest = v;
+  });
+  const current = (): number | [number, number] => (props.range ? [latest[0], latest[1]] : latest[0]);
+  const format = (v: number) => {
+    if (props.valueText) return props.valueText(v);
+    const mark = model().marks.find((m) => m.value === v && m.label);
+    return mark ? mark.label! : `${v}${props.suffix ?? ""}`;
+  };
+  const setAt = (i: number, v: number) => {
+    if (latest[i] === v) return;
+    const next = latest.slice();
+    next[i] = v;
+    latest = next;
+    setValues(next);
+    props.onChange?.(current());
+  };
+  let unwire: (() => void) | undefined;
+  let lane: HTMLDivElement | undefined;
+  onCleanup(() => unwire?.());
+  const wire = (control: HTMLDivElement) => {
+    unwire?.();
+    unwire = wireTouchSlider({
+      control,
+      track: lane!,
+      model,
+      values: () => latest,
+      disabled: () => !!props.disabled,
+      onPress: setPressed,
+      onDrag: (i, f) => {
+        const next = drags().slice();
+        next[i] = f;
+        setDrags(next);
+      },
+      onValue: setAt,
+      onRelease: () => props.onRelease?.(current()),
+    });
+  };
+  const onKey = (i: number, e: KeyboardEvent) => {
+    if (props.disabled) return;
+    const next = sliderKey(model(), latest, i, e.key, page());
+    if (next === null) return;
+    e.preventDefault();
+    if (next !== latest[i]) {
+      setAt(i, next);
+      props.onRelease?.(current());
+    }
+  };
+  const name = (i: number) =>
+    props.range ? `${i === 0 ? "Minimum" : "Maximum"} ${props.label || props.ariaLabel || ""}`.trim() : props.label ? undefined : props.ariaLabel || undefined;
+
+  return (
+    <div class={["pm-slider", "pm-slider--touch", props.disabled && "pm-slider--disabled"]}>
+      <Show when={props.label || props.showValue}>
+        <div class="pm-slider__head">
+          <Show when={props.label} fallback={<span />}><span class="pm-slider__label" id={`pm-slider-${id}-label`}>{props.label}</span></Show>
+          <Show when={props.showValue}>
+            <span class="pm-slider__value" aria-hidden="true">
+              {props.range ? `${format(values()[0])} to ${format(values()[1])}` : format(values()[0])}
+            </span>
+          </Show>
+        </div>
+      </Show>
+      <div class="pm-slider__control" ref={(el) => queueMicrotask(() => wire(el))} style={props.length ? `width: ${props.length}px` : undefined}>
+        <div class="pm-slider__lane" ref={(el) => (lane = el)}>
+          <span class="pm-slider__rail" aria-hidden="true">
+            <For each={detents()}>
+              {(d) => {
+                const f = () => sliderFraction(model(), d);
+                return <span class={["pm-slider__detent", f() >= fillFrom() - 1e-4 && f() <= fillTo() + 1e-4 && "pm-slider__detent--on"]} style={`left: ${f() * 100}%`} />;
+              }}
+            </For>
+            <span
+              class={["pm-slider__bar", (drags()[0] !== null || drags()[1] !== null) && "pm-slider__bar--dragging"]}
+              style={`left: ${fillFrom() * 100}%; width: ${(fillTo() - fillFrom()) * 100}%`}
+            />
+          </span>
+          <For each={props.range ? [0, 1] : [0]}>
+            {(i) => (
+              <span
+                data-thumb={i}
+                class={["pm-slider__hit", pressed() === i && "pm-slider__hit--pressed", drags()[i] !== null && "pm-slider__hit--dragging"]}
+                style={`left: ${fracs()[i] * 100}%`}
+                role="slider"
+                tabindex={props.disabled ? -1 : 0}
+                aria-valuemin={sliderLimits(model(), values(), i)[0]}
+                aria-valuemax={sliderLimits(model(), values(), i)[1]}
+                aria-valuenow={values()[i]}
+                aria-valuetext={format(values()[i])}
+                aria-orientation="horizontal"
+                aria-disabled={props.disabled ? "true" : undefined}
+                aria-labelledby={props.label && !props.range ? `pm-slider-${id}-label` : undefined}
+                aria-label={name(i)}
+                onKeyDown={(e) => onKey(i, e)}
+              >
+                <span class="pm-slider__knob" aria-hidden="true" />
+                <span class="pm-slider__bubble" aria-hidden="true">{format(values()[i])}</span>
+              </span>
+            )}
+          </For>
+        </div>
+        <Show when={model().marks.some((m) => m.label)}>
+          <div class="pm-slider__marks" aria-hidden="true">
+            <For each={model().marks.filter((m) => m.label)}>
+              {(m) => (
+                <span class={["pm-slider__mark", values().includes(m.value) && "pm-slider__mark--on"]} style={`left: ${sliderFraction(model(), m.value) * 100}%`}>
+                  {m.label}
+                </span>
+              )}
+            </For>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}
+
+function DesktopSlider(outer: { of: SliderProps; onRoot: (el: HTMLElement) => void }): JSX.Element {
+  const props = outer.of;
   const id = createUniqueId();
   const min = () => props.min ?? {{ c.spec.props.min.default }};
   const max = () => props.max ?? {{ c.spec.props.max.default }};
   const step = () => props.step ?? {{ c.spec.props.step.default }};
   const page = () => props.pageStep ?? Math.max(step(), Math.round((max() - min()) / 10));
   const vertical = () => props.orientation === "vertical";
-  const [value, setValue] = createSignal(() => props.value ?? min());
+  const [value, setValue] = createSignal(() => (typeof props.value === "number" ? props.value : Array.isArray(props.value) ? props.value[0] : min()));
   const [dragging, setDragging] = createSignal(false);
   let track!: HTMLDivElement;
   let thumb!: HTMLDivElement;
@@ -81,7 +256,7 @@ export function Slider(props: SliderProps): JSX.Element {
   );
 
   return (
-    <div class={["pm-slider", vertical() && "pm-slider--vertical", dragging() && "pm-slider--dragging", props.disabled && "pm-slider--disabled"]}>
+    <div ref={outer.onRoot} class={["pm-slider", vertical() && "pm-slider--vertical", dragging() && "pm-slider--dragging", props.disabled && "pm-slider--disabled"]}>
       <Show when={props.label || props.showValue}>
         <div class="pm-slider__head">
           <Show when={props.label}><span class="pm-slider__label" id={`pm-slider-${id}-label`}>{props.label}</span></Show>
