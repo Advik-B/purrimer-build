@@ -3,6 +3,16 @@ import { FAB, PurrimerIcons } from "purrimer-components.slint";
 export component Example inherits HorizontalLayout {
     spacing: 16px;
     alignment: start;
-    FAB { label: "New note"; clicked => { debug("new note"); } }
+    FAB {
+        label: "New note";
+        screen-width: root.width;
+        screen-height: root.height;
+        actions: [
+            { label: "Take photo", icon: PurrimerIcons.device-camera-24 },
+            { label: "Checklist", icon: PurrimerIcons.checklist-24 },
+        ];
+        clicked => { debug("new note"); }
+        action-selected(index) => { debug("chose", index); }
+    }
     FAB { icon: PurrimerIcons.pencil-24; label: "Compose"; extended: true; }
 }

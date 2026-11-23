@@ -1,9 +1,14 @@
 // {{ note }}
 // {{ c.summary }}
-import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
+import { HoldMenu, HoldMenuItem } from "hold-menu.slint";
 
+// Give it actions (two to six HoldMenuItem) and a press and hold opens them above the FAB; slide onto one and release to
+// choose it, and action-selected(index) reports the choice. A tap still calls clicked(), or opens the actions with
+// tap-opens. With actions, place the FAB last among its siblings and set screen-width and screen-height to the window's
+// size for the scrim, as for HoldMenu.
 export component FAB inherits Rectangle {
     // 24px path commands, such as PurrimerIcons.plus-24
     in property <string> icon: PurrimerIcons.plus-24;
@@ -11,43 +16,72 @@ export component FAB inherits Rectangle {
     in property <bool> extended;
     // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
     in property <bool> folded;
+    in property <[HoldMenuItem]> actions;
+    // "stack" of labelled options, or "arc" for two to four whose icons read without labels.
+    in property <string> actions-layout: "stack";
+    in property <bool> tap-opens;
+    in property <length> screen-width;
+    in property <length> screen-height;
     callback clicked();
+    callback action-selected(int);
     property <float> fold: root.folded && root.extended ? 1 : 0;
     animate fold { duration: PurrimerMotion.pause-loops ? 0ms : {{ "duration-base" | tok }}; }
 
     height: {{ "mobile-fab-size" | tok }};
     width: root.extended ? max(self.height, row.preferred-width + (self.height - row.preferred-width) * root.fold) : self.height;
-    clip: true;
-    border-radius: {{ "borderRadius-large" | tok }};
-    background: touch.pressed ? {{ "button-primary-bgColor-active" | tok }} : touch.has-hover ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }};
-    drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
-    drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
-    drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
-    accessible-role: button;
-    accessible-label: label;
-    accessible-action-default => { root.clicked(); }
 
-    touch := TouchArea { mouse-cursor: pointer; clicked => { root.clicked(); } }
+    // Compresses while pressed and springs back on release.
+    press := PmSpring { value: 1; target: 1; precision: 0.0005; }
 
-    row := HorizontalLayout {
-        x: 0;
-        width: max(parent.width, self.preferred-width);
-        padding-left: 16px;
-        padding-right: root.extended ? 20px : 16px;
-        spacing: 8px;
-        alignment: center;
-        VerticalLayout {
-            alignment: center;
-            Icon { path: root.icon; box: 24; size: 24px; color: {{ "fgColor-onEmphasis" | tok }}; }
+    // With no actions HoldMenu is a plain button, so one tree serves both.
+    menu := HoldMenu {
+        width: parent.width;
+        height: parent.height;
+        items: root.actions;
+        layout: root.actions-layout;
+        tap-opens: root.tap-opens;
+        press-feedback: false;
+        accessible-name: root.label;
+        screen-width: root.screen-width;
+        screen-height: root.screen-height;
+        clicked => { root.clicked(); }
+        selected(index) => { root.action-selected(index); }
+        changed pressed => {
+            press.to(self.pressed ? PurrimerMotion.press-scale : 1, 0);
         }
-        if root.extended: Text {
-            text: root.label;
-            opacity: 1 - root.fold;
-            vertical-alignment: center;
-            color: {{ "fgColor-onEmphasis" | tok }};
-            font-family: {{ "text-mobile-body" | tok }}.font-family;
-            font-size: 16px;
-            font-weight: 600;
+
+        Rectangle {
+            width: root.width;
+            height: root.height;
+            transform-scale: press.value;
+            clip: true;
+            border-radius: {{ "borderRadius-large" | tok }};
+            background: menu.pressed ? {{ "button-primary-bgColor-active" | tok }} : menu.hovered ? {{ "button-primary-bgColor-hover" | tok }} : {{ "button-primary-bgColor-rest" | tok }};
+            drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
+            drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
+            drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
+
+            row := HorizontalLayout {
+                x: 0;
+                width: max(parent.width, self.preferred-width);
+                padding-left: 16px;
+                padding-right: root.extended ? 20px : 16px;
+                spacing: 8px;
+                alignment: center;
+                VerticalLayout {
+                    alignment: center;
+                    Icon { path: root.icon; box: 24; size: 24px; color: {{ "fgColor-onEmphasis" | tok }}; }
+                }
+                if root.extended: Text {
+                    text: root.label;
+                    opacity: 1 - root.fold;
+                    vertical-alignment: center;
+                    color: {{ "fgColor-onEmphasis" | tok }};
+                    font-family: {{ "text-mobile-body" | tok }}.font-family;
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+            }
         }
     }
 }

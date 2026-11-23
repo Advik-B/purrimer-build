@@ -110,6 +110,7 @@ component HoldOption {
 // tap calls clicked(), or opens the menu with tap-opens. Moving 10px before the hold completes cancels it. Releasing on
 // the button keeps the menu open for tapping. Right-click, the Menu key, Shift+F10 and the arrow towards the menu open
 // it for the keyboard; arrows move between options, Enter chooses and Escape closes.
+// With no items it is a plain button: a tap or the default accessible action calls clicked().
 // HoldMenu takes the button's pointer input, so wire its tap to HoldMenu's clicked rather than the button's own. Place
 // it last among its siblings so the options draw above them, and set screen-width and screen-height to the window's
 // size for the scrim.
@@ -127,9 +128,14 @@ export component HoldMenu inherits FocusScope {
     in property <bool> default-open;
     in property <length> screen-width;
     in property <length> screen-height;
+    // Shrinks the trigger while it is held; off for a trigger that draws its own press feedback.
+    in property <bool> press-feedback: true;
     // "", "held" while the finger is still down, or "sticky" for tapping and the keyboard.
     out property <string> mode;
     out property <int> active: -1;
+    // The trigger's pointer state, for a trigger that draws its own press and hover.
+    out property <bool> pressed: touch.pressed;
+    out property <bool> hovered: touch.has-hover;
     callback clicked();
     callback selected(int);
     property <bool> arc: root.layout == "arc";
@@ -155,6 +161,13 @@ export component HoldMenu inherits FocusScope {
     accessible-role: button;
     accessible-label: root.accessible-name;
     accessible-expanded: root.mode != "";
+    accessible-action-default => {
+        if root.tap-opens && root.items.length > 0 {
+            root.open-sticky();
+        } else {
+            root.clicked();
+        }
+    }
 
     init => {
         if root.default-open {
@@ -257,7 +270,7 @@ export component HoldMenu inherits FocusScope {
     }
 
     slot := Rectangle {
-        transform-scale: root.holding ? PurrimerMotion.press-scale : 1;
+        transform-scale: root.holding && root.press-feedback ? PurrimerMotion.press-scale : 1;
         animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out; }
         content := VerticalLayout {
             @children
@@ -265,6 +278,12 @@ export component HoldMenu inherits FocusScope {
     }
 
     touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            if root.items.length == 0 {
+                root.clicked();
+            }
+        }
         pointer-event(event) => {
             if event.kind == PointerEventKind.down && event.button == PointerEventButton.right && root.mode == "" {
                 root.open-sticky();
