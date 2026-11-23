@@ -79,6 +79,8 @@ class MobileScreen(QWidget):
                  footer: QWidget | None = None, surface: str = "default", refreshable: bool = False,
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        # Marks a touch scope: components inside switch to their touch design, such as Banner's swipe.
+        self.setProperty("pmTouchScope", True)
         self.app_bar = app_bar
         self.fab = fab
         self._surface = surface

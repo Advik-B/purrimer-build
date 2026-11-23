@@ -13,27 +13,44 @@
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:Banner">
-        <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
-                BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
-                Padding="16,12,8,12">
-          <Grid ColumnDefinitions="Auto,*,Auto">
-            <pm:Icon Name="toneIcon" IconName="{TemplateBinding IconName}" Margin="0,2,12,0" VerticalAlignment="Top"
-                     Foreground="{{ "fgColor-info" | tok }}" />
-            <StackPanel Grid.Column="1" Margin="0,0,8,0">
-              <TextBlock Text="{TemplateBinding Title}" FontWeight="SemiBold" TextWrapping="Wrap"
-                         IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-              <TextBlock Text="{TemplateBinding Text}" TextWrapping="Wrap"
-                         IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
-              <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
-                                ContentTemplate="{TemplateBinding ContentTemplate}"
-                                IsVisible="{TemplateBinding Content, Converter={x:Static ObjectConverters.IsNotNull}}" />
-            </StackPanel>
-            <pm:IconButton Name="PART_Dismiss" Grid.Column="2" Classes="invisible small" IconName="x" Label="Dismiss"
-                           VerticalAlignment="Top" IsVisible="{TemplateBinding IsDismissible}" />
-          </Grid>
-        </Border>
+        <Panel>
+          <!-- The panel a swipe uncovers, with the close mark on that side. -->
+          <Border Name="PART_Mark" IsVisible="False" CornerRadius="{TemplateBinding CornerRadius}" Padding="16,0"
+                  Background="{{ "bgColor-neutral-muted" | tok }}">
+            <Border Name="PART_MarkDisc" Width="32" Height="32" CornerRadius="16" VerticalAlignment="Center"
+                    HorizontalAlignment="Left" Background="Transparent">
+              <pm:Icon Name="markIcon" IconName="x" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{{ "fgColor-muted" | tok }}" />
+            </Border>
+          </Border>
+          <Border Name="PART_Card" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                  BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}"
+                  Padding="16,12,8,12">
+            <Grid ColumnDefinitions="Auto,*,Auto">
+              <pm:Icon Name="toneIcon" IconName="{TemplateBinding IconName}" Margin="0,2,12,0" VerticalAlignment="Top"
+                       Foreground="{{ "fgColor-info" | tok }}" />
+              <StackPanel Grid.Column="1" Margin="0,0,8,0">
+                <TextBlock Text="{TemplateBinding Title}" FontWeight="SemiBold" TextWrapping="Wrap"
+                           IsVisible="{TemplateBinding Title, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <TextBlock Text="{TemplateBinding Text}" TextWrapping="Wrap"
+                           IsVisible="{TemplateBinding Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+                <ContentPresenter Name="PART_ContentPresenter" Content="{TemplateBinding Content}"
+                                  ContentTemplate="{TemplateBinding ContentTemplate}"
+                                  IsVisible="{TemplateBinding Content, Converter={x:Static ObjectConverters.IsNotNull}}" />
+              </StackPanel>
+              <pm:IconButton Name="PART_Dismiss" Grid.Column="2" Classes="invisible small" IconName="x" Label="Dismiss"
+                             VerticalAlignment="Top" IsVisible="{TemplateBinding IsDismissible}" />
+            </Grid>
+          </Border>
+        </Panel>
       </ControlTemplate>
     </Setter>
+    <Style Selector="^:armed /template/ Border#PART_MarkDisc">
+      <Setter Property="Background" Value="{{ "bgColor-neutral-emphasis" | tok }}" />
+    </Style>
+    <Style Selector="^:armed /template/ pm|Icon#markIcon">
+      <Setter Property="Foreground" Value="{{ "fgColor-onEmphasis" | tok }}" />
+    </Style>
     <Style Selector="^[Tone=success]">
       <Setter Property="Background" Value="{{ "bgColor-success-muted" | tok }}" />
       <Setter Property="BorderBrush" Value="{{ "borderColor-success-emphasis" | tok }}" />

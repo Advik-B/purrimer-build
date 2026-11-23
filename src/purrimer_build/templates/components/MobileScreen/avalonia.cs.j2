@@ -53,6 +53,7 @@ public class MobileScreen : ContentControl
     private ScrollViewer? _scroll;
     private Control? _pullDisc;
     private Point? _grab;
+    private bool _grabVertical;
     private double _grabOffset;
     private bool _pulling;
     private bool _refreshing;
@@ -170,6 +171,7 @@ public class MobileScreen : ContentControl
             return;
         _fling.Stop();
         _grab = point.Position;
+        _grabVertical = false;
         _grabOffset = _scroll.Offset.Y;
         _pulling = false;
         _tracker.Reset();
@@ -183,6 +185,19 @@ public class MobileScreen : ContentControl
         var p = e.GetPosition(this);
         _tracker.Add(p);
         var dy = p.Y - grab.Y;
+        // A drag that starts sideways belongs to whatever is under it, such as a Banner's swipe or a Carousel.
+        if (!_grabVertical)
+        {
+            var dx = p.X - grab.X;
+            if (Math.Abs(dx) < PurrimerMotion.Slop && Math.Abs(dy) < PurrimerMotion.Slop)
+                return;
+            if (Math.Abs(dx) > Math.Abs(dy))
+            {
+                _grab = null;
+                return;
+            }
+            _grabVertical = true;
+        }
         if (IsRefreshable && _grabOffset <= 0 && dy > 0)
         {
             _pulling = true;

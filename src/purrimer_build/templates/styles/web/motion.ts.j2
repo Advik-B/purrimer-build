@@ -312,6 +312,36 @@ function cssValue(el: Element, name: string, fallback: string): string {
   return getComputedStyle(el).getPropertyValue(name).trim() || fallback;
 }
 
+// Inside a touch scope: MobileScreen, MobileNavigator and the other touch containers mark one with
+// data-density="touch", and so can the page's html element.
+export function inTouchScope(el: Element): boolean {
+  return el.closest('[data-density="touch"]') !== null;
+}
+
+// How long a released drag takes to spring back, from the motion kind in scope.
+export function settleMs(el: Element): number {
+  return reducedMotion() ? cssMs(el, "--duration-reduced", 120) : cssMs(el, "--pm-settle-dur", 360);
+}
+
+// Shrinks an element's height to nothing and resolves when it has; at once with reduced motion.
+export function collapseHeight(el: HTMLElement): Promise<void> {
+  el.style.overflow = "hidden";
+  const duration = reducedMotion() ? 0 : cssMs(el, "--duration-base", 200);
+  if (duration <= 0 || typeof el.animate !== "function") {
+    el.style.height = "0px";
+    return Promise.resolve();
+  }
+  const anim = el.animate([{ height: `${el.offsetHeight}px` }, { height: "0px" }], {
+    duration,
+    easing: cssValue(el, "--easing-standard", "ease"),
+    fill: "forwards",
+  });
+  return anim.finished.then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
 export function screenTiming(el: Element): { duration: number; easing: string; reduced: boolean } {
   const reduced = reducedMotion();
   const playful = motionKind(el) === "playful";

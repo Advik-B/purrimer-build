@@ -22,4 +22,4 @@ doc = "Body text; ends with a full stop."
 [props.dismissible]
 type = "bool"
 default = false
-doc = "Shows a close button."
+doc = "Shows a close button. Inside a touch scope the banner also swipes sideways to dismiss."

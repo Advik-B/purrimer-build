@@ -4,6 +4,7 @@
   import type { Snippet } from "svelte";
   import Icon from "./Icon.svelte";
   import IconButton from "./IconButton.svelte";
+  import { collapseHeight, inTouchScope, settleMs, wireDismissSwipe } from "../motion";
 
   const icons = { info: "info", success: "check-circle", attention: "alert", danger: "stop", done: "check-circle-fill" } as const;
 
@@ -12,19 +13,78 @@
     title?: string;
     text?: string;
     dismissible?: boolean;
+    // Inside a touch scope a dismissible banner with ondismiss also swipes sideways to dismiss.
     ondismiss?: () => void;
     children?: Snippet;
   } = $props();
+
+  const swipeable = $derived(dismissible && !!ondismiss);
+  let wrap: HTMLElement | undefined = $state();
+  let dx = $state(0);
+  let side = $state(0);
+  let armed = $state(false);
+  let dragging = $state(false);
+  let leaving = $state(false);
+
+  $effect(() => {
+    if (!wrap || !swipeable) return;
+    const el = wrap;
+    let timer = 0;
+    const unwire = wireDismissSwipe({
+      el,
+      enabled: () => !leaving && inTouchScope(el),
+      onMove: (v, a, d) => {
+        clearTimeout(timer);
+        dx = v;
+        armed = a;
+        dragging = d;
+        if (v !== 0) side = Math.sign(v);
+        else timer = window.setTimeout(() => (side = 0), settleMs(el));
+      },
+      onDismiss: (direction) => {
+        dragging = false;
+        leaving = true;
+        dx = direction * el.offsetWidth;
+        // The banner slides out, then the gap closes before ondismiss runs.
+        timer = window.setTimeout(() => collapseHeight(el).then(() => ondismiss?.()), {{ ms("duration-sleepy-exit") }});
+      },
+    });
+    return () => {
+      clearTimeout(timer);
+      unwire();
+    };
+  });
+
+  const opacity = $derived(leaving ? 0 : 1 - Math.min(1, Math.abs(dx) / (wrap?.offsetWidth || 320)) * 0.6);
 </script>
 
-<div class={["pm-banner", tone !== "info" && `pm-banner--${tone}`]} role={tone === "danger" ? "alert" : "status"}>
-  <Icon name={icons[tone]} class="pm-banner__icon" />
-  <div class="pm-banner__body">
-    {#if title}<p class="pm-banner__title">{title}</p>{/if}
-    {#if text}<p class="pm-banner__text">{text}</p>{/if}
-    {@render children?.()}
+{#snippet card()}
+  <div class={["pm-banner", tone !== "info" && `pm-banner--${tone}`]} role={tone === "danger" ? "alert" : "status"}>
+    <Icon name={icons[tone]} class="pm-banner__icon" />
+    <div class="pm-banner__body">
+      {#if title}<p class="pm-banner__title">{title}</p>{/if}
+      {#if text}<p class="pm-banner__text">{text}</p>{/if}
+      {@render children?.()}
+    </div>
+    {#if dismissible}
+      <IconButton class="pm-banner__close" icon="x" label="Dismiss" variant="invisible" onclick={() => ondismiss?.()} />
+    {/if}
   </div>
-  {#if dismissible}
-    <IconButton class="pm-banner__close" icon="x" label="Dismiss" variant="invisible" onclick={() => ondismiss?.()} />
-  {/if}
-</div>
+{/snippet}
+
+{#if swipeable}
+  <div
+    bind:this={wrap}
+    class={["pm-banner-swipe", dragging && "pm-banner-swipe--dragging", leaving && "pm-banner-swipe--leaving"]}
+    style="--pm-banner-dx: {dx}px; --pm-banner-opacity: {opacity}"
+  >
+    {#if side}
+      <span class={["pm-banner-swipe__mark", side > 0 ? "pm-banner-swipe__mark--start" : "pm-banner-swipe__mark--end", armed && "pm-banner-swipe__mark--armed"]} aria-hidden="true">
+        <span class="pm-banner-swipe__icon"><Icon name="x" size={16} /></span>
+      </span>
+    {/if}
+    {@render card()}
+  </div>
+{:else}
+  {@render card()}
+{/if}

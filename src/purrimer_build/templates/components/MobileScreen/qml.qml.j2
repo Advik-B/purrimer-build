@@ -10,6 +10,8 @@ import QtQuick.Effects
 // the top emits refreshRequested; call finishRefresh() when it is done.
 Rectangle {
     id: root
+    // Marks a touch scope: components inside switch to their touch design, such as Banner's swipe.
+    readonly property bool pmTouchScope: true
     property AppBar appBar
     property Item bottomNav
     property FAB fab
