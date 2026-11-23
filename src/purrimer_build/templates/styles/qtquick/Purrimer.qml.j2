@@ -17,6 +17,16 @@ QtObject {
     readonly property real pressScale: 0.96
 
     // Resistance past an edge: the further the drag, the less the content moves.
+    // True inside a touch scope: an ancestor of item declares pmTouchScope: true, as MobileScreen does. Components
+    // there switch to their touch design. Untyped, since any item can declare it.
+    function inTouchScope(item) {
+        for (let node = item ? item.parent : null; node; node = node.parent) {
+            if (node.pmTouchScope === true)
+                return true
+        }
+        return false
+    }
+
     function rubberBand(overshoot, dimension) {
         if (dimension <= 0)
             return 0

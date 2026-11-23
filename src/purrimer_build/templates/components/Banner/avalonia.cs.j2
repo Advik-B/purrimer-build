@@ -1,7 +1,6 @@
 // {{ note }}
 // {{ c.summary }}
 using System;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
@@ -9,12 +8,11 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using Avalonia.VisualTree;
 
 namespace {{ ns }};
 
 // An inline message in info, success, attention, danger or done tone.
-// Inside a touch scope (a MobileScreen, or any ancestor with the "touch" class) a dismissible banner also swipes
+// Inside a touch scope (a MobileScreen, or any container with pm:PurrimerTouch.Scope set) a dismissible banner also swipes
 // sideways to dismiss: it follows the pointer and fades over a panel with a close mark, which fills past 30% of its
 // width. A release there, or a flick, slides it out and closes the gap before Dismissed is raised; an earlier release
 // springs back. A vertical drag is left to scrolling, and the close button stays for keyboards.
@@ -86,9 +84,8 @@ public class Banner : ContentControl
         };
     }
 
-    // A MobileScreen, or any ancestor with the "touch" class, makes a touch scope.
-    public static bool InTouchScope(Visual visual) =>
-        visual.GetVisualAncestors().Any(a => a is MobileScreen || (a is StyledElement styled && styled.Classes.Contains("touch")));
+    // Inherited from a MobileScreen or any container with pm:PurrimerTouch.Scope set.
+    public static bool InTouchScope(Visual visual) => PurrimerTouch.GetScope(visual);
 
     public string? Title
     {

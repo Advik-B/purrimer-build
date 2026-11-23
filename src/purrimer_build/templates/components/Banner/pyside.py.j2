@@ -9,7 +9,7 @@ from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
 from ..icons import paint_icon
-from ..motion import Spring, VelocityTracker
+from ..motion import Spring, VelocityTracker, in_touch_scope
 from ..theme import theme
 from .icon import Icon
 from .icon_button import IconButton
@@ -37,16 +37,6 @@ COLORS = {
     "{{ t }}": ({{ ("bgColor-" ~ t ~ "-muted") | tok }}, {{ ("borderColor-" ~ t ~ "-emphasis") | tok }}, {{ ("fgColor-" ~ t) | tok }}),
 {% endfor %}
 }
-
-
-def in_touch_scope(widget: QWidget) -> bool:
-    """True when an ancestor sets the pmTouchScope property, as MobileScreen does."""
-    parent = widget.parentWidget()
-    while parent is not None:
-        if parent.property("pmTouchScope"):
-            return True
-        parent = parent.parentWidget()
-    return False
 
 
 class _Card(QWidget):

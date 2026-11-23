@@ -34,12 +34,8 @@ Item {
     })
     readonly property var spec: tones[tone] || tones["info"]
 
-    // Any item can declare pmTouchScope, so the walk takes untyped items rather than QQuickItem.
-    function scopeFrom(item) {
-        return !!item && (item.pmTouchScope === true || scopeFrom(item.parent))
-    }
-    Component.onCompleted: touchScope = scopeFrom(parent)
-    onParentChanged: touchScope = scopeFrom(parent)
+    Component.onCompleted: touchScope = Purrimer.inTouchScope(root)
+    onParentChanged: touchScope = Purrimer.inTouchScope(root)
 
     implicitWidth: 360
     implicitHeight: (Math.max(row.implicitHeight, 20) + 24) * collapse

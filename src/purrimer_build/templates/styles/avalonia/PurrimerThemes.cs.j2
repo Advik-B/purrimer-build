@@ -24,6 +24,22 @@ public static class PurrimerThemes
     public static IReadOnlyList<ThemeVariant> All { get; } = new[] { {% for t in themes %}{{ labels[t] }}{{ ", " if not loop.last }}{% endfor %} };
 }
 
+// Marks a touch scope: components inside switch to their touch design (Banner's swipe, Slider's touch thumb).
+// MobileScreen sets it; set pm:PurrimerTouch.Scope="True" on any other container. It is inherited down the tree.
+public sealed class PurrimerTouch : AvaloniaObject
+{
+    public static readonly AttachedProperty<bool> ScopeProperty =
+        AvaloniaProperty.RegisterAttached<PurrimerTouch, AvaloniaObject, bool>("Scope", inherits: true);
+
+    private PurrimerTouch()
+    {
+    }
+
+    public static bool GetScope(AvaloniaObject element) => element.GetValue(ScopeProperty);
+
+    public static void SetScope(AvaloniaObject element, bool value) => element.SetValue(ScopeProperty, value);
+}
+
 // Motion switches shared by every control.
 public static class PurrimerMotion
 {

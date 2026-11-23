@@ -61,6 +61,7 @@ public class MobileScreen : ContentControl
 
     public MobileScreen()
     {
+        PurrimerTouch.SetScope(this, true);
         _pull.Changed += v => SetCurrentValue(PullProperty, v);
         _fling.Changed += v =>
         {

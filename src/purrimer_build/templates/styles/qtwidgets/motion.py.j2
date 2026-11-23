@@ -170,3 +170,14 @@ class LongPress(QObject):
 
     def cancel(self) -> None:
         self._timer.stop()
+
+
+def in_touch_scope(widget: QWidget) -> bool:
+    """True when an ancestor sets the pmTouchScope property, as MobileScreen does. Components inside switch to their
+    touch design."""
+    parent = widget.parentWidget()
+    while parent is not None:
+        if parent.property("pmTouchScope"):
+            return True
+        parent = parent.parentWidget()
+    return False
