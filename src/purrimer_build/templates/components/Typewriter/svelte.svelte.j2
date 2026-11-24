@@ -1,0 +1,62 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import { effectiveKind, inView, typewrite, type MotionKind } from "../motion";
+
+  let {
+    text,
+    speed,
+    delay,
+    caret = true,
+    trigger = "mount",
+    play = true,
+    replay,
+    kind,
+    as = "span",
+    ondone,
+    class: className = "",
+  }: {
+    text: string;
+    // Milliseconds per character. Defaults to 62 sleepy, 28 playful.
+    speed?: number;
+    delay?: number;
+    // true hides the caret when done; "always" keeps it blinking.
+    caret?: boolean | "always";
+    trigger?: "mount" | "inView";
+    play?: boolean;
+    // Change any value to type again.
+    replay?: unknown;
+    kind?: MotionKind;
+    as?: string;
+    ondone?: () => void;
+    class?: string;
+  } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let seen = $state(false);
+  let count = $state(0);
+  let still = $state(false);
+  const chars = $derived(Array.from(text));
+  const go = $derived(trigger === "inView" ? seen : play);
+
+  $effect(() => {
+    if (trigger !== "inView" || !el) return;
+    return inView(el, (inside) => (seen = inside));
+  });
+
+  $effect(() => {
+    void replay;
+    const line = text;
+    if (!go || !el) return;
+    const k = effectiveKind(el, kind);
+    still = k === "still";
+    return typewrite(line, k, { speed: speed || undefined, delay }, (n) => (count = n), ondone);
+  });
+
+  const done = $derived(count >= chars.length);
+</script>
+
+<svelte:element this={as} bind:this={el} class={["pm-typewriter", still && "pm-m pm-m-wake", className]} data-motion={kind}>
+  <span class="pm-sr-only">{text}</span>
+  <span aria-hidden="true">{chars.slice(0, count).join("")}</span>{#if caret !== false && (!done || caret === "always")}<span class="pm-typewriter__caret" aria-hidden="true"></span>{/if}
+</svelte:element>

@@ -1,0 +1,17 @@
+import { Purrimer, TextReveal } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    spacing: 12px;
+    TextReveal {
+        text: "All caught up today.";
+        pieces: ["All", "caught", "up", "today."];
+    }
+    TextReveal {
+        text: "Branch ready";
+        pieces: ["B", "r", "a", "n", "c", "h", " ", "r", "e", "a", "d", "y"];
+        by: "letter";
+        effect: "tangle";
+        font-size: Purrimer.text-title-medium.font-size;
+    }
+}

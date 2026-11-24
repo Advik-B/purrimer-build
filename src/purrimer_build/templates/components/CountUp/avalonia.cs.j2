@@ -1,0 +1,245 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Counts a number to To, or rolls each digit like an odometer (Mode="roll", the rightmost digit first). Digits are
+// JetBrains Mono at 500 with a slashed zero, and separators are pulled in so 1,284 reads as one number. Screen
+// readers hear only the final value. Changing To counts on from the current number.
+public class CountUp : Control
+{
+    private const string Separators = ",.'  ";
+
+    public static readonly StyledProperty<double> ToProperty = AvaloniaProperty.Register<CountUp, double>(nameof(To));
+    public static readonly StyledProperty<double> FromProperty = AvaloniaProperty.Register<CountUp, double>(nameof(From));
+    public static readonly StyledProperty<int> DecimalsProperty = AvaloniaProperty.Register<CountUp, int>(nameof(Decimals));
+    public static readonly StyledProperty<string> PrefixProperty = AvaloniaProperty.Register<CountUp, string>(nameof(Prefix), "");
+    public static readonly StyledProperty<string> SuffixProperty = AvaloniaProperty.Register<CountUp, string>(nameof(Suffix), "");
+    public static readonly StyledProperty<string> ModeProperty = AvaloniaProperty.Register<CountUp, string>(nameof(Mode), "{{ c.spec.props.mode.default }}");
+    public static readonly StyledProperty<double> DurationProperty = AvaloniaProperty.Register<CountUp, double>(nameof(Duration));
+    public static readonly StyledProperty<string> TriggerProperty = AvaloniaProperty.Register<CountUp, string>(nameof(Trigger), "mount");
+    public static readonly StyledProperty<string> KindProperty = AvaloniaProperty.Register<CountUp, string>(nameof(Kind), "");
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontFamilyProperty.AddOwner<CountUp>();
+    public static readonly StyledProperty<double> FontSizeProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontSizeProperty.AddOwner<CountUp>();
+    public static readonly StyledProperty<double> LineHeightProperty = AvaloniaProperty.Register<CountUp, double>(nameof(LineHeight), 40);
+    public static readonly StyledProperty<IBrush?> ForegroundProperty =
+        global::Avalonia.Controls.Documents.TextElement.ForegroundProperty.AddOwner<CountUp>();
+
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _value;
+    private double _start;
+    private bool _attached;
+
+    static CountUp()
+    {
+        AffectsRender<CountUp>(ForegroundProperty);
+        AffectsMeasure<CountUp>(ToProperty, DecimalsProperty, PrefixProperty, SuffixProperty, FontFamilyProperty, FontSizeProperty, LineHeightProperty);
+        ToProperty.Changed.AddClassHandler<CountUp>((c, e) =>
+        {
+            c._start = c._value;
+            AutomationProperties.SetName(c, c.Format(c.To));
+            if (c._attached)
+                c.Begin();
+            else
+                c._value = c.From;
+        });
+    }
+
+    public CountUp()
+    {
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
+    }
+
+    public double To { get => GetValue(ToProperty); set => SetValue(ToProperty, value); }
+    public double From { get => GetValue(FromProperty); set => SetValue(FromProperty, value); }
+    public int Decimals { get => GetValue(DecimalsProperty); set => SetValue(DecimalsProperty, value); }
+    public string Prefix { get => GetValue(PrefixProperty); set => SetValue(PrefixProperty, value); }
+    public string Suffix { get => GetValue(SuffixProperty); set => SetValue(SuffixProperty, value); }
+    // count, or roll: each digit rolls like an odometer.
+    public string Mode { get => GetValue(ModeProperty); set => SetValue(ModeProperty, value); }
+    // ms; 0 uses 900 sleepy, 800 playful.
+    public double Duration { get => GetValue(DurationProperty); set => SetValue(DurationProperty, value); }
+    // mount or inView
+    public string Trigger { get => GetValue(TriggerProperty); set => SetValue(TriggerProperty, value); }
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    public double FontSize { get => GetValue(FontSizeProperty); set => SetValue(FontSizeProperty, value); }
+    public double LineHeight { get => GetValue(LineHeightProperty); set => SetValue(LineHeightProperty, value); }
+    public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+
+    private string Effective => PurrimerMotion.EffectiveKind(this, Kind);
+
+    public string Format(double value)
+    {
+        var text = Math.Abs(value).ToString("N" + Decimals, CultureInfo.GetCultureInfo("en-US"));
+        return Prefix + (value < 0 ? "-" : "") + text + Suffix;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        _value = _start = From;
+        AutomationProperties.SetName(this, Format(To));
+        Begin();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _attached = false;
+        _timer.Stop();
+    }
+
+    private void Begin()
+    {
+        if (PurrimerMotion.PauseLoops || Effective == "still")
+        {
+            _value = To;
+            _timer.Stop();
+            InvalidateVisual();
+            return;
+        }
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    private double Length
+    {
+        get
+        {
+            var kind = Effective;
+            if (Mode == "roll")
+                return PurrimerMotionCatalog.Entry("emerge", kind).Duration + Format(To).Count(char.IsDigit) * PurrimerMotionCatalog.Stagger(kind);
+            return Duration > 0 ? Duration : kind == "playful" ? 800 : 900;
+        }
+    }
+
+    private static double CountEase(string kind, double p)
+    {
+        if (kind != "playful")
+            return 1 - Math.Pow(1 - p, 5);
+        double zeta = 0.55, omega = 12, t = p * 0.781;
+        var wd = omega * Math.Sqrt(1 - zeta * zeta);
+        return 1 - Math.Exp(-zeta * omega * t) * (Math.Cos(wd * t) + zeta * omega / wd * Math.Sin(wd * t));
+    }
+
+    private void Tick()
+    {
+        var elapsed = _clock.Elapsed.TotalMilliseconds;
+        if (Mode != "roll")
+        {
+            var p = Math.Min(1, elapsed / Math.Max(1, Length));
+            var f = Math.Pow(10, Decimals);
+            _value = p >= 1 ? To : Math.Round((_start + (To - _start) * CountEase(Effective, p)) * f) / f;
+        }
+        if (elapsed >= Length)
+        {
+            _timer.Stop();
+            _value = To;
+        }
+        InvalidateVisual();
+    }
+
+    // Each character with its roll position: a digit's column offset (0 to 9, fractional while rolling), else -1.
+    private List<(char Ch, double Roll)> Cells()
+    {
+        if (Mode != "roll")
+            return Format(_value).Select(ch => (ch, -1.0)).ToList();
+        var final = Format(To);
+        var start = Math.Abs(Math.Round(_start)).ToString(CultureInfo.InvariantCulture).Reverse().ToArray();
+        var count = final.Count(char.IsDigit);
+        var kind = Effective;
+        var entry = PurrimerMotionCatalog.Entry("emerge", kind);
+        var curve = PurrimerMotionCatalog.Entry("rise", kind).Easing;
+        var stagger = PurrimerMotionCatalog.Stagger(kind);
+        var elapsed = _clock.Elapsed.TotalMilliseconds;
+        var cells = new List<(char, double)>();
+        var seen = 0;
+        foreach (var ch in final)
+        {
+            if (!char.IsDigit(ch))
+            {
+                cells.Add((ch, -1));
+                continue;
+            }
+            var index = count - 1 - seen++;
+            double end = ch - '0';
+            if (!_timer.IsEnabled)
+            {
+                cells.Add((ch, end));
+                continue;
+            }
+            double s = index < start.Length ? start[index] - '0' : 0;
+            var p = Math.Clamp((elapsed - index * stagger) / Math.Max(1, entry.Duration), 0, 1);
+            cells.Add((ch, s + (end - s) * PurrimerMotionCatalog.Ease(curve, p)));
+        }
+        return cells;
+    }
+
+    private FormattedText Text(string text)
+    {
+        var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(FontFamily, FontStyle.Normal, FontWeight.Medium), FontSize, Foreground);
+        formatted.SetFontFeatures(new FontFeatureCollection { new FontFeature { Tag = "zero", Value = 1 }, new FontFeature { Tag = "tnum", Value = 1 } });
+        return formatted;
+    }
+
+    private double Advance(char ch, double zero)
+    {
+        var width = Text(ch.ToString()).WidthIncludingTrailingWhitespace;
+        // Monospace gives separators a full cell; pull them in.
+        return Separators.Contains(ch) ? width - 0.36 * zero : width;
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var zero = Text("0").WidthIncludingTrailingWhitespace;
+        return new Size(Format(To).Sum(ch => Advance(ch, zero)) + 1, LineHeight);
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var zero = Text("0").WidthIncludingTrailingWhitespace;
+        var x = 0.0;
+        foreach (var (ch, roll) in Cells())
+        {
+            var advance = Advance(ch, zero);
+            if (roll < 0)
+            {
+                var text = Text(ch.ToString());
+                var offset = Separators.Contains(ch) ? -0.18 * zero : 0;
+                context.DrawText(text, new Point(x + offset, (LineHeight - text.Height) / 2));
+            }
+            else
+            {
+                using (context.PushClip(new Rect(x, 0, advance, LineHeight)))
+                {
+                    var b = (int)Math.Floor(roll);
+                    for (var n = b; n <= b + 1; n++)
+                    {
+                        if (n < 0 || n > 9)
+                            continue;
+                        var digit = Text(n.ToString(CultureInfo.InvariantCulture));
+                        context.DrawText(digit, new Point(x, (n - roll) * LineHeight + (LineHeight - digit.Height) / 2));
+                    }
+                }
+            }
+            x += advance;
+        }
+    }
+}

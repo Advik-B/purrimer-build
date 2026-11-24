@@ -1,0 +1,62 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { effectiveKind, inView, typewrite, type MotionKind } from "../motion";
+
+export type TypewriterProps = {
+  text: string;
+  // Milliseconds per character. Defaults to 62 sleepy, 28 playful.
+  speed?: number;
+  delay?: number;
+  // true hides the caret when done; "always" keeps it blinking.
+  caret?: boolean | "always";
+  trigger?: "mount" | "inView";
+  play?: boolean;
+  // Change any value to type again.
+  replay?: unknown;
+  kind?: MotionKind;
+  as?: string;
+  onDone?: () => void;
+  class?: string;
+};
+
+export function Typewriter(props: TypewriterProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "span");
+  const [el, setEl] = createSignal<HTMLElement>();
+  const [seen, setSeen] = createSignal(false);
+  const [count, setCount] = createSignal(0);
+  const [still, setStill] = createSignal(false);
+  const chars = () => Array.from(props.text);
+  const go = () => ((props.trigger ?? "mount") === "inView" ? seen() : props.play !== false);
+
+  createEffect(
+    () => ((props.trigger ?? "mount") === "inView" ? el() : undefined),
+    (node) => {
+      if (node) onCleanup(inView(node, setSeen));
+    },
+  );
+
+  createEffect(
+    () => [props.text, go(), el(), props.replay] as const,
+    ([text, going, node]) => {
+      if (!going || !node) return;
+      const k = effectiveKind(node, props.kind);
+      setStill(k === "still");
+      onCleanup(typewrite(text, k, { speed: props.speed || undefined, delay: props.delay }, setCount, props.onDone));
+    },
+  );
+
+  const caret = () => props.caret ?? true;
+  const done = () => count() >= chars().length;
+
+  return (
+    <Tag ref={setEl} class={["pm-typewriter", still() && "pm-m pm-m-wake", props.class]} data-motion={props.kind}>
+      <span class="pm-sr-only">{props.text}</span>
+      <span aria-hidden="true">{chars().slice(0, count()).join("")}</span>
+      <Show when={caret() !== false && (!done() || caret() === "always")}>
+        <span class="pm-typewriter__caret" aria-hidden="true" />
+      </Show>
+    </Tag>
+  );
+}

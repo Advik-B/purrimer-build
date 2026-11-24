@@ -1,0 +1,155 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using System.Globalization;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Types Text one character at a time with a mauve caret: 62ms a character sleepy (pausing after punctuation),
+// 28ms playful with a little jitter. Caret is "true" (hidden when done), "always" or "false". Screen readers hear
+// the whole text at once. Bump Replay to type again; Done fires at the end.
+public class Typewriter : Control
+{
+    private const string Punctuation = ".,;:!?";
+
+    public static readonly StyledProperty<string> TextProperty = AvaloniaProperty.Register<Typewriter, string>(nameof(Text), "");
+    public static readonly StyledProperty<double> SpeedProperty = AvaloniaProperty.Register<Typewriter, double>(nameof(Speed));
+    public static readonly StyledProperty<double> DelayProperty = AvaloniaProperty.Register<Typewriter, double>(nameof(Delay));
+    public static readonly StyledProperty<string> CaretProperty = AvaloniaProperty.Register<Typewriter, string>(nameof(Caret), "true");
+    public static readonly StyledProperty<string> TriggerProperty = AvaloniaProperty.Register<Typewriter, string>(nameof(Trigger), "mount");
+    public static readonly StyledProperty<string> KindProperty = AvaloniaProperty.Register<Typewriter, string>(nameof(Kind), "");
+    public static readonly StyledProperty<int> ReplayProperty = AvaloniaProperty.Register<Typewriter, int>(nameof(Replay));
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontFamilyProperty.AddOwner<Typewriter>();
+    public static readonly StyledProperty<double> FontSizeProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontSizeProperty.AddOwner<Typewriter>();
+    public static readonly StyledProperty<FontWeight> FontWeightProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontWeightProperty.AddOwner<Typewriter>();
+    public static readonly StyledProperty<double> LineHeightProperty = AvaloniaProperty.Register<Typewriter, double>(nameof(LineHeight), 20);
+    public static readonly StyledProperty<IBrush?> ForegroundProperty =
+        global::Avalonia.Controls.Documents.TextElement.ForegroundProperty.AddOwner<Typewriter>();
+    public static readonly StyledProperty<IBrush?> CaretBrushProperty = AvaloniaProperty.Register<Typewriter, IBrush?>(nameof(CaretBrush));
+
+    private readonly DispatcherTimer _step;
+    private readonly DispatcherTimer _blink;
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly Random _random = new();
+    private int _count;
+    private bool _attached;
+
+    static Typewriter()
+    {
+        AffectsRender<Typewriter>(ForegroundProperty, CaretBrushProperty, CaretProperty);
+        AffectsMeasure<Typewriter>(TextProperty, FontFamilyProperty, FontSizeProperty, FontWeightProperty, LineHeightProperty);
+        TextProperty.Changed.AddClassHandler<Typewriter>((t, _) => { AutomationProperties.SetName(t, t.Text); if (t._attached) t.Start(); });
+        ReplayProperty.Changed.AddClassHandler<Typewriter>((t, _) => { if (t._attached) t.Start(); });
+    }
+
+    public Typewriter()
+    {
+        _step = new DispatcherTimer(TimeSpan.FromMilliseconds(62), DispatcherPriority.Render, (_, _) => Next());
+        _step.Stop();
+        _blink = new DispatcherTimer(TimeSpan.FromMilliseconds(50), DispatcherPriority.Render, (_, _) => InvalidateVisual());
+    }
+
+    public event EventHandler? Done;
+
+    public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
+    // ms per character; 0 uses 62 sleepy, 28 playful.
+    public double Speed { get => GetValue(SpeedProperty); set => SetValue(SpeedProperty, value); }
+    public double Delay { get => GetValue(DelayProperty); set => SetValue(DelayProperty, value); }
+    // "true" hides the caret when done, "always" keeps it blinking, "false" never shows it.
+    public string Caret { get => GetValue(CaretProperty); set => SetValue(CaretProperty, value); }
+    // mount or inView (inView plays on attach here).
+    public string Trigger { get => GetValue(TriggerProperty); set => SetValue(TriggerProperty, value); }
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+    public int Replay { get => GetValue(ReplayProperty); set => SetValue(ReplayProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    public double FontSize { get => GetValue(FontSizeProperty); set => SetValue(FontSizeProperty, value); }
+    public FontWeight FontWeight { get => GetValue(FontWeightProperty); set => SetValue(FontWeightProperty, value); }
+    public double LineHeight { get => GetValue(LineHeightProperty); set => SetValue(LineHeightProperty, value); }
+    public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+    public IBrush? CaretBrush { get => GetValue(CaretBrushProperty); set => SetValue(CaretBrushProperty, value); }
+
+    private string Effective => PurrimerMotion.EffectiveKind(this, Kind);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        AutomationProperties.SetName(this, Text);
+        if (!PurrimerMotion.PauseLoops)
+            _blink.Start();
+        Start();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _attached = false;
+        _step.Stop();
+        _blink.Stop();
+    }
+
+    public void Start()
+    {
+        _step.Stop();
+        if (PurrimerMotion.PauseLoops || Effective == "still")
+        {
+            _count = Text.Length;
+            InvalidateVisual();
+            Done?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        _count = 0;
+        InvalidateVisual();
+        _step.Interval = TimeSpan.FromMilliseconds(Math.Max(1, Delay));
+        _step.Start();
+    }
+
+    private void Next()
+    {
+        _step.Stop();
+        _count++;
+        InvalidateVisual();
+        if (_count >= Text.Length)
+        {
+            Done?.Invoke(this, EventArgs.Empty);
+            return;
+        }
+        var playful = Effective == "playful";
+        var b = Speed > 0 ? Speed : playful ? 28 : 62;
+        var pause = Punctuation.Contains(Text[_count - 1]) ? b * (playful ? 4 : 6) : 0;
+        var jitter = playful ? _random.NextDouble() * b : 0;
+        _step.Interval = TimeSpan.FromMilliseconds(b + pause + jitter);
+        _step.Start();
+    }
+
+    private FormattedText Format(string text) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, new Typeface(FontFamily, FontStyle.Normal, FontWeight), FontSize, Foreground);
+
+    protected override Size MeasureOverride(Size availableSize) =>
+        new(Format(Text).WidthIncludingTrailingWhitespace + 4, LineHeight);
+
+    public override void Render(DrawingContext context)
+    {
+        var shown = Format(Text.Substring(0, Math.Min(_count, Text.Length)));
+        var top = (LineHeight - shown.Height) / 2;
+        context.DrawText(shown, new Point(0, top));
+        var finished = _count >= Text.Length;
+        if (Caret == "false" || (finished && Caret != "always") || CaretBrush is null)
+            return;
+        var blink = (Effective == "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}) * 0.3;
+        if (!PurrimerMotion.PauseLoops && _clock.Elapsed.TotalMilliseconds % blink >= blink / 2)
+            return;
+        var height = shown.Height * 1.1 / 1.2;
+        context.DrawRectangle(CaretBrush, null, new Rect(shown.WidthIncludingTrailingWhitespace + 1, (LineHeight - height) / 2, 2, height), 1, 1);
+    }
+}

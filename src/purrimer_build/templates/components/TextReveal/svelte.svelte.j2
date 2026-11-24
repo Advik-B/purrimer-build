@@ -1,0 +1,80 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import { effectiveKind, inView, revealPieces, tangle, type EnterMotion, type MotionKind } from "../motion";
+
+  let {
+    text,
+    by = "word",
+    effect: look = "reveal",
+    name = "{{ c.spec.props.name.default }}",
+    step,
+    trigger = "mount",
+    play = true,
+    replay,
+    kind,
+    as = "span",
+    class: className = "",
+    style = "",
+  }: {
+    text: string;
+    by?: "word" | "letter";
+    // tangle: scrambled letters settle left to right.
+    effect?: "reveal" | "tangle";
+    name?: EnterMotion;
+    step?: number;
+    trigger?: "mount" | "inView";
+    play?: boolean;
+    // Change any value to play again.
+    replay?: unknown;
+    kind?: MotionKind;
+    as?: string;
+    class?: string;
+    style?: string;
+  } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let seen = $state(false);
+  let shown = $state("");
+  const go = $derived(trigger === "inView" ? seen : play);
+
+  $effect(() => {
+    if (trigger !== "inView" || !el) return;
+    return inView(el, (inside) => (seen = inside));
+  });
+
+  $effect(() => {
+    void replay;
+    const line = text;
+    if (look !== "tangle") return;
+    if (!go || !el) {
+      shown = line;
+      return;
+    }
+    return tangle(line, effectiveKind(el, kind), { step: step || undefined }, (s) => (shown = s));
+  });
+
+  const pieces = $derived(revealPieces(text, by));
+</script>
+
+<svelte:element
+  this={as}
+  bind:this={el}
+  class={["pm-text-reveal", look === "tangle" && "pm-text-reveal--tangle", className]}
+  style={style || undefined}
+  data-motion={kind}
+>
+  <span class="pm-sr-only">{text}</span>
+  {#if look === "tangle"}
+    <span aria-hidden="true">{shown}</span>
+  {:else}
+    {#key replay}
+      <span aria-hidden="true">
+        {#each pieces as piece, i (i)}{#if piece.space}{piece.text}{:else}<span
+              class={["pm-text-reveal__piece", "pm-m", `pm-m-${name}`, !go && "pm-m-paused"]}
+              style="--pm-m-i: {piece.index}{step ? `; --pm-m-stagger: ${step}ms` : ''}">{piece.text}</span
+            >{/if}{/each}
+      </span>
+    {/key}
+  {/if}
+</svelte:element>

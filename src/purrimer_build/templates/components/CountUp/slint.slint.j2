@@ -1,0 +1,188 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint has no number formatting, so the digits are worked out one cell at a time: up to 12 integer digits with
+// en-US grouping, and up to 3 decimals. Slint cannot select font features, so the zero is not slashed.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PmMotionCatalog } from "../motion.slint";
+
+component CountUpCell inherits Rectangle {
+    in property <string> glyph;
+    // A digit's roll position, 0 to 9 (fractional while rolling); negative draws `glyph` as it is.
+    in property <float> roll: -1;
+    in property <bool> separator;
+    in property <length> zero;
+    in property <length> line;
+    in property <length> font-size;
+    in property <int> font-weight;
+    in property <color> ink;
+
+    // Monospace gives separators a full cell; pull them in.
+    width: root.separator ? root.zero * 0.64 : root.zero;
+    height: root.line;
+    clip: root.roll >= 0;
+
+    if root.roll < 0: Text {
+        x: root.separator ? -root.zero * 0.18 : 0px;
+        height: root.line;
+        vertical-alignment: center;
+        text: root.glyph;
+        font-family: "{{ tokens.family_names.numeric }}";
+        font-size: root.font-size;
+        font-weight: root.font-weight;
+        color: root.ink;
+    }
+    if root.roll >= 0: Rectangle {
+        for n in 10: Text {
+            y: (n - root.roll) * root.line;
+            height: root.line;
+            vertical-alignment: center;
+            text: n;
+            font-family: "{{ tokens.family_names.numeric }}";
+            font-size: root.font-size;
+            font-weight: root.font-weight;
+            color: root.ink;
+        }
+    }
+}
+
+export component CountUp {
+    in property <float> to: 0;
+    in property <float> from: 0;
+    // 0 to 3
+    in property <int> decimals: 0;
+    in property <string> prefix;
+    in property <string> suffix;
+    // count, or roll: each digit rolls like an odometer, the rightmost first.
+    in property <string> mode: "{{ c.spec.props.mode.default }}";
+    // 0ms uses 900ms sleepy, 800ms playful.
+    in property <duration> duration: 0ms;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    in property <length> font-size: Purrimer.text-stat.font-size;
+    in property <length> line-height: Purrimer.text-stat.line-height;
+    in property <color> color: Purrimer.fg-color-default;
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <int> kind-index: root.reduce || PurrimerMotion.reduce ? (root.playful ? 0 : 2) : (root.playful ? 1 : 0);
+    property <bool> active;
+    property <float> start-value: root.from;
+    property <duration> started;
+    property <float> roll-length: PmMotionCatalog.entry("emerge", root.kind-index).dur / 1ms;
+    property <float> stagger: PmMotionCatalog.stagger(root.kind-index) / 1ms;
+    property <float> length: root.mode == "roll" ? root.roll-length + root.stagger * (root.final-digits + root.decimals)
+        : root.duration > 0ms ? root.duration / 1ms : root.kind-index == 1 ? 800 : 900;
+    property <float> elapsed: root.active ? (animation-tick() - root.started) / 1ms : 0;
+    property <float> p: Math.clamp(root.elapsed / Math.max(root.length, 1), 0, 1);
+    // Sleepy eases out (a quintic); playful is the same spring as easing-playful-spring and passes the value.
+    property <float> wd: 12 * Math.sqrt(1 - 0.55 * 0.55);
+    property <float> spring: 1 - Math.pow(2.718281828, -0.55 * 12 * root.p * 0.781)
+        * (Math.cos(root.wd * root.p * 0.781 * 1rad) + 0.55 * 12 / root.wd * Math.sin(root.wd * root.p * 0.781 * 1rad));
+    property <float> eased: root.kind-index == 1 ? root.spring : 1 - Math.pow(1 - root.p, 5);
+    property <float> scale: Math.pow(10, root.decimals);
+    property <float> value: root.active && root.mode == "count"
+        ? round((root.start-value + (root.to - root.start-value) * root.eased) * root.scale) / root.scale
+        : root.to;
+    property <float> magnitude: Math.abs(root.value) + 0.0000001;
+    property <int> whole: floor(root.magnitude);
+    property <int> int-digits: {% for k in range(11, 0, -1) %}root.whole >= {{ 10 ** k }} ? {{ k + 1 }} : {% endfor %}1;
+    property <float> start-magnitude: Math.abs(root.start-value);
+    property <int> final-whole: floor(Math.abs(root.to) + 0.0000001);
+    property <int> final-digits: {% for k in range(11, 0, -1) %}root.final-whole >= {{ 10 ** k }} ? {{ k + 1 }} : {% endfor %}1;
+    // The roll position of the digit `i` places from the right (decimals first), at the current time.
+    pure function roll-at(i: int, end: int, first: int) -> float {
+        if !root.active || root.mode != "roll" {
+            return end;
+        }
+        let q = Math.clamp((root.elapsed - i * root.stagger) / Math.max(root.roll-length, 1), 0, 1);
+        return first + (end - first) * PmMotionCatalog.ease(PmMotionCatalog.entry("rise", root.kind-index).ease, q);
+    }
+    pure function digit-of(m: float, place: float) -> int {
+        return mod(floor(m / place), 10);
+    }
+
+    public function begin() {
+        root.start-value = root.value;
+        if PurrimerMotion.pause-loops || root.kind-index == 2 {
+            root.active = false;
+            return;
+        }
+        root.started = animation-tick();
+        root.active = true;
+    }
+
+    init => {
+        root.start-value = root.from;
+        root.begin();
+    }
+    changed to => { root.begin(); }
+
+    Timer {
+        interval: 16ms;
+        running: root.active;
+        triggered => {
+            if root.elapsed >= root.length {
+                root.active = false;
+                root.start-value = root.to;
+            }
+        }
+    }
+
+    zero-text := Text {
+        visible: false;
+        text: "0";
+        font-family: "{{ tokens.family_names.numeric }}";
+        font-size: root.font-size;
+        font-weight: 500;
+    }
+
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.prefix + (root.to < 0 ? "-" : "") + "\{floor(Math.abs(root.to))}" + root.suffix;
+
+    HorizontalLayout {
+        alignment: start;
+        if root.prefix != "": Text {
+            vertical-alignment: center;
+            text: root.prefix;
+            font-family: "{{ tokens.family_names.numeric }}";
+            font-size: root.font-size;
+            font-weight: 500;
+            color: root.color;
+        }
+        if root.value < 0: CountUpCell { glyph: "-"; zero: zero-text.preferred-width; line: root.line-height; font-size: root.font-size; font-weight: 500; ink: root.color; }
+{% for k in range(11, -1, -1) %}
+        if root.int-digits > {{ k }}: CountUpCell {
+            glyph: "\{root.digit-of(root.magnitude, {{ 10 ** k }})}";
+            roll: root.mode == "roll" ? root.roll-at(root.decimals + {{ k }}, root.digit-of(root.magnitude, {{ 10 ** k }}), root.digit-of(root.start-magnitude, {{ 10 ** k }})) : -1;
+            zero: zero-text.preferred-width;
+            line: root.line-height;
+            font-size: root.font-size;
+            font-weight: 500;
+            ink: root.color;
+        }
+{% if k > 0 and k % 3 == 0 %}
+        if root.int-digits > {{ k }}: CountUpCell { glyph: ","; separator: true; zero: zero-text.preferred-width; line: root.line-height; font-size: root.font-size; font-weight: 500; ink: root.color; }
+{% endif %}
+{% endfor %}
+        if root.decimals > 0: CountUpCell { glyph: "."; separator: true; zero: zero-text.preferred-width; line: root.line-height; font-size: root.font-size; font-weight: 500; ink: root.color; }
+{% for k in range(1, 4) %}
+        if root.decimals >= {{ k }}: CountUpCell {
+            glyph: "\{root.digit-of(root.magnitude * {{ 10 ** k }}, 1)}";
+            roll: root.mode == "roll" ? root.roll-at(root.decimals - {{ k }}, root.digit-of(root.magnitude * {{ 10 ** k }}, 1), root.digit-of(root.start-magnitude * {{ 10 ** k }}, 1)) : -1;
+            zero: zero-text.preferred-width;
+            line: root.line-height;
+            font-size: root.font-size;
+            font-weight: 500;
+            ink: root.color;
+        }
+{% endfor %}
+        if root.suffix != "": Text {
+            vertical-alignment: center;
+            text: root.suffix;
+            font-family: "{{ tokens.family_names.numeric }}";
+            font-size: root.font-size;
+            font-weight: 500;
+            color: root.color;
+        }
+    }
+}

@@ -1,0 +1,93 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import { untrack } from "svelte";
+  import { countUp, effectiveKind, formatNumber, inView, numberPieces, rollCells, type MotionKind } from "../motion";
+
+  let {
+    to,
+    from = 0,
+    decimals = 0,
+    prefix = "",
+    suffix = "",
+    locale,
+    format,
+    mode = "count",
+    duration,
+    trigger = "mount",
+    play = true,
+    kind,
+    class: className = "",
+  }: {
+    to: number;
+    from?: number;
+    decimals?: number;
+    prefix?: string;
+    suffix?: string;
+    locale?: string;
+    format?: (value: number) => string;
+    mode?: "count" | "roll";
+    duration?: number;
+    trigger?: "mount" | "inView";
+    play?: boolean;
+    kind?: MotionKind;
+    class?: string;
+  } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let seen = $state(false);
+  let value = $state(untrack(() => from));
+  let rolled = $state(false);
+  let still = $state(false);
+  let previous = untrack(() => from);
+  const fmt = $derived({ decimals, prefix, suffix, locale, format });
+  const go = $derived(trigger === "inView" ? seen : play);
+
+  $effect(() => {
+    if (trigger !== "inView" || !el) return;
+    return inView(el, (inside) => (seen = inside));
+  });
+
+  $effect(() => {
+    const target = to;
+    if (!go || !el) return;
+    const k = effectiveKind(el, kind);
+    still = k === "still";
+    const start = untrack(() => previous);
+    previous = target;
+    if (mode === "roll") {
+      // Two frames, so the columns render at their start digits before they roll.
+      let raf = requestAnimationFrame(() => (raf = requestAnimationFrame(() => (rolled = true))));
+      return () => cancelAnimationFrame(raf);
+    }
+    return countUp(start, target, k, { duration, decimals }, (v) => (value = v));
+  });
+
+  const final = $derived(formatNumber(to, fmt));
+</script>
+
+{#if mode === "roll"}
+  <span bind:this={el} class={["pm-countup", "pm-countup--roll", className]} data-motion={kind}>
+    <span class="pm-sr-only">{final}</span>
+    <span aria-hidden="true" style="display: inline-flex">
+      {#each rollCells(final, from) as cell, i (i)}
+        {#if cell.digit}
+          <span class="pm-countup__digit">
+            <span class="pm-countup__col" style="--d: {rolled || still ? Number(cell.ch) : cell.start}; --pm-m-i: {cell.index}">
+              {#each [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] as n (n)}<span>{n}</span>{/each}
+            </span>
+          </span>
+        {:else}
+          <span class={cell.sep ? "pm-countup__sep" : undefined}>{cell.ch}</span>
+        {/if}
+      {/each}
+    </span>
+  </span>
+{:else}
+  <span bind:this={el} class={["pm-countup", still && "pm-m pm-m-wake", className]} data-motion={kind}>
+    <span class="pm-sr-only">{final}</span>
+    <span aria-hidden="true">
+      {#each numberPieces(formatNumber(value, fmt)) as piece, i (i)}{#if piece.sep}<span class="pm-countup__sep">{piece.text}</span>{:else}{piece.text}{/if}{/each}
+    </span>
+  </span>
+{/if}

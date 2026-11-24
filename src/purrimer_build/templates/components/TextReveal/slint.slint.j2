@@ -1,0 +1,58 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot split a string, so pass the text twice: `text` for screen readers and `pieces`, its words (by word)
+// or letters (by letter), to reveal. Tangle scrambles with a fixed pattern rather than at random.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Motion } from "motion.slint";
+
+export component TextReveal {
+    in property <string> text;
+    in property <[string]> pieces;
+    // word or letter: words are spaced apart, letters are not.
+    in property <string> by: "{{ c.spec.props.by.default }}";
+    // reveal, or tangle: scrambled letters settle left to right (pass letters as pieces).
+    in property <string> effect: "reveal";
+    // Any entrance.
+    in property <string> name: "{{ c.spec.props.name.default }}";
+    // 0ms uses the kind's stagger (tangle: 48ms sleepy, 22ms playful per letter).
+    in property <duration> step: 0ms;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    in property <length> font-size: Purrimer.text-title-large.font-size;
+    in property <int> font-weight: Purrimer.text-title-large.font-weight;
+    in property <color> color: Purrimer.fg-color-default;
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <bool> calm: (root.reduce || PurrimerMotion.reduce) && !root.playful;
+    property <duration> started;
+
+    init => { root.started = PurrimerMotion.loop-tick; }
+    property <int> settled: PurrimerMotion.pause-loops || root.calm ? root.pieces.length
+        : floor((PurrimerMotion.loop-tick - root.started) / (root.step > 0ms ? root.step : root.playful ? 22ms : 48ms));
+    property <[string]> alphabet: ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r",
+        "s", "t", "u", "v", "w", "x", "y", "z", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"];
+
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+
+    HorizontalLayout {
+        alignment: start;
+        spacing: root.by == "word" && root.effect != "tangle" ? root.font-size * 0.25 : 0px;
+        for piece[i] in root.pieces: Motion {
+            name: root.effect == "tangle" ? "wake" : root.name;
+            index: root.step > 0ms ? 0 : i;
+            delay: root.step > 0ms ? i * root.step : 0ms;
+            duration: root.effect == "tangle" ? 1ms : 0ms;
+            kind: root.kind;
+            reduce: root.reduce;
+            Text {
+                text: root.effect != "tangle" || i < root.settled || piece == " " ? piece
+                    : root.alphabet[mod(i * 7 + floor((PurrimerMotion.loop-tick - root.started) / 50ms), 36)];
+                font-size: root.font-size;
+                font-weight: root.font-weight;
+                color: root.color;
+            }
+        }
+    }
+}

@@ -1,0 +1,149 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Reveals one line by word or by letter with any entrance (MotionName), each piece one stagger step after the last,
+// or untangles it from scrambled letters (Effect="tangle"). Screen readers hear the whole line.
+public class TextReveal : StackPanel
+{
+    private const string Alphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+    public static readonly StyledProperty<string> TextProperty = AvaloniaProperty.Register<TextReveal, string>(nameof(Text), "");
+    public static readonly StyledProperty<string> ByProperty = AvaloniaProperty.Register<TextReveal, string>(nameof(By), "{{ c.spec.props.by.default }}");
+    public static readonly StyledProperty<string> EffectNameProperty = AvaloniaProperty.Register<TextReveal, string>(nameof(EffectName), "reveal");
+    public static readonly StyledProperty<string> MotionNameProperty = AvaloniaProperty.Register<TextReveal, string>(nameof(MotionName), "{{ c.spec.props.name.default }}");
+    public static readonly StyledProperty<double> StepProperty = AvaloniaProperty.Register<TextReveal, double>(nameof(Step));
+    public static readonly StyledProperty<string> KindProperty = AvaloniaProperty.Register<TextReveal, string>(nameof(Kind), "");
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontFamilyProperty.AddOwner<TextReveal>();
+    public static readonly StyledProperty<double> FontSizeProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontSizeProperty.AddOwner<TextReveal>();
+    public static readonly StyledProperty<FontWeight> FontWeightProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontWeightProperty.AddOwner<TextReveal>();
+    public static readonly StyledProperty<IBrush?> ForegroundProperty =
+        global::Avalonia.Controls.Documents.TextElement.ForegroundProperty.AddOwner<TextReveal>();
+
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private readonly Random _random = new();
+    private TextBlock? _tangle;
+
+    public TextReveal()
+    {
+        Orientation = global::Avalonia.Layout.Orientation.Horizontal;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Scramble());
+    }
+
+    public string Text { get => GetValue(TextProperty); set => SetValue(TextProperty, value); }
+    // word or letter
+    public string By { get => GetValue(ByProperty); set => SetValue(ByProperty, value); }
+    // reveal, or tangle: scrambled letters settle left to right.
+    public string EffectName { get => GetValue(EffectNameProperty); set => SetValue(EffectNameProperty, value); }
+    // Any entrance.
+    public string MotionName { get => GetValue(MotionNameProperty); set => SetValue(MotionNameProperty, value); }
+    // ms between pieces; 0 uses the kind's stagger (tangle: 48 sleepy, 22 playful per letter).
+    public double Step { get => GetValue(StepProperty); set => SetValue(StepProperty, value); }
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    public double FontSize { get => GetValue(FontSizeProperty); set => SetValue(FontSizeProperty, value); }
+    public FontWeight FontWeight { get => GetValue(FontWeightProperty); set => SetValue(FontWeightProperty, value); }
+    public IBrush? Foreground { get => GetValue(ForegroundProperty); set => SetValue(ForegroundProperty, value); }
+
+    private TextBlock Piece(string text) => new()
+    {
+        Text = text,
+        FontFamily = FontFamily,
+        FontSize = FontSize,
+        FontWeight = FontWeight,
+        Foreground = Foreground,
+        [AutomationProperties.AccessibilityViewProperty] = AccessibilityView.Raw,
+    };
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        Build();
+        base.OnAttachedToVisualTree(e);
+        if (EffectName == "tangle")
+            StartTangle();
+    }
+
+    private void Build()
+    {
+        Children.Clear();
+        AutomationProperties.SetName(this, Text);
+        if (EffectName == "tangle")
+        {
+            _tangle = Piece(Text);
+            Children.Add(_tangle);
+            return;
+        }
+        var parts = By == "letter"
+            ? Text.Select(ch => ch.ToString()).ToArray()
+            : Regex.Split(Text, @"(\s+)").Where(p => p.Length > 0).ToArray();
+        var index = 0;
+        foreach (var part in parts)
+        {
+            if (string.IsNullOrWhiteSpace(part))
+            {
+                Children.Add(Piece(part.Replace(' ', ' ')));
+                continue;
+            }
+            // A custom step replaces the kind's stagger with a plain delay.
+            Children.Add(new Motion
+            {
+                MotionName = MotionName,
+                Kind = Kind,
+                Index = Step > 0 ? 0 : index,
+                Delay = Step > 0 ? index * Step : 0,
+                Child = Piece(part),
+            });
+            index++;
+        }
+    }
+
+    private void StartTangle()
+    {
+        var kind = PurrimerMotion.EffectiveKind(this, Kind);
+        if (PurrimerMotion.PauseLoops || kind == "still" || _tangle is null)
+        {
+            if (_tangle is not null)
+                _tangle.Text = Text;
+            return;
+        }
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    private void Scramble()
+    {
+        if (_tangle is null)
+            return;
+        if (PurrimerMotion.PauseLoops)
+        {
+            _tangle.Text = Text;
+            _timer.Stop();
+            return;
+        }
+        var kind = PurrimerMotion.EffectiveKind(this, Kind);
+        var step = Step > 0 ? Step : kind == "playful" ? 22 : 48;
+        var settled = (int)(_clock.Elapsed.TotalMilliseconds / step);
+        var shown = new StringBuilder();
+        for (var i = 0; i < Text.Length; i++)
+            shown.Append(i < settled || char.IsWhiteSpace(Text[i]) ? Text[i] : Alphabet[_random.Next(Alphabet.Length)]);
+        _tangle.Text = shown.ToString();
+        if (settled >= Text.Length)
+            _timer.Stop();
+    }
+}

@@ -1,0 +1,13 @@
+.pm-typewriter__caret {
+  display: inline-block;
+  width: 2px;
+  height: 1.1em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: {{ "fgColor-accent" | tok }};
+  border-radius: 1px;
+  animation: pm-typewriter-caret calc(var(--pm-m-loop) * 0.3) steps(1, end) infinite;
+}
+@keyframes pm-typewriter-caret {
+  50% { opacity: 0; }
+}

@@ -1,0 +1,49 @@
+name = "TextReveal"
+group = "Motion"
+order = 108
+summary = "Reveals a line word by word or letter by letter with any entrance, or untangles it from scrambled letters."
+requires = ["Motion"]
+
+[props.text]
+type = "string"
+default = ""
+doc = "One line: titles of empty states, onboarding headlines, release highlights. Screen readers hear it all at once."
+
+[props.by]
+type = "enum"
+default = "word"
+doc = "word or letter. Letter by letter pounce in a playful scope reads as prancing letters."
+values = ["word", "letter"]
+
+[props.effect]
+type = "enum"
+default = "reveal"
+doc = "reveal plays the entrance on each piece; tangle settles scrambled letters left to right (for codes and short identifiers)."
+values = ["reveal", "tangle"]
+
+[props.name]
+type = "string"
+default = "rise"
+doc = "Any entrance."
+
+[props.step]
+type = "int"
+default = 0
+doc = "Milliseconds between pieces; 0 uses the kind's stagger (tangle: 48 sleepy, 22 playful per letter)."
+
+[props.trigger]
+type = "enum"
+default = "mount"
+doc = "mount, or inView to wait until it scrolls into view."
+values = ["mount", "inView"]
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind; empty follows the scope."
+values = ["", "sleepy", "playful"]
+
+[props.textStyle]
+type = "string"
+default = "text-title-large"
+doc = "Native targets: the type style; the web takes a text-* class (text-display or text-title-large)."

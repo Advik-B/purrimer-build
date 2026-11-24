@@ -1,0 +1,11 @@
+import { Purrimer, Typewriter } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Typewriter {
+        text: "Good morning. Ready when you are.";
+        parts: ["G", "o", "o", "d", " ", "m", "o", "r", "n", "i", "n", "g", ".", " ", "R", "e", "a", "d", "y", " ", "w", "h", "e", "n", " ", "y", "o", "u", " ", "a", "r", "e", "."];
+        caret: "always";
+        font-size: Purrimer.text-body-large.font-size;
+    }
+}

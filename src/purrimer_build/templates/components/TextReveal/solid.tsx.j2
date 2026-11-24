@@ -1,0 +1,100 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createEffect, createSignal, onCleanup } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { effectiveKind, inView, restart, revealPieces, tangle, type EnterMotion, type MotionKind } from "../motion";
+
+export type TextRevealProps = {
+  text: string;
+  by?: "word" | "letter";
+  // tangle: scrambled letters settle left to right.
+  effect?: "reveal" | "tangle";
+  name?: EnterMotion;
+  step?: number;
+  trigger?: "mount" | "inView";
+  play?: boolean;
+  // Change any value to play again.
+  replay?: unknown;
+  kind?: MotionKind;
+  as?: string;
+  class?: string;
+  style?: JSX.CSSProperties;
+};
+
+export function TextReveal(props: TextRevealProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "span");
+  const [el, setEl] = createSignal<HTMLElement>();
+  const [seen, setSeen] = createSignal(false);
+  const [shown, setShown] = createSignal("");
+  const go = () => ((props.trigger ?? "mount") === "inView" ? seen() : props.play !== false);
+  const tangled = () => props.effect === "tangle";
+
+  createEffect(
+    () => ((props.trigger ?? "mount") === "inView" ? el() : undefined),
+    (node) => {
+      if (node) onCleanup(inView(node, setSeen));
+    },
+  );
+
+  createEffect(
+    () => [props.text, go(), el(), tangled(), props.replay] as const,
+    ([text, going, node, isTangle]) => {
+      if (!isTangle) return;
+      if (!going || !node) {
+        setShown(text);
+        return;
+      }
+      onCleanup(tangle(text, effectiveKind(node, props.kind), { step: props.step || undefined }, setShown));
+    },
+  );
+
+  let started = false;
+  createEffect(
+    () => props.replay,
+    () => {
+      if (!started) {
+        started = true;
+        return;
+      }
+      for (const piece of Array.from(el()?.querySelectorAll(".pm-text-reveal__piece") ?? [])) restart(piece);
+    },
+  );
+
+  const pieces = () => revealPieces(props.text, props.by ?? "word");
+  const pieceStyle = (index: number): JSX.CSSProperties => ({
+    "--pm-m-i": String(index),
+    ...(props.step ? { "--pm-m-stagger": `${props.step}ms` } : {}),
+  });
+
+  return (
+    <Tag
+      ref={setEl}
+      class={["pm-text-reveal", tangled() && "pm-text-reveal--tangle", props.class]}
+      style={props.style}
+      data-motion={props.kind}
+    >
+      <span class="pm-sr-only">{props.text}</span>
+      <Show
+        when={!tangled()}
+        fallback={<span aria-hidden="true">{shown()}</span>}
+      >
+        <span aria-hidden="true">
+          <For each={pieces()}>
+            {(piece) =>
+              piece.space ? (
+                piece.text
+              ) : (
+                <span
+                  class={["pm-text-reveal__piece", "pm-m", `pm-m-${props.name ?? "{{ c.spec.props.name.default }}"}`, !go() && "pm-m-paused"]}
+                  style={pieceStyle(piece.index)}
+                >
+                  {piece.text}
+                </span>
+              )
+            }
+          </For>
+        </span>
+      </Show>
+    </Tag>
+  );
+}
