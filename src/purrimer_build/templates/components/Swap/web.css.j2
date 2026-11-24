@@ -1,0 +1,8 @@
+/* Both children share one grid cell while one leaves and one arrives, so the width settles to the wider of the
+   two while they overlap. */
+.pm-swap {
+  display: inline-grid;
+  vertical-align: top;
+}
+.pm-swap > * { grid-area: 1 / 1; }
+.pm-swap__old { pointer-events: none; }

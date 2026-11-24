@@ -1,0 +1,74 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot keep old children, so Swap swaps a line of text: set `text`, and the previous text leaves while the
+// new one arrives. Both share one cell; the width settles to the wider of the two.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Motion } from "motion.slint";
+
+export component Swap {
+    in property <string> text;
+    in property <string> enter: "{{ c.spec.props.enter.default }}";
+    in property <string> exit: "{{ c.spec.props.exit.default }}";
+    in property <duration> duration: 0ms;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    in property <color> color: Purrimer.fg-color-default;
+    in property <length> font-size: Purrimer.text-body-medium.font-size;
+    in property <int> font-weight: Purrimer.text-body-medium.font-weight;
+
+    property <string> shown;
+    property <string> old;
+    property <bool> leaving;
+
+    init => { root.shown = root.text; }
+
+    changed text => {
+        root.old = root.shown;
+        root.shown = root.text;
+        root.leaving = true;
+        outgoing.start();
+        incoming.start();
+    }
+
+    preferred-width: Math.max(incoming.preferred-width, root.leaving ? outgoing.preferred-width : 0px);
+    preferred-height: incoming.preferred-height;
+
+    outgoing := Motion {
+        x: 0px;
+        y: 0px;
+        width: self.preferred-width;
+        height: self.preferred-height;
+        visible: root.leaving;
+        name: root.exit;
+        trigger: "presence";
+        kind: root.kind;
+        reduce: root.reduce;
+        done => { root.leaving = false; }
+        Text {
+            text: root.old;
+            color: root.color;
+            font-size: root.font-size;
+            font-weight: root.font-weight;
+            accessible-role: none;
+        }
+    }
+
+    incoming := Motion {
+        x: 0px;
+        y: 0px;
+        width: self.preferred-width;
+        height: self.preferred-height;
+        name: root.enter;
+        trigger: "presence";
+        duration: root.duration;
+        kind: root.kind;
+        reduce: root.reduce;
+        Text {
+            text: root.shown;
+            color: root.color;
+            font-size: root.font-size;
+            font-weight: root.font-weight;
+        }
+    }
+}

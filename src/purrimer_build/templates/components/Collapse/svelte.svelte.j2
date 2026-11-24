@@ -1,0 +1,12 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+
+  let { open = false, id, class: className = "", children }: { open?: boolean; id?: string; class?: string; children?: Snippet } = $props();
+</script>
+
+<!-- Closed content is inert, so it cannot be tabbed into. -->
+<div {id} class={["pm-collapse", className]} data-open={open ? "true" : "false"} inert={!open}>
+  <div class="pm-collapse__inner">{@render children?.()}</div>
+</div>

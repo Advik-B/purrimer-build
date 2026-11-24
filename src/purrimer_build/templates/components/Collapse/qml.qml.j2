@@ -1,0 +1,61 @@
+// {{ note }}
+// {{ c.summary }}
+// Children go inside. Closed content is hidden, so it cannot be focused and screen readers skip it.
+pragma ComponentBehavior: Bound
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+Item {
+    id: root
+
+    default property alias content: inner.data
+    property bool open: false
+    // Empty follows the scope.
+    property string kind: ""
+    // 0 closed, 1 open: eased from wherever it was, as a CSS transition does.
+    readonly property real progress: from + (to - from) * PmMotion.ease(PmMotion.EASINGS[timing.ease], phase)
+    signal toggled(bool open)
+
+    property real from: open ? 1 : 0
+    property real to: open ? 1 : 0
+    property real phase: 1
+    // The kind's move curve and medium duration (the same as tab-next).
+    readonly property var timing: PmMotion.entry("tab-next", Purrimer.effectiveKind(root, root.kind))
+
+    clip: true
+    implicitWidth: inner.childrenRect.x + inner.childrenRect.width
+    implicitHeight: inner.implicitHeight * Math.max(0, progress)
+
+    onOpenChanged: {
+        const now = progress
+        anim.stop()
+        from = now
+        to = open ? 1 : 0
+        phase = 0
+        if (Purrimer.pauseLoops) {
+            phase = 1
+            toggled(open)
+        } else {
+            anim.start()
+        }
+    }
+
+    NumberAnimation {
+        id: anim
+        target: root
+        property: "phase"
+        from: 0
+        to: 1
+        duration: root.timing.dur
+        onFinished: root.toggled(root.open)
+    }
+
+    Item {
+        id: inner
+        width: root.width
+        implicitHeight: childrenRect.y + childrenRect.height
+        height: implicitHeight
+        visible: root.progress > 0.001
+        opacity: Math.min(1, Math.max(0, root.progress))
+    }
+}

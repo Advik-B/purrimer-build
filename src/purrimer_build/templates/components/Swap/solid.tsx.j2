@@ -1,0 +1,36 @@
+// {{ note }}
+// {{ c.summary }}
+import { createMemo } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { swapLayers, type EnterMotion, type ExitMotion } from "../motion";
+
+export type SwapProps = {
+  // Changing it swaps the old child out and the new child in.
+  swapKey: string | number | boolean;
+  enter?: EnterMotion;
+  exit?: ExitMotion;
+  duration?: number;
+  as?: string;
+  "aria-live"?: "polite" | "assertive" | "off";
+  class?: string;
+  children?: JSX.Element;
+};
+
+export function Swap(props: SwapProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "span");
+  let layer: HTMLSpanElement | undefined;
+  let last = props.swapKey;
+  // Memos run before the DOM updates, so the copy that leaves still shows the old content.
+  createMemo(() => {
+    const key = props.swapKey;
+    if (key === last || !layer) return key;
+    last = key;
+    swapLayers(layer, props.enter ?? "{{ c.spec.props.enter.default }}", props.exit ?? "{{ c.spec.props.exit.default }}", props.duration);
+    return key;
+  });
+  return (
+    <Tag class={["pm-swap", props.class]} aria-live={props["aria-live"]}>
+      <span ref={layer}>{props.children}</span>
+    </Tag>
+  );
+}

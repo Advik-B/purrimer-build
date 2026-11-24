@@ -1,0 +1,15 @@
+/* Height to and from auto with a grid track. */
+.pm-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows var(--pm-m-medium) var(--pm-m-move), opacity var(--pm-m-short) var(--pm-m-move);
+}
+.pm-collapse[data-open="true"] {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+.pm-collapse__inner {
+  min-height: 0;
+  overflow: hidden;
+}

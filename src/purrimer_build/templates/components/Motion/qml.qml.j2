@@ -36,8 +36,12 @@ Item {
     readonly property alias running: player.running
     signal done()
 
+    // The share of its height it takes in a layout: Presence closes the gap after an exit with it.
+    property real gap: 1
+
     implicitWidth: holder.childrenRect.x + holder.childrenRect.width
-    implicitHeight: holder.childrenRect.y + holder.childrenRect.height
+    implicitHeight: (holder.childrenRect.y + holder.childrenRect.height) * gap
+    clip: gap < 1
 
     function start() {
         player.play(root.name, Purrimer.effectiveKind(root, root.kind), {
@@ -101,12 +105,12 @@ Item {
     Item {
         id: stage
         width: root.width
-        height: root.height
+        height: holder.childrenRect.y + holder.childrenRect.height
         opacity: root.frame.opacity
         transform: Matrix4x4 {
             matrix: {
                 const o = root.origin.x >= 0 ? [root.origin.x, root.origin.y] : root.entryOrigin
-                const m = PmMotion.matrix(root.frame, root.width, root.height, o, player.entry ? player.entry.perspective : 0)
+                const m = PmMotion.matrix(root.frame, root.width, stage.height, o, player.entry ? player.entry.perspective : 0)
                 return Qt.matrix4x4(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15])
             }
         }
@@ -125,7 +129,7 @@ Item {
             x: -root.frame.halo
             y: -root.frame.halo
             width: root.width + 2 * root.frame.halo
-            height: root.height + 2 * root.frame.halo
+            height: stage.height + 2 * root.frame.halo
             radius: root.radius + root.frame.halo
             color: "transparent"
             border.width: root.frame.halo
@@ -147,7 +151,7 @@ Item {
             x: -64
             y: -64
             width: root.frame.draw < 0.999 ? 64 + root.frame.draw * root.width : root.width + 128
-            height: root.frame.reveal < 0.999 ? root.frame.reveal * (root.height + 64) : root.height + 128
+            height: root.frame.reveal < 0.999 ? root.frame.reveal * (stage.height + 64) : stage.height + 128
             clip: root.frame.reveal < 0.999 || root.frame.draw < 0.999
 
             Item {
@@ -155,7 +159,7 @@ Item {
                 x: 64
                 y: 64
                 width: root.width
-                height: root.height
+                height: stage.height
             }
         }
 

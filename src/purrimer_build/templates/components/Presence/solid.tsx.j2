@@ -1,0 +1,101 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createEffect, createSignal, onCleanup } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { closeGap, effectiveKind, motionStyle, type ChoreographyMotion, type EnterMotion, type ExitMotion, type MotionKind } from "../motion";
+
+export type PresenceProps = {
+  show?: boolean;
+  enter?: EnterMotion | ChoreographyMotion;
+  exit?: ExitMotion | ChoreographyMotion;
+  // Also closes the height gap after the exit, for rows in a list.
+  collapse?: boolean;
+  duration?: number;
+  delay?: number;
+  index?: number;
+  kind?: MotionKind;
+  onExited?: () => void;
+  as?: string;
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
+};
+
+export function Presence(props: PresenceProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "div");
+  const [phase, setPhase] = createSignal<"enter" | "exit" | "gone">(props.show === false ? "gone" : "enter");
+  const [el, setEl] = createSignal<HTMLElement>();
+
+  createEffect(
+    () => props.show !== false,
+    (show) => {
+      const now = phase();
+      if (show && now !== "enter") setPhase("enter");
+      else if (!show && now === "enter") setPhase("exit");
+    },
+  );
+
+  // Waits for the exit, then closes the gap (with collapse) before the content goes.
+  createEffect(
+    () => (phase() === "exit" ? el() : undefined),
+    (node) => {
+      if (!node) return;
+      let over = false;
+      let gap: Animation | null = null;
+      const done = () => {
+        if (over) return;
+        over = true;
+        setPhase("gone");
+        props.onExited?.();
+      };
+      const ended = () => {
+        if (props.collapse) {
+          gap = closeGap(node, effectiveKind(node, props.kind));
+          if (gap) {
+            gap.finished.then(done, done);
+            return;
+          }
+        }
+        done();
+      };
+      const onEnd = (e: AnimationEvent) => {
+        if (e.target === node) ended();
+      };
+      node.addEventListener("animationend", onEnd);
+      // With animations off there is no animationend: finish at once.
+      const raf = requestAnimationFrame(() => {
+        if (!node.getAnimations().some((a) => a.playState === "running")) ended();
+      });
+      const timer = setTimeout(ended, 2000);
+      onCleanup(() => {
+        node.removeEventListener("animationend", onEnd);
+        cancelAnimationFrame(raf);
+        clearTimeout(timer);
+        gap?.cancel();
+      });
+    },
+  );
+
+  const style = (): JSX.CSSProperties => ({
+    ...motionStyle({ duration: props.duration, index: props.index, delay: phase() === "enter" ? props.delay : undefined }),
+    ...props.style,
+  });
+
+  return (
+    <Show when={phase() !== "gone"}>
+      <Tag
+        ref={setEl}
+        data-motion={props.kind}
+        class={[
+          "pm-m",
+          `pm-m-${phase() === "enter" ? (props.enter ?? "{{ c.spec.props.enter.default }}") : (props.exit ?? "{{ c.spec.props.exit.default }}")}`,
+          props.collapse && phase() === "exit" && "pm-presence--closing",
+          props.class,
+        ]}
+        style={style()}
+      >
+        {props.children}
+      </Tag>
+    </Show>
+  );
+}

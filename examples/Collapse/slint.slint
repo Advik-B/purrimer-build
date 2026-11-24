@@ -1,0 +1,21 @@
+import { Collapse, Purrimer } from "purrimer-components.slint";
+
+component Heading inherits Text {
+    color: Purrimer.fg-color-default;
+    font-size: Purrimer.text-title-small.font-size;
+    font-weight: Purrimer.text-title-small.font-weight;
+}
+
+component Body inherits Text {
+    wrap: word-wrap;
+    color: Purrimer.fg-color-default;
+}
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    spacing: 8px;
+    Heading { text: "Advanced options"; }
+    Collapse { open: true; Body { text: "Signed commits, branch protection and merge queues."; } }
+    Heading { text: "Danger zone"; }
+    Collapse { Body { text: "Archive or delete this repository."; } }
+}

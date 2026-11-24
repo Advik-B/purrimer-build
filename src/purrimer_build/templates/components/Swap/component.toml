@@ -1,0 +1,25 @@
+name = "Swap"
+group = "Motion"
+order = 104
+summary = "Crossfades from one child to the next when its key changes: Copy becomes Copied, Follow becomes Following."
+requires = ["Motion"]
+
+[props.swapKey]
+type = "string"
+default = ""
+doc = "Changing it swaps the old content out and the new content in. Natives take the content per key (see the examples)."
+
+[props.enter]
+type = "string"
+default = "rise"
+doc = "The entrance of the new content."
+
+[props.exit]
+type = "string"
+default = "hop-up"
+doc = "The exit of the old content."
+
+[props.duration]
+type = "int"
+default = 0
+doc = "Entrance duration in ms; 0 uses the catalog's."

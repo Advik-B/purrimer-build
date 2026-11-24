@@ -1,0 +1,14 @@
+name = "Collapse"
+group = "Motion"
+order = 105
+summary = "Opens and closes content to and from its natural height, on the kind's move curve."
+
+[props.open]
+type = "bool"
+default = false
+doc = "Shown when true. Closed content cannot be tabbed into and is hidden from screen readers."
+
+[props.id]
+type = "string"
+default = ""
+doc = "Web: an id to point the trigger's aria-controls at. Put aria-expanded on the trigger and a pm-m-chevron icon inside it to turn the chevron with the same timing."

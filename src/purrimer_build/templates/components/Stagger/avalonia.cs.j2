@@ -1,0 +1,96 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// A StackPanel whose children each play the same entrance, one stagger step after the last. The first 12 are
+// staggered; the rest arrive together after them. Bump Replay to play them again.
+public class Stagger : StackPanel
+{
+    public static readonly StyledProperty<string> MotionNameProperty =
+        AvaloniaProperty.Register<Stagger, string>(nameof(MotionName), "{{ c.spec.props.name.default }}");
+
+    public static readonly StyledProperty<double> StepProperty =
+        AvaloniaProperty.Register<Stagger, double>(nameof(Step));
+
+    public static readonly StyledProperty<int> StartProperty =
+        AvaloniaProperty.Register<Stagger, int>(nameof(Start));
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Stagger, string>(nameof(Kind), "");
+
+    public static readonly StyledProperty<int> ReplayProperty =
+        AvaloniaProperty.Register<Stagger, int>(nameof(Replay));
+
+    private readonly Dictionary<Control, PurrimerMotionPlayer> _players = new();
+
+    static Stagger()
+    {
+        ReplayProperty.Changed.AddClassHandler<Stagger>((s, _) => s.PlayAll());
+    }
+
+    public string MotionName { get => GetValue(MotionNameProperty); set => SetValue(MotionNameProperty, value); }
+
+    // ms between items; 0 uses the kind's stagger.
+    public double Step { get => GetValue(StepProperty); set => SetValue(StepProperty, value); }
+
+    public int Start { get => GetValue(StartProperty); set => SetValue(StartProperty, value); }
+
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+
+    public int Replay { get => GetValue(ReplayProperty); set => SetValue(ReplayProperty, value); }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        PlayAll();
+    }
+
+    private void PlayAll()
+    {
+        if (VisualRoot is null)
+            return;
+        var kind = PurrimerMotion.EffectiveKind(this, Kind);
+        for (var i = 0; i < Children.Count; i++)
+        {
+            var child = Children[i];
+            if (!_players.TryGetValue(child, out var player))
+            {
+                player = new PurrimerMotionPlayer();
+                var target = child;
+                player.Frame += f => Apply(target, f, player.Entry);
+                _players[child] = player;
+            }
+            var position = Start + Math.Min(i, 12);
+            player.Play(MotionName, kind, delay: Step > 0 ? position * Step : 0, index: Step > 0 ? 0 : position);
+        }
+    }
+
+    // The same transform, opacity, blur and clip as Motion, applied to the child itself.
+    private static void Apply(Control target, PurrimerMotionFrame f, PurrimerMotionEntry? entry)
+    {
+        if (f.AtRest)
+        {
+            target.RenderTransform = null;
+            target.Opacity = 1;
+            target.Effect = null;
+            target.Clip = null;
+            return;
+        }
+        var size = target.Bounds.Size;
+        target.RenderTransformOrigin = RelativePoint.TopLeft;
+        target.RenderTransform = new MatrixTransform(
+            PurrimerMotionCatalog.ToMatrix(f, size, entry?.Origin ?? new Point(0.5, 0.5), entry?.Perspective ?? 0));
+        target.Opacity = f.Opacity;
+        target.Effect = f.Blur > 0.05 ? new BlurEffect { Radius = Math.Max(0, (f.Blur - 0.5) / 0.57735) } : null;
+        target.Clip = f.Reveal < 0.999
+            ? new RectangleGeometry(new Rect(-64, -64, size.Width + 128, Math.Max(0, f.Reveal * (size.Height + 64))))
+            : null;
+    }
+}

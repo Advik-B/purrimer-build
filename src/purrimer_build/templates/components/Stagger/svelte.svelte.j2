@@ -1,0 +1,57 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { wireStagger, type AttentionMotion, type ChoreographyMotion, type EnterMotion, type MotionKind } from "../motion";
+
+  let {
+    name = "{{ c.spec.props.name.default }}",
+    as = "div",
+    step,
+    start = 0,
+    trigger = "mount",
+    replay,
+    kind,
+    role,
+    class: className = "",
+    style = "",
+    children,
+  }: {
+    name?: EnterMotion | AttentionMotion | ChoreographyMotion;
+    // The wrapper element; its children are the items (use ul with li children for a list).
+    as?: string;
+    step?: number;
+    start?: number;
+    trigger?: "mount" | "inView";
+    // Change any value to play again.
+    replay?: unknown;
+    kind?: MotionKind;
+    role?: string;
+    class?: string;
+    style?: string;
+    children?: Snippet;
+  } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let wired: ReturnType<typeof wireStagger> | undefined;
+
+  $effect(() => {
+    if (!el) return;
+    wired = wireStagger(el, { name, step: step || undefined, start, trigger });
+    return () => wired?.dispose();
+  });
+
+  let started = false;
+  $effect(() => {
+    void replay;
+    if (!started) {
+      started = true;
+      return;
+    }
+    wired?.replay();
+  });
+</script>
+
+<svelte:element this={as} bind:this={el} class={className || undefined} style={style || undefined} data-motion={kind} {role}>
+  {@render children?.()}
+</svelte:element>

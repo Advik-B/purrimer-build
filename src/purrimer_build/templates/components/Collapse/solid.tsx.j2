@@ -1,0 +1,20 @@
+// {{ note }}
+// {{ c.summary }}
+import type { JSX } from "@solidjs/web";
+
+export type CollapseProps = {
+  open?: boolean;
+  // Point the trigger's aria-controls at it.
+  id?: string;
+  class?: string;
+  children?: JSX.Element;
+};
+
+export function Collapse(props: CollapseProps): JSX.Element {
+  // Closed content is inert, so it cannot be tabbed into.
+  return (
+    <div id={props.id} class={["pm-collapse", props.class]} data-open={props.open ? "true" : "false"} inert={!props.open}>
+      <div class="pm-collapse__inner">{props.children}</div>
+    </div>
+  );
+}

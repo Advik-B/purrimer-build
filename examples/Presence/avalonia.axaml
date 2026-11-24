@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Presence Collapse="True">
+    <pm:Card Title="Draft saved">
+      <TextBlock Text="It leaves with lie-down when dismissed." TextWrapping="Wrap" />
+    </pm:Card>
+  </pm:Presence>
+</UserControl>

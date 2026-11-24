@@ -1,0 +1,74 @@
+// {{ note }}
+// {{ c.summary }}
+// Children go inside. With collapse, the height gap closes after the exit, so items below slide up.
+import QtQuick
+
+Motion {
+    id: root
+
+    property bool show: true
+    property string enter: "{{ c.spec.props.enter.default }}"
+    property string exit: "{{ c.spec.props.exit.default }}"
+    property bool collapse: false
+    readonly property bool leaving: _leaving
+    signal exited()
+
+    property bool _leaving: false
+    property int _enterDelay: 0
+
+    name: _leaving ? exit : enter
+    trigger: "presence"
+    visible: show || _leaving || gapAnim.running
+
+    Component.onCompleted: {
+        _enterDelay = delay
+        if (show)
+            start()
+    }
+
+    onShowChanged: {
+        gapAnim.stop()
+        if (show) {
+            _leaving = false
+            gap = 1
+            delay = _enterDelay
+        } else {
+            _leaving = true
+            delay = 0
+        }
+        start()
+    }
+
+    onDone: {
+        if (!_leaving)
+            return
+        const kind = Purrimer.effectiveKind(root, root.kind)
+        if (collapse && !Purrimer.pauseLoops && kind !== "still") {
+            gapAnim.length = kind === "playful" ? 320 : 420
+            gapAnim.start()
+        } else {
+            _leaving = false
+            stop()
+            exited()
+        }
+    }
+
+    SequentialAnimation {
+        id: gapAnim
+        property int length: 420
+        PauseAnimation { duration: 120 }
+        NumberAnimation {
+            target: root
+            property: "gap"
+            to: 0
+            duration: gapAnim.length
+            easing.type: Easing.BezierSpline
+            easing.bezierCurve: {{ "easing-sleepy-move" | tok }}
+        }
+        onFinished: {
+            root._leaving = false
+            root.stop()
+            root.exited()
+        }
+    }
+}

@@ -1,0 +1,62 @@
+// {{ note }}
+// {{ c.summary }}
+// The content is a delegate that declares `property var swapKey`: each key gets its own instance, so the old one
+// keeps showing the old content while it leaves. Layers share one cell; the size settles to the larger.
+pragma ComponentBehavior: Bound
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+Item {
+    id: root
+
+    property var swapKey
+    property Component delegate
+    property string enter: "{{ c.spec.props.enter.default }}"
+    property string exit: "{{ c.spec.props.exit.default }}"
+    // ms; 0 uses the catalog's.
+    property int duration: 0
+    // Empty follows the scope.
+    property string kind: ""
+
+    property Motion current: null
+
+    implicitWidth: childrenRect.width
+    implicitHeight: childrenRect.height
+
+    function add(key, animate) {
+        const fresh = layerComponent.createObject(root, { key: key }) as Motion
+        if (animate)
+            fresh.start()
+        const old = current
+        current = fresh
+        if (old) {
+            old.name = root.exit
+            old.duration = 0
+            old.enabled = false
+            old.done.connect(old.destroy)
+            if (animate)
+                old.start()
+            else
+                old.destroy()
+        }
+    }
+
+    Component.onCompleted: add(swapKey, false)
+    onSwapKeyChanged: if (current) add(swapKey, true)
+
+    Component {
+        id: layerComponent
+        Motion {
+            id: slot
+            property var key
+            name: root.enter
+            trigger: "presence"
+            duration: root.duration
+            kind: root.kind
+            Loader {
+                sourceComponent: root.delegate
+                onLoaded: PmMotion.assign(item, "swapKey", slot.key)
+            }
+        }
+    }
+}

@@ -1,0 +1,63 @@
+// {{ note }}
+// {{ c.summary }}
+// With collapse, the height gap closes after the exit, so items below slide up.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Motion } from "motion.slint";
+
+export component Presence inherits Rectangle {
+    in property <bool> show: true;
+    in property <string> enter: "{{ c.spec.props.enter.default }}";
+    in property <string> exit: "{{ c.spec.props.exit.default }}";
+    in property <bool> collapse: false;
+    in property <duration> duration: 0ms;
+    in property <duration> delay: 0ms;
+    in property <int> index: 0;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    callback exited();
+
+    property <bool> leaving;
+    property <bool> calm: (root.reduce || PurrimerMotion.reduce) && !(root.kind == "" ? PurrimerMotion.playful : root.kind == "playful");
+    property <bool> closing: root.collapse && !PurrimerMotion.pause-loops && !root.calm;
+    property <float> gap: root.show || root.leaving ? 1 : 0;
+
+    animate gap {
+        delay: root.closing ? 120ms : 0ms;
+        duration: root.closing ? 420ms : 0ms;
+        easing: {{ "easing-sleepy-move" | tok }};
+    }
+
+    changed show => {
+        root.leaving = !root.show;
+        m.start();
+    }
+
+    visible: root.show || root.leaving || root.gap > 0.001;
+    clip: root.gap < 1;
+    preferred-width: m.preferred-width;
+    min-width: m.min-width;
+    preferred-height: m.preferred-height * root.gap;
+    min-height: m.min-height * root.gap;
+
+    m := Motion {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: self.preferred-height;
+        name: root.leaving ? root.exit : root.enter;
+        trigger: root.show ? "mount" : "presence";
+        duration: root.duration;
+        delay: root.leaving ? 0ms : root.delay;
+        index: root.index;
+        kind: root.kind;
+        reduce: root.reduce;
+        done => {
+            if root.leaving {
+                root.leaving = false;
+                root.exited();
+            }
+        }
+        @children
+    }
+}

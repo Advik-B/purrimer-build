@@ -2293,3 +2293,60 @@ export function closeGap(el: HTMLElement, kind: EffectiveKind): Animation | null
     },
   );
 }
+
+// Stagger: gives each child element of `container` the same catalog animation, one stagger step after the last.
+// The first 12 are staggered; the rest arrive together after them. Returns a replay function.
+export interface StaggerOptions {
+  name: MotionName;
+  step?: number;
+  start?: number;
+  trigger?: "mount" | "inView";
+  kind?: MotionKind;
+}
+
+export function wireStagger(container: HTMLElement, opts: StaggerOptions): { replay: () => void; dispose: () => void } {
+  let waiting = opts.trigger === "inView";
+  const apply = () => {
+    const items = Array.from(container.children) as HTMLElement[];
+    items.forEach((el, i) => {
+      for (const m of catalog) el.classList.remove(`pm-m-${m.name}`);
+      el.classList.add("pm-m", `pm-m-${opts.name}`);
+      el.classList.toggle("pm-m-paused", waiting);
+      el.style.setProperty("--pm-m-i", String((opts.start ?? 0) + Math.min(i, 12)));
+      if (opts.step != null) el.style.setProperty("--pm-m-stagger", `${opts.step}ms`);
+    });
+  };
+  apply();
+  // Items added later join without replaying the others.
+  const observer = new MutationObserver(apply);
+  observer.observe(container, { childList: true });
+  const stopView = waiting
+    ? inView(container, (inside) => {
+        if (!inside) return;
+        waiting = false;
+        apply();
+      })
+    : () => {};
+  return {
+    replay: () => {
+      for (const el of Array.from(container.children)) restart(el);
+    },
+    dispose: () => {
+      observer.disconnect();
+      stopView();
+    },
+  };
+}
+
+// Swap: the outgoing layer is a copy of the current content that plays `exit` and removes itself, while the live
+// content plays `enter`. Both share one grid cell, so the width settles to the wider of the two while they overlap.
+export function swapLayers(live: HTMLElement, enter: MotionName, exit: MotionName, duration?: number): void {
+  const old = live.cloneNode(true) as HTMLElement;
+  old.removeAttribute("id");
+  old.setAttribute("aria-hidden", "true");
+  old.classList.add("pm-swap__old");
+  for (const m of catalog) old.classList.remove(`pm-m-${m.name}`);
+  live.parentElement?.insertBefore(old, live);
+  void play(old, exit, { keep: true }).then(() => old.remove());
+  void play(live, enter, { duration });
+}

@@ -155,3 +155,9 @@ function matrix(f, w, h, origin, perspective) {
 function stagger(kind) {
     return STAGGER[kind === "still" ? "reduced" : kind] || 0
 }
+
+// Sets a property a delegate declares, if it declares it (delegates are loaded as plain QObjects).
+function assign(target, name, value) {
+    if (target && name in target)
+        target[name] = value
+}

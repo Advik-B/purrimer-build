@@ -1,0 +1,82 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QElapsedTimer, Qt, QTimer, Signal
+from PySide6.QtWidgets import QWidget
+
+from ..motion import EASINGS, ease
+from ..theme import theme
+from .motion import Motion
+
+# Closing the gap after an exit: a short wait, then the sleepy move curve (quicker in playful).
+GAP = {"sleepy": (120, 420), "playful": (120, 320), "still": (0, 1)}
+
+
+class Presence(Motion):
+    """Plays `enter` when shown and `exit` when hidden, and hides its content only once the exit has finished. With
+    collapse it then closes its height gap, so rows below slide up. `exited` fires when the content is gone."""
+
+    exited = Signal()
+
+    def __init__(self, show: bool = True, enter: str = "{{ c.spec.props.enter.default }}",
+                 exit: str = "{{ c.spec.props.exit.default }}", collapse: bool = False, kind: str = "",
+                 duration: int = 0, delay: int = 0, index: int = 0, parent: QWidget | None = None) -> None:
+        super().__init__(enter, trigger="mount" if show else "manual", kind=kind, index=index, delay=delay,
+                         duration=duration, play=False, parent=parent)
+        self.enter = enter
+        self.exit = exit
+        self.collapse = collapse
+        self._show = show
+        self._enter_delay = delay
+        self._gap_from = 0
+        self._clock = QElapsedTimer()
+        self._gap_timer = QTimer(self)
+        self._gap_timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._gap_timer.setInterval(16)
+        self._gap_timer.timeout.connect(self._close_gap)
+        self.done.connect(self._finished)
+        if not show:
+            self.setVisible(False)
+
+    @property
+    def shown(self) -> bool:
+        return self._show
+
+    def set_show(self, show: bool) -> None:
+        if show == self._show:
+            return
+        self._show = show
+        self._gap_timer.stop()
+        if show:
+            self.setMaximumHeight(16777215)
+            self.setVisible(True)
+            self.name, self.delay = self.enter, self._enter_delay
+        else:
+            self.name, self.delay = self.exit, 0
+        self.start()
+
+    def _finished(self) -> None:
+        if self._show:
+            return
+        if self.collapse and not theme.pause_loops and self.effective_kind() != "still":
+            self._gap_from = self.height()
+            self._clock.start()
+            self._gap_timer.start()
+        else:
+            self._gone()
+
+    def _close_gap(self) -> None:
+        wait, length = GAP[self.effective_kind()]
+        p = max(0.0, min(1.0, (self._clock.elapsed() - wait) / length))
+        self.setMaximumHeight(round(self._gap_from * (1 - ease(EASINGS["easing-sleepy-move"], p))))
+        if p >= 1:
+            self._gap_timer.stop()
+            self._gone()
+
+    def _gone(self) -> None:
+        self.setVisible(False)
+        self.stop()
+        self.exited.emit()
