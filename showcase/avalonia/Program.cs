@@ -58,6 +58,8 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
         {
             var example = (Control)AvaloniaRuntimeXamlLoader.Load(File.ReadAllText(file), typeof(Card).Assembly);
             if (!bleed) example.VerticalAlignment = VerticalAlignment.Top;
+            // Shadows spill past the component, as on the web, so the example root must not clip them.
+            example.ClipToBounds = false;
             var frame = new Border
             {
                 Width = width,
