@@ -1,0 +1,15 @@
+import { Chip, Motion, Stagger } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    alignment: start;
+    s := Stagger {
+        name: "pounce";
+        HorizontalLayout {
+            spacing: 8px;
+            Motion { name: s.name; index: s.position(0); Chip { text: "Design"; } }
+            Motion { name: s.name; index: s.position(1); Chip { text: "Shipped"; tone: "success"; } }
+            Motion { name: s.name; index: s.position(2); Chip { text: "Archive"; tone: "neutral"; } }
+            Motion { name: s.name; index: s.position(3); Chip { text: "Docs"; tone: "info"; } }
+        }
+    }
+}

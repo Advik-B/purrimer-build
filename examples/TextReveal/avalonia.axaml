@@ -1,0 +1,7 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="12">
+    <pm:TextReveal Text="All caught up today." />
+    <pm:TextReveal Text="Branch ready" EffectName="tangle" FontSize="{StaticResource PmTextTitleMediumFontSize}" />
+  </StackPanel>
+</UserControl>

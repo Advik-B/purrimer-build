@@ -1,0 +1,129 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QElapsedTimer, QEvent, QObject, QSize, Qt, QTimer, Signal
+from PySide6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QVBoxLayout, QWidget
+
+from ..motion import EASINGS, effective_kind, ease
+from ..theme import theme
+
+# The kind's move curve and medium duration open the height; the fade takes the short duration.
+TIMING = {
+{% for kind in ["sleepy", "playful", "reduced"] %}
+    "{{ kind }}": ({{ motion.table(tokens, kind)["tab-next"]["dur"] }}, {{ motion.table(tokens, kind)["backdrop"]["dur"] }}, "{{ motion.kinds[kind].easings.move }}"),
+{% endfor %}
+}
+
+
+class Collapse(QWidget):
+    """Opens and closes the widgets in `body` to and from their natural height. Closed content is hidden, so it
+    cannot be focused and screen readers skip it. `toggled` fires when it settles."""
+
+    toggled = Signal(bool)
+
+    def __init__(self, open: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._open = open
+        self._t = 1.0 if open else 0.0
+        self._from = self._t
+        self.inner = QWidget(self)
+        self.body = QVBoxLayout(self.inner)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self._fade = QGraphicsOpacityEffect(self.inner)
+        self._fade.setOpacity(self._t)
+        self.inner.setGraphicsEffect(self._fade)
+        self.inner.setVisible(open)
+        policy = QSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        policy.setHeightForWidth(True)
+        self.setSizePolicy(policy)
+        self._clock = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._tick)
+        # Fonts and styles arrive when the content is polished; measure again whenever its layout changes.
+        self.inner.installEventFilter(self)
+        self._apply()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.inner and event.type() == QEvent.Type.LayoutRequest:
+            QTimer.singleShot(0, self._apply)
+        return super().eventFilter(watched, event)
+
+    @property
+    def open(self) -> bool:
+        return self._open
+
+    def add_widget(self, widget: QWidget) -> QWidget:
+        self.body.addWidget(widget)
+        self._apply()
+        return widget
+
+    def set_open(self, open: bool) -> None:
+        if open == self._open:
+            return
+        self._open = open
+        self._from = self._t
+        self.inner.setVisible(True)
+        if theme.pause_loops:
+            self._t = 1.0 if open else 0.0
+            self._settle()
+            return
+        self._clock.start()
+        self._timer.start()
+
+    def toggle(self) -> None:
+        self.set_open(not self._open)
+
+    def _timing(self) -> tuple[float, float, str]:
+        kind = effective_kind(self)
+        return TIMING["reduced" if kind == "still" else kind]
+
+    def _tick(self) -> None:
+        height_ms, fade_ms, curve = self._timing()
+        elapsed = self._clock.elapsed()
+        p = min(1.0, elapsed / max(height_ms, 1))
+        target = 1.0 if self._open else 0.0
+        self._t = self._from + (target - self._from) * ease(EASINGS[curve], p)
+        fade = min(1.0, elapsed / max(fade_ms, 1))
+        self._fade.setOpacity(fade if self._open else 1 - fade)
+        self._apply()
+        if p >= 1:
+            self._settle()
+
+    def _settle(self) -> None:
+        self._timer.stop()
+        self._fade.setOpacity(1.0 if self._open else 0.0)
+        self.inner.setVisible(self._open)
+        self._apply()
+        self.toggled.emit(self._open)
+
+    def _natural(self, width: int) -> int:
+        """The content's height at `width`, so wrapped text is measured as it will be laid out."""
+        if width > 0 and self.body.hasHeightForWidth():
+            return self.body.totalHeightForWidth(width)
+        return self.inner.sizeHint().height()
+
+    def hasHeightForWidth(self) -> bool:
+        return True
+
+    def heightForWidth(self, width: int) -> int:
+        return max(0, round(self._natural(width) * max(0.0, self._t)))
+
+    def sizeHint(self) -> QSize:
+        width = self.width() if self.width() > 0 else self.inner.sizeHint().width()
+        return QSize(self.inner.sizeHint().width(), self.heightForWidth(width))
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(0, self.sizeHint().height())
+
+    def _apply(self) -> None:
+        self.inner.setGeometry(0, 0, self.width(), self._natural(self.width()))
+        self.updateGeometry()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self.inner.setGeometry(0, 0, self.width(), self._natural(self.width()))

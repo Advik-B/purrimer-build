@@ -2,10 +2,13 @@
 // {{ c.summary }}
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
+import { PmMotionCatalog, PmMotionFrame } from "../motion.slint";
 
 // Place it in the window above the bottom bar; it shows while open is true and closes after duration. Swipe it
 // sideways to dismiss it: it follows the pointer and fades, and past 30% of its width, or on a flick, it slides out and
-// closes. Its timer pauses while the pointer is held on it.
+// closes. Its timer pauses while the pointer is held on it. It arrives with the toast choreography (rise when sleepy,
+// slink in from the end side when playful) and leaves with toast-out. Slint cannot see a MotionScope, so set kind by
+// hand.
 export component Snackbar inherits Rectangle {
     in-out property <bool> open;
     in property <string> message;
@@ -22,8 +25,54 @@ export component Snackbar inherits Rectangle {
     property <length> last-x;
     property <duration> last-t;
     property <float> velocity;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <int> kind-index: root.reduce || PurrimerMotion.reduce ? (root.playful ? 0 : 2) : (root.playful ? 1 : 0);
+    // toast-out plays after a close that was not a swipe.
+    property <bool> closing;
+    property <bool> swiped;
+    property <bool> active;
+    property <duration> started;
+    property <float> elapsed: root.active ? (animation-tick() - root.started) / 1ms : 100000;
+    property <string> motion: root.closing ? "toast-out" : "toast";
+    property <float> motion-length: PmMotionCatalog.entry(root.motion, root.kind-index).dur / 1ms;
+    property <PmMotionFrame> frame: PurrimerMotion.pause-loops
+        ? { opacity: 1, sx: 1, sy: 1, reveal: 1, ring-s: 1, draw: 1 }
+        : PmMotionCatalog.sample(root.motion, root.kind-index, Math.clamp(root.elapsed / root.motion-length, 0, 1), "");
 
-    visible: bar.opacity > 0 || root.open;
+    init => {
+        root.started = animation-tick();
+        root.active = root.open;
+    }
+    changed open => {
+        if root.open {
+            root.closing = false;
+        } else if root.swiped {
+            // A swipe already took it away.
+            root.swiped = false;
+            return;
+        } else {
+            root.closing = true;
+        }
+        root.started = animation-tick();
+        root.active = true;
+    }
+
+    // Ticks only while it moves; toast-out ends with the bar hidden.
+    Timer {
+        interval: 16ms;
+        running: root.active;
+        triggered => {
+            if PurrimerMotion.pause-loops || root.elapsed >= root.motion-length {
+                root.active = false;
+                root.closing = false;
+            }
+        }
+    }
+
+    visible: root.open || root.closing || root.leaving;
     height: max(48px, row.preferred-height);
     accessible-role: AccessibleRole.text;
     accessible-label: message;
@@ -47,6 +96,7 @@ export component Snackbar inherits Rectangle {
         interval: PurrimerMotion.pause-loops ? 1ms : {{ "duration-base" | tok }};
         running: root.leaving;
         triggered => {
+            root.swiped = true;
             root.leaving = false;
             root.close();
             root.dx = 0;
@@ -54,10 +104,14 @@ export component Snackbar inherits Rectangle {
     }
 
     bar := Rectangle {
-        x: root.dx;
+        x: root.dx + root.frame.tx * 1px + root.frame.txp * root.width;
+        y: root.frame.ty * 1px + root.frame.typ * root.height;
         width: root.width;
-        opacity: !root.open || root.leaving ? 0 : max(0, 1 - abs(root.dx) / (root.width * 0.6));
-        animate opacity { duration: root.dragging ? 0ms : {{ "duration-sleepy-medium" | tok }}; easing: {{ "easing-sleepy-enter" | tok }}; }
+        transform-scale-x: root.frame.sx;
+        transform-scale-y: root.frame.sy;
+        // The swipe fades it as it follows the pointer, and fades it out as it slides away.
+        opacity: root.leaving ? 0 : root.frame.opacity * max(0, 1 - abs(root.dx) / (root.width * 0.6));
+        animate opacity { duration: root.leaving ? {{ "duration-base" | tok }} : 0ms; }
         border-radius: {{ "borderRadius-large" | tok }};
         background: {{ "bgColor-emphasis" | tok }};
         drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;

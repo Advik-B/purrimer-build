@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Stagger MotionName="pounce" Orientation="Horizontal" Spacing="8">
+    <pm:Chip Text="Design" />
+    <pm:Chip Text="Shipped" Tone="success" />
+    <pm:Chip Text="Archive" Tone="neutral" />
+    <pm:Chip Text="Docs" Tone="info" />
+  </pm:Stagger>
+</UserControl>

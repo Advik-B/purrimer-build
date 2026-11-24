@@ -1,0 +1,31 @@
+// {{ note }}
+// {{ c.summary }}
+import { dynamic, type JSX } from "@solidjs/web";
+import type { MotionKind } from "../motion";
+
+export type MotionScopeProps = {
+  kind?: MotionKind;
+  // An in-app reduced motion setting for everything inside.
+  reduce?: boolean;
+  as?: string;
+  // Without a class or style the scope renders display: contents. Pass false to keep a box.
+  contents?: boolean;
+  class?: string;
+  style?: JSX.CSSProperties | string;
+  children?: JSX.Element;
+};
+
+export function MotionScope(props: MotionScopeProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "div");
+  const box = () => props.contents === false || !!props.class || !!props.style;
+  return (
+    <Tag
+      data-motion={props.kind ?? "sleepy"}
+      data-motion-reduce={props.reduce ? "" : undefined}
+      class={[!box() && "pm-motion-scope", props.class]}
+      style={props.style}
+    >
+      {props.children}
+    </Tag>
+  );
+}

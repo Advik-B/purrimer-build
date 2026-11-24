@@ -1,0 +1,110 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import random
+
+from PySide6.QtCore import QElapsedTimer, QPointF, QRectF, Qt, QTimer
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+from ..motion import burst_length, burst_particles, burst_state, effective_kind
+from ..theme import theme
+
+
+class _BurstLayer(QWidget):
+    """Draws one burst over the whole window, so particles can fly past the wrapper's edges."""
+
+    def __init__(self, window: QWidget, origin: QPointF, particles: list[dict], rain: bool) -> None:
+        super().__init__(window)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        self.setAttribute(Qt.WidgetAttribute.WA_NoSystemBackground)
+        self.setGeometry(window.rect())
+        self._origin = QPointF(0, 0) if rain else origin
+        self._particles = particles
+        self._length = burst_length(particles)
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._tick)
+        self._timer.start()
+        self.raise_()
+        self.show()
+
+    def _tick(self) -> None:
+        if self._clock.elapsed() >= self._length:
+            self._timer.stop()
+            self.deleteLater()
+            return
+        self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        elapsed = self._clock.elapsed()
+        for p in self._particles:
+            s = burst_state(p, elapsed, self.width(), self.height())
+            if s["opacity"] <= 0:
+                continue
+            w, h = p["width"], p["height"]
+            painter.save()
+            # Rotate and scale about the particle's centre, as CSS does.
+            painter.translate(self._origin.x() + s["x"] + w / 2, self._origin.y() + s["y"] + h / 2)
+            painter.rotate(s["rotate"])
+            painter.scale(s["scale"], s["scale"])
+            painter.setOpacity(s["opacity"])
+            painter.setBrush(theme.color(p["color"]))
+            radius = min(w, h) / 2 if p["shape"] == "circle" else 2
+            painter.drawRoundedRect(QRectF(-w / 2, -h / 2, w, h), radius, radius)
+            painter.restore()
+
+
+class Burst(QWidget):
+    """Wraps the widgets in `body` and bursts celebration particles from their centre with `fire()`: confetti when
+    playful, motes drifting up when sleepy, a ring, or rain across the window. Reduced motion shows nothing in
+    sleepy and motes in playful. Fire it once per achievement."""
+
+    def __init__(self, variant: str = "", count: int = 0, spread: int = 0, origin_x: float = 0.5,
+                 origin_y: float = 0.5, on_mount: bool = False, seed: int = 0, kind: str = "",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.variant = variant
+        self.count = count
+        self.spread = spread
+        self.origin_x = origin_x
+        self.origin_y = origin_y
+        self.on_mount = on_mount
+        self.seed = seed
+        self.kind = kind
+        self._shown = False
+
+    def add_widget(self, widget: QWidget) -> QWidget:
+        self.body.addWidget(widget)
+        return widget
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._shown:
+            self._shown = True
+            if self.on_mount:
+                QTimer.singleShot(0, self.fire)
+
+    def fire(self) -> None:
+        # With loops paused (screenshots) a burst would land on a random frame, so it shows nothing.
+        if theme.pause_loops:
+            return
+        kind = effective_kind(self, self.kind or None)
+        particles = burst_particles(kind, self.variant or None, self.count or None, self.spread or None,
+                                    self.seed or random.randrange(1, 2**31))
+        if not particles:
+            return
+        window = self.window()
+        origin = self.mapTo(window, QPointF(self.width() * self.origin_x, self.height() * self.origin_y))
+        _BurstLayer(window, origin, particles, self.variant == "rain")

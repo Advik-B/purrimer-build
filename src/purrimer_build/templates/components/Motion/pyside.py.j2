@@ -1,0 +1,128 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+from ..motion import REST, MotionEffect, MotionPlayer, effective_kind, table_for
+
+
+class Motion(QWidget):
+    """Plays one catalog animation on the widgets in `body`, in the kind of the closest MotionScope (or `kind`).
+
+    Triggers: "mount" plays once when first shown; "inView" waits until part of it is visible; "hover" plays while
+    hovered or focused; "manual" plays while `set_play(True)`. `replay()` plays again. `done` fires when a finite
+    animation ends. Exits hold their end state; use Presence for content that leaves."""
+
+    done = Signal()
+
+    def __init__(self, name: str = "{{ c.spec.props.name.default }}", trigger: str = "mount", kind: str = "",
+                 index: int = 0, delay: int = 0, duration: int = 0, easing: str = "", loop: bool = False,
+                 paused: bool = False, play: bool = True, radius: float = 0, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.body.setSpacing(0)
+        self.name = name
+        self.trigger = trigger
+        self.kind = kind
+        self.index = index
+        self.delay = delay
+        self.duration = duration
+        self.easing = easing
+        self.loop = loop
+        self.paused = paused
+        self.radius = radius
+        self.origin: tuple[float, float] | None = None
+        self._play = play
+        self._shown = False
+        self._effect: MotionEffect | None = None
+        self.player = MotionPlayer(self)
+        self.player.frame.connect(self._frame)
+        self.player.done.connect(self.done)
+        if trigger == "hover":
+            self.setAttribute(Qt.WidgetAttribute.WA_Hover)
+
+    def add_widget(self, widget: QWidget) -> QWidget:
+        self.body.addWidget(widget)
+        return widget
+
+    def effective_kind(self) -> str:
+        return effective_kind(self, self.kind or None)
+
+    def start(self) -> None:
+        """Plays from the beginning, whatever the trigger."""
+        self.player.play(self.name, self.effective_kind(), duration=self.duration or None, delay=self.delay,
+                         easing=self.easing or None, index=self.index, loop=self.loop, paused=self.paused)
+
+    def replay(self) -> None:
+        self.start()
+
+    def stop(self) -> None:
+        """Stops and returns to rest."""
+        self.player.reset()
+
+    def set_name(self, name: str) -> None:
+        self.name = name
+
+    def set_play(self, play: bool) -> None:
+        self._play = play
+        if self.trigger == "manual":
+            if play:
+                self.start()
+            else:
+                self.stop()
+
+    def set_paused(self, paused: bool) -> None:
+        if paused == self.paused:
+            return
+        self.paused = paused
+        if not paused and self._shown:
+            self.start()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._shown:
+            return
+        self._shown = True
+        if self.trigger == "mount" or (self.trigger == "manual" and self._play):
+            self.start()
+        elif self.trigger == "inView":
+            # Hold the first frame until some of it is on screen.
+            self.player.play(self.name, self.effective_kind(), paused=True)
+            QTimer.singleShot(0, self._check_view)
+
+    def _check_view(self) -> None:
+        if self.trigger != "inView" or self.player.running or not self.isVisible():
+            return
+        if not self.visibleRegion().isEmpty():
+            self.start()
+        else:
+            QTimer.singleShot(100, self._check_view)
+
+    def event(self, event: QEvent) -> bool:
+        # Qt sends events while __init__ is still running, before trigger exists.
+        if getattr(self, "trigger", "") == "hover":
+            if event.type() in (QEvent.Type.HoverEnter, QEvent.Type.FocusIn):
+                self.start()
+            elif event.type() in (QEvent.Type.HoverLeave, QEvent.Type.FocusOut):
+                self.stop()
+        return super().event(event)
+
+    def _frame(self, values: dict) -> None:
+        entry = table_for(self.player.kind)[self.player.name] if self.player.name else None
+        at_rest = all(abs(values[k] - v) < 1e-4 for k, v in REST.items())
+        if at_rest and not self.player.running:
+            if self._effect is not None:
+                self.setGraphicsEffect(None)
+                self._effect = None
+            return
+        if self._effect is None:
+            self._effect = MotionEffect(self)
+            self.setGraphicsEffect(self._effect)
+        self._effect.radius = self.radius
+        origin = self.origin or (tuple(entry["origin"]) if entry else (0.5, 0.5))
+        self._effect.set_frame(values, origin, entry["perspective"] if entry else 0.0)

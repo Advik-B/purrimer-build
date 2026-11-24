@@ -1,0 +1,28 @@
+/* Digits in JetBrains Mono at 500 with a slashed zero, so every digit has the same width and nothing jitters while
+   it counts. Size it with a text-stat* class or the parent's font size. */
+.pm-countup {
+  font-family: var(--font-numeric);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums slashed-zero;
+}
+.pm-countup--roll { display: inline-flex; }
+/* Monospace gives separators a full cell; pull them in so 1,284 reads as one number. */
+.pm-countup__sep {
+  display: inline-block;
+  margin-inline: -0.18ch;
+}
+.pm-countup__digit {
+  display: inline-block;
+  height: 1lh;
+  overflow: hidden;
+}
+/* Each digit rolls like an odometer, the rightmost first. */
+.pm-countup__col {
+  display: flex;
+  flex-direction: column;
+  transform: translateY(calc(var(--d, 0) * -10%));
+  transition: transform var(--pm-m-long) var(--pm-m-enter);
+  transition-delay: calc(var(--pm-m-i, 0) * var(--pm-m-stagger));
+}
+.pm-countup__col > span { height: 1lh; }

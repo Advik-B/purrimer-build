@@ -2,6 +2,7 @@
 // {{ c.summary }}
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
+import { PmMotionCatalog, PmMotionControls, PmTween } from "../motion.slint";
 
 export component Radio inherits Rectangle {
     in property <string> text;
@@ -21,6 +22,10 @@ export component Radio inherits Rectangle {
     }
 
     callback toggled(bool);
+    // sleepy or playful; empty follows PurrimerMotion.playful. Slint cannot see a MotionScope, so set it by hand.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    property <PmMotionControls> motion: PmMotionCatalog.controls(PmMotionCatalog.kind-index(root.kind, root.reduce));
     out property <bool> has-focus: focus.has-focus;
     min-height: 20px;
     accessible-label: text;
@@ -43,6 +48,18 @@ export component Radio inherits Rectangle {
         }
     }
 
+    // The mark pops in on the kind's curve; in a playful scope the box presses to 95% while held.
+    press := PmTween {
+        target: touch.pressed && root.enabled ? root.motion.press : 1;
+        length: root.motion.press-dur;
+        easing: root.motion.press-ease;
+    }
+    mark := PmTween {
+        target: root.checked ? 1 : 0;
+        length: root.motion.check-dur;
+        easing: root.motion.check-ease;
+    }
+
     // TouchArea and FocusScope above cover the whole row; only the visible parts are laid out.
     HorizontalLayout {
         spacing: 8px;
@@ -53,15 +70,16 @@ export component Radio inherits Rectangle {
             height: 16px;
             y: (parent.height - self.height) / 2;
             border-radius: 8px;
+            transform-scale-x: press.value;
+            transform-scale-y: press.value;
             background: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.checked ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }};
             border-width: {{ "borderWidth-thin" | tok }};
             border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.checked ? self.background : touch.has-hover ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
             Rectangle {
-                width: root.checked ? 6px : 0px;
+                width: 6px * Math.max(0, mark.value);
                 height: self.width;
-                border-radius: 3px;
+                border-radius: self.width / 2;
                 background: {{ "fgColor-onEmphasis" | tok }};
-                animate width { duration: {{ "duration-fast" | tok }}; }
             }
             if root.has-focus: Rectangle {
                 x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;

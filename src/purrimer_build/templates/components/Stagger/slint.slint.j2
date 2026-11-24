@@ -1,0 +1,16 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot reach its children, so each item is a Motion that reads the shared settings and its own position:
+// `s := Stagger { Motion { name: s.name; index: s.position(0); kind: s.kind; } Motion { ... s.position(1) ... } }`.
+// For a model, use `for row[i] in rows: Motion { index: s.position(i); ... }`.
+export component Stagger inherits VerticalLayout {
+    in property <string> name: "{{ c.spec.props.name.default }}";
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <int> start: 0;
+
+    // The stagger index for the item at `i`: the first 12 are staggered; the rest arrive together after them.
+    public pure function position(i: int) -> int {
+        return root.start + Math.min(i, 12);
+    }
+}

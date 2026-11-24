@@ -3,20 +3,71 @@
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { IconButton } from "icon-button.slint";
+import { PmMotionCatalog, PmMotionFrame } from "../motion.slint";
 
-// Place it last in the window so it covers the screen; it shows while open is true.
+// Place it last in the window so it covers the screen; it shows while open is true. It opens with the dialog
+// choreography (rise when sleepy, pounce when playful) over a backdrop that fades in, and leaves with dialog-out and
+// backdrop-out. Slint cannot see a MotionScope, so set kind by hand.
 export component Dialog inherits Rectangle {
     in-out property <bool> open;
     in property <string> title;
     in property <length> dialog-width: 440px;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
     callback closed();
 
-    visible: open;
-    background: {{ "overlay-backdrop-bgColor" | tok }};
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <bool> reduced: root.reduce || PurrimerMotion.reduce;
+    property <int> kind-index: root.reduced ? (root.playful ? 0 : 2) : (root.playful ? 1 : 0);
+    property <bool> leaving;
+    // Ticks only while it moves, so a resting dialog does not redraw every frame.
+    property <bool> active;
+    property <duration> started;
+    property <float> elapsed: root.active ? (animation-tick() - root.started) / 1ms : 100000;
+    property <string> card-motion: root.leaving ? "dialog-out" : "dialog";
+    property <string> backdrop-motion: root.leaving ? "backdrop-out" : "backdrop";
+    property <float> card-length: PmMotionCatalog.entry(root.card-motion, root.kind-index).dur / 1ms;
+    property <float> backdrop-length: PmMotionCatalog.entry(root.backdrop-motion, root.kind-index).dur / 1ms;
+    property <PmMotionFrame> card-frame: PurrimerMotion.pause-loops
+        ? { opacity: 1, sx: 1, sy: 1, reveal: 1, ring-s: 1, draw: 1 }
+        : PmMotionCatalog.sample(root.card-motion, root.kind-index, Math.clamp(root.elapsed / root.card-length, 0, 1), "");
+    property <float> backdrop-opacity: PurrimerMotion.pause-loops ? 1
+        : PmMotionCatalog.sample(root.backdrop-motion, root.kind-index, Math.clamp(root.elapsed / root.backdrop-length, 0, 1), "").opacity;
+
+    visible: root.open || root.leaving;
+    background: transparent;
+
+    init => {
+        root.started = animation-tick();
+        root.active = root.open;
+    }
+    changed open => {
+        root.started = animation-tick();
+        root.leaving = !root.open;
+        root.active = true;
+    }
+
+    // The backdrop leaves last, so the dialog hides when both are done.
+    Timer {
+        interval: 16ms;
+        running: root.active;
+        triggered => {
+            if PurrimerMotion.pause-loops || root.elapsed >= Math.max(root.card-length, root.backdrop-length) {
+                root.active = false;
+                root.leaving = false;
+            }
+        }
+    }
 
     function close() {
         root.open = false;
         root.closed();
+    }
+
+    Rectangle {
+        background: {{ "overlay-backdrop-bgColor" | tok }};
+        opacity: root.backdrop-opacity;
     }
 
     TouchArea { clicked => { root.close(); } }
@@ -33,8 +84,12 @@ export component Dialog inherits Rectangle {
         Rectangle {
             width: min(root.dialog-width, root.width - 2 * {{ "mobile-gutter" | tok }});
             height: card.preferred-height;
-            x: (root.width - self.width) / 2;
-            y: (root.height - self.height) / 2;
+            x: (root.width - self.width) / 2 + root.card-frame.tx * 1px + root.card-frame.txp * self.width;
+            y: (root.height - self.height) / 2 + root.card-frame.ty * 1px + root.card-frame.typ * self.height;
+            opacity: root.card-frame.opacity;
+            transform-scale-x: root.card-frame.sx;
+            transform-scale-y: root.card-frame.sy;
+            transform-rotation: root.card-frame.rot * 1deg;
             border-radius: {{ "borderRadius-large" | tok }};
             background: {{ "overlay-bgColor" | tok }};
             border-width: {{ "borderWidth-thin" | tok }};

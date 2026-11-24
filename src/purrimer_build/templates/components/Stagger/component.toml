@@ -1,0 +1,32 @@
+name = "Stagger"
+group = "Motion"
+order = 103
+summary = "Plays the same entrance on each child, one after another, by the kind's stagger (90ms sleepy, 45ms playful)."
+requires = ["Motion"]
+
+[props.name]
+type = "string"
+default = "rise"
+doc = "row for list rows, rise for cards, pounce for avatars and chips. The first 12 children are staggered; the rest arrive together after them."
+
+[props.step]
+type = "int"
+default = 0
+doc = "Milliseconds between items; 0 uses the kind's stagger."
+
+[props.start]
+type = "int"
+default = 0
+doc = "The stagger index of the first child."
+
+[props.trigger]
+type = "enum"
+default = "mount"
+doc = "mount, or inView to wait until the list scrolls into view."
+values = ["mount", "inView"]
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind; empty follows the scope."
+values = ["", "sleepy", "playful"]

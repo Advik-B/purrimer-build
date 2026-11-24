@@ -1,0 +1,187 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import math
+
+from PySide6.QtCore import QElapsedTimer, QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QFont, QFontMetricsF, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..motion import EASINGS, CATALOG, STAGGER, ease, effective_kind
+from ..theme import theme
+
+SEPARATORS = ",.'  "
+
+
+def count_ease(kind: str, p: float) -> float:
+    """Sleepy eases out (a quintic); playful is the same spring as easing-playful-spring and passes the value."""
+    if kind != "playful":
+        return 1 - (1 - p) ** 5
+    zeta, omega, t = 0.55, 12.0, p * 0.781
+    wd = omega * math.sqrt(1 - zeta * zeta)
+    return 1 - math.exp(-zeta * omega * t) * (math.cos(wd * t) + (zeta * omega / wd) * math.sin(wd * t))
+
+
+class CountUp(QWidget):
+    """Counts a number to `to`, or rolls each digit like an odometer (mode="roll", the rightmost digit first).
+    Digits are JetBrains Mono at 500 with a slashed zero, and separators are pulled in so 1,284 reads as one
+    number. Screen readers hear only the final value. `set_value()` counts on from the current number."""
+
+    def __init__(self, to: float = 0, from_: float = 0, decimals: int = 0, prefix: str = "", suffix: str = "",
+                 mode: str = "{{ c.spec.props.mode.default }}", duration: int = 0, trigger: str = "mount",
+                 kind: str = "", text_style: str = "{{ c.spec.props.textStyle.default }}",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.to = float(to)
+        self.from_ = float(from_)
+        self.decimals = decimals
+        self.prefix = prefix
+        self.suffix = suffix
+        self.mode = mode
+        self.duration = duration
+        self.trigger = trigger
+        self.kind = kind
+        self.text_style = text_style
+        self._start = float(from_)
+        self._value = float(from_)
+        self._started = False
+        self._clock = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._tick)
+        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(self.text(self.to))
+        theme.changed.connect(self.update)
+
+    def font_for_digits(self) -> QFont:
+        font = theme.font(self.text_style)
+        font.setWeight(QFont.Weight.Medium)
+        font.setFeature(QFont.Tag("zero"), 1)
+        font.setFeature(QFont.Tag("tnum"), 1)
+        return font
+
+    def text(self, value: float) -> str:
+        sign = "-" if value < 0 else ""
+        return f"{self.prefix}{sign}{abs(value):,.{self.decimals}f}{self.suffix}"
+
+    def set_value(self, to: float) -> None:
+        self._start = self._value
+        self.to = float(to)
+        self.setAccessibleName(self.text(self.to))
+        self.updateGeometry()
+        self._begin()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._started:
+            self._started = True
+            if self.trigger == "inView":
+                QTimer.singleShot(0, self._check_view)
+            else:
+                self._begin()
+
+    def _check_view(self) -> None:
+        if not self.visibleRegion().isEmpty():
+            self._begin()
+        elif self.isVisible():
+            QTimer.singleShot(100, self._check_view)
+
+    def _kind(self) -> str:
+        return effective_kind(self, self.kind or None)
+
+    def _begin(self) -> None:
+        if theme.pause_loops or self._kind() == "still":
+            self._value = self.to
+            self._timer.stop()
+            self.update()
+            return
+        self._clock.start()
+        self._timer.start()
+
+    def _length(self) -> float:
+        kind = self._kind()
+        if self.mode == "roll":
+            digits = sum(ch.isdigit() for ch in self.text(self.to))
+            table = CATALOG["reduced" if kind == "still" else kind]
+            return table["emerge"]["dur"] + digits * STAGGER["reduced" if kind == "still" else kind]
+        return self.duration or (800 if kind == "playful" else 900)
+
+    def _tick(self) -> None:
+        elapsed = self._clock.elapsed()
+        if self.mode == "count":
+            p = min(1.0, elapsed / max(self._length(), 1))
+            f = 10 ** self.decimals
+            self._value = self.to if p >= 1 else round((self._start + (self.to - self._start) * count_ease(self._kind(), p)) * f) / f
+        if elapsed >= self._length():
+            self._timer.stop()
+            self._value = self.to
+        self.update()
+
+    def _cells(self) -> list[tuple[str, float]]:
+        """Each character with its roll position: a digit's column offset (0 to 9, fractional while rolling)."""
+        final = self.text(self.to)
+        if self.mode != "roll":
+            return [(ch, -1.0) for ch in self.text(self._value)]
+        start_digits = str(abs(round(self._start)))[::-1]
+        count = sum(ch.isdigit() for ch in final)
+        kind = self._kind()
+        table = CATALOG["reduced" if kind == "still" else kind]
+        length = table["emerge"]["dur"]
+        curve = EASINGS[table["rise"]["ease"]]
+        stagger = STAGGER["reduced" if kind == "still" else kind]
+        running = self._timer.isActive()
+        elapsed = self._clock.elapsed() if running else 0
+        out, seen = [], 0
+        for ch in final:
+            if not ch.isdigit():
+                out.append((ch, -1.0))
+                continue
+            index = count - 1 - seen
+            seen += 1
+            end = float(ch)
+            start = float(start_digits[index]) if index < len(start_digits) else 0.0
+            if not running:
+                out.append((ch, end))
+                continue
+            p = max(0.0, min(1.0, (elapsed - index * stagger) / max(length, 1)))
+            out.append((ch, start + (end - start) * ease(curve, p)))
+        return out
+
+    def _advance(self, metrics: QFontMetricsF, ch: str) -> float:
+        width = metrics.horizontalAdvance(ch)
+        # Monospace gives separators a full cell; pull them in.
+        return width - 0.36 * metrics.horizontalAdvance("0") if ch in SEPARATORS else width
+
+    def sizeHint(self) -> QSize:
+        metrics = QFontMetricsF(self.font_for_digits())
+        width = sum(self._advance(metrics, ch) for ch in self.text(self.to))
+        return QSize(math.ceil(width) + 1, math.ceil(theme.line_height(self.text_style)))
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        font = self.font_for_digits()
+        painter.setFont(font)
+        painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+        metrics = QFontMetricsF(font)
+        line = theme.line_height(self.text_style)
+        x = 0.0
+        for ch, roll in self._cells():
+            advance = self._advance(metrics, ch)
+            offset = -0.18 * metrics.horizontalAdvance("0") if ch in SEPARATORS else 0.0
+            if roll < 0:
+                painter.drawText(QRectF(x + offset, 0, metrics.horizontalAdvance(ch), line), Qt.AlignmentFlag.AlignVCenter, ch)
+            else:
+                painter.save()
+                painter.setClipRect(QRectF(x, 0, advance, line))
+                base = math.floor(roll)
+                for n in (base, base + 1):
+                    if 0 <= n <= 9:
+                        y = (n - roll) * line
+                        painter.drawText(QRectF(x, y, advance, line), Qt.AlignmentFlag.AlignVCenter, str(n))
+                painter.restore()
+            x += advance

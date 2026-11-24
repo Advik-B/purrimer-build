@@ -1,0 +1,139 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import math
+import random
+
+from PySide6.QtCore import QElapsedTimer, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtGui import QFontMetricsF, QPainter
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..motion import effective_kind
+from ..theme import theme
+
+PUNCTUATION = ".,;:!?"
+# The caret blinks once per 0.3 of the kind's loop; under paused loops it holds still.
+BLINK = {"sleepy": {{ ms("duration-sleepy-loop") * 0.3 }}, "playful": {{ ms("duration-playful-loop") * 0.3 }}}
+
+
+class Typewriter(QWidget):
+    """Types `text` one character at a time with a mauve caret: 62ms a character sleepy (pausing after
+    punctuation), 28ms playful with a little jitter. caret is True (hidden when done), "always" or False. Screen
+    readers hear the whole text at once. `replay()` types it again; `done` fires at the end."""
+
+    done = Signal()
+
+    def __init__(self, text: str = "", speed: int = 0, delay: int = 0, caret: bool | str = True,
+                 trigger: str = "mount", kind: str = "", text_style: str = "{{ c.spec.props.textStyle.default }}",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._text = text
+        self.speed = speed
+        self.delay = delay
+        self.caret = caret
+        self.trigger = trigger
+        self.kind = kind
+        self.text_style = text_style
+        self._count = 0
+        self._started = False
+        self._step = QTimer(self)
+        self._step.setSingleShot(True)
+        self._step.timeout.connect(self._next)
+        self._blink = QTimer(self)
+        self._blink.setInterval(50)
+        self._blink.timeout.connect(self.update)
+        self._clock = QElapsedTimer()
+        self._clock.start()
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+        self.setAccessibleName(text)
+        theme.changed.connect(self.update)
+
+    def text(self) -> str:
+        return self._text
+
+    def set_text(self, text: str) -> None:
+        self._text = text
+        self.setAccessibleName(text)
+        self.updateGeometry()
+        self.replay()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if not self._started:
+            self._started = True
+            if self.trigger == "inView":
+                QTimer.singleShot(0, self._check_view)
+            else:
+                self.replay()
+        if not theme.pause_loops:
+            self._blink.start()
+
+    def hideEvent(self, event) -> None:
+        super().hideEvent(event)
+        self._blink.stop()
+
+    def _check_view(self) -> None:
+        if not self.visibleRegion().isEmpty():
+            self.replay()
+        elif self.isVisible():
+            QTimer.singleShot(100, self._check_view)
+
+    def _kind(self) -> str:
+        return effective_kind(self, self.kind or None)
+
+    def replay(self) -> None:
+        self._step.stop()
+        if theme.pause_loops or self._kind() == "still":
+            self._count = len(self._text)
+            self.update()
+            self.done.emit()
+            return
+        self._count = 0
+        self.update()
+        self._step.start(self.delay)
+
+    def _base(self) -> int:
+        return self.speed or (28 if self._kind() == "playful" else 62)
+
+    def _next(self) -> None:
+        self._count += 1
+        self.update()
+        if self._count >= len(self._text):
+            self.done.emit()
+            return
+        base = self._base()
+        playful = self._kind() == "playful"
+        pause = base * (4 if playful else 6) if self._text[self._count - 1] in PUNCTUATION else 0
+        jitter = random.random() * base if playful else 0
+        self._step.start(round(base + pause + jitter))
+
+    def sizeHint(self) -> QSize:
+        metrics = QFontMetricsF(theme.font(self.text_style))
+        return QSize(math.ceil(metrics.horizontalAdvance(self._text)) + 4, math.ceil(theme.line_height(self.text_style)))
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        font = theme.font(self.text_style)
+        painter.setFont(font)
+        painter.setPen(theme.color({{ "fgColor-default" | tok }}))
+        metrics = QFontMetricsF(font)
+        line = theme.line_height(self.text_style)
+        shown = self._text[: self._count]
+        painter.drawText(QRectF(0, 0, self.width(), line), Qt.AlignmentFlag.AlignVCenter, shown)
+        finished = self._count >= len(self._text)
+        if self.caret is False or (finished and self.caret != "always"):
+            return
+        blink = BLINK["playful" if self._kind() == "playful" else "sleepy"]
+        if not theme.pause_loops and (self._clock.elapsed() % blink) >= blink / 2:
+            return
+        height = metrics.height() * 1.1 / 1.2
+        # Measured as the painter lays the text out, so the caret sits right after the last glyph.
+        x = painter.boundingRect(QRectF(0, 0, 100000, line), Qt.AlignmentFlag.AlignVCenter, shown).width() + 1
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "fgColor-accent" | tok }}))
+        painter.drawRoundedRect(QRectF(x, (line - height) / 2, 2, height), 1, 1)

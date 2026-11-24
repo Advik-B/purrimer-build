@@ -1,0 +1,90 @@
+// {{ note }}
+// Plays one catalog animation over time. Bind to `values` (every channel); `done` fires when a finite animation
+// ends. While Purrimer.pauseLoops is on (screenshot runs), values stay at rest and finite animations end at once, as
+// the web does with animations off.
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+QtObject {
+    id: player
+
+    property string name: ""
+    // An effective kind: "sleepy", "playful" or "still" (sleepy under reduced motion).
+    property string kind: "sleepy"
+    property var values: PmMotion.rest()
+    readonly property bool running: frames.running
+    readonly property var entry: name !== "" && PmMotion.has(name) ? PmMotion.entry(name, kind) : null
+
+    signal done()
+
+    property real _duration: 0
+    property real _delay: 0
+    property int _count: 1
+    property string _easing: ""
+    property bool _alternate: false
+    property real _elapsed: 0
+
+    // opts: duration and delay (ms), easing (a token), index (stagger), loop, count, alternate, paused.
+    function play(motionName, motionKind, opts) {
+        const o = opts || {}
+        if (!PmMotion.has(motionName)) {
+            console.warn("Unknown motion: " + motionName)
+            return
+        }
+        frames.stop()
+        name = motionName
+        kind = motionKind || "sleepy"
+        const e = PmMotion.entry(name, kind)
+        _duration = o.duration !== undefined && o.duration !== null ? o.duration : e.dur
+        _delay = (o.delay || 0) + (o.index || 0) * PmMotion.stagger(kind)
+        _count = o.loop ? -1 : (o.count !== undefined && o.count !== null ? o.count : e.count)
+        _easing = o.easing || ""
+        _alternate = !!o.alternate
+        _elapsed = 0
+        if (Purrimer.pauseLoops) {
+            values = PmMotion.rest()
+            if (_count >= 0)
+                done()
+            return
+        }
+        // Decorative loops stop under reduced motion, resting on their first frame.
+        if (kind === "still" && (e.decorative || _count < 0)) {
+            values = PmMotion.sample(name, kind, 0, _easing)
+            return
+        }
+        values = e.fill === "both" ? PmMotion.sample(name, kind, 0, _easing) : PmMotion.rest()
+        if (!o.paused)
+            frames.start()
+    }
+
+    function stop() {
+        frames.stop()
+    }
+
+    function reset() {
+        frames.stop()
+        values = PmMotion.rest()
+    }
+
+    property FrameAnimation frames: FrameAnimation {
+        onTriggered: {
+            player._elapsed += frameTime * 1000
+            const t = player._elapsed - player._delay
+            if (t < 0)
+                return
+            const dur = Math.max(player._duration, 1)
+            const iteration = Math.floor(t / dur)
+            if (player._count >= 0 && iteration >= player._count) {
+                stop()
+                const last = player._alternate && (player._count - 1) % 2 === 1
+                player.values = player.entry.fill === "both" ? PmMotion.sample(player.name, player.kind, last ? 0 : 1, player._easing) : PmMotion.rest()
+                player.done()
+                return
+            }
+            let p = (t - iteration * dur) / dur
+            if (player._alternate && iteration % 2 === 1)
+                p = 1 - p
+            player.values = PmMotion.sample(player.name, player.kind, p, player._easing)
+        }
+    }
+}

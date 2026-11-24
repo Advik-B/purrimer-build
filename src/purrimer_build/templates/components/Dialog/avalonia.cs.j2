@@ -11,10 +11,13 @@ using Avalonia.Media;
 
 namespace {{ ns }};
 
-// A modal dialog with a title and close button. Place it last in a Panel that covers the window.
+// A modal dialog with a title and close button. Place it last in a Panel that covers the window. It opens with the
+// dialog choreography (rise when sleepy, pounce when playful) over a backdrop that fades in, and leaves with
+// dialog-out and backdrop-out before it hides. The kind follows the closest MotionScope, or Kind.
 [PseudoClasses(":open")]
 [TemplatePart("PART_Close", typeof(Button))]
 [TemplatePart("PART_Backdrop", typeof(Control))]
+[TemplatePart("PART_Card", typeof(Control))]
 public class Dialog : ContentControl
 {
     public static readonly StyledProperty<bool> IsOpenProperty =
@@ -32,8 +35,36 @@ public class Dialog : ContentControl
     public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
         RoutedEvent.Register<Dialog, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
 
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Dialog, string>(nameof(Kind), "");
+
+    private readonly PurrimerMotionPlayer _cardMotion = new();
+    private readonly PurrimerMotionPlayer _backdropMotion = new();
     private Button? _close;
     private Control? _backdrop;
+    private Control? _card;
+    private bool _leaving;
+
+    public Dialog()
+    {
+        _cardMotion.Frame += f => { if (_card != null) PurrimerMotionVisual.Apply(_card, f, _cardMotion.Entry); };
+        _backdropMotion.Frame += f => { if (_backdrop != null) _backdrop.Opacity = f.Opacity; };
+        // The backdrop starts first and leaves last, so the dialog hides when the backdrop is done.
+        _backdropMotion.Done += () =>
+        {
+            if (!_leaving)
+                return;
+            _leaving = false;
+            IsVisible = false;
+        };
+    }
+
+    // sleepy or playful; empty follows the closest MotionScope.
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
 
     public bool IsOpen
     {
@@ -81,6 +112,7 @@ public class Dialog : ContentControl
             PseudoClasses.Set(":open", IsOpen);
             if (IsOpen)
                 Focus();
+            Choreograph();
         }
     }
 
@@ -93,10 +125,41 @@ public class Dialog : ContentControl
         base.OnApplyTemplate(e);
         _close = e.NameScope.Find<Button>("PART_Close");
         _backdrop = e.NameScope.Find<Control>("PART_Backdrop");
+        _card = e.NameScope.Find<Control>("PART_Card");
         if (_close != null)
             _close.Click += OnCloseClick;
         if (_backdrop != null)
             _backdrop.PointerPressed += OnBackdropPressed;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (IsOpen)
+            Choreograph();
+    }
+
+    private void Choreograph()
+    {
+        if (VisualRoot is null)
+        {
+            IsVisible = IsOpen;
+            return;
+        }
+        var kind = PurrimerMotion.EffectiveKind(this, Kind);
+        if (IsOpen)
+        {
+            _leaving = false;
+            IsVisible = true;
+            _backdropMotion.Play("backdrop", kind);
+            _cardMotion.Play("dialog", kind);
+        }
+        else if (IsVisible)
+        {
+            _leaving = true;
+            _cardMotion.Play("dialog-out", kind);
+            _backdropMotion.Play("backdrop-out", kind);
+        }
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

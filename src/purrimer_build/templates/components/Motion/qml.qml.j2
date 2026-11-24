@@ -1,0 +1,178 @@
+// {{ note }}
+// {{ c.summary }}
+// Children go inside; the item sizes to them. The kind follows the closest MotionScope (pmMotionKind), or `kind`.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Effects
+import "PmMotion.js" as PmMotion
+
+Item {
+    id: root
+
+    default property alias content: holder.data
+    property string name: "{{ c.spec.props.name.default }}"
+    // mount, inView, hover or manual
+    property string trigger: "mount"
+    // With trigger manual: plays while true.
+    property bool play: true
+    // Change it to play again.
+    property int replay: 0
+    property int index: 0
+    property int delay: 0
+    // ms; 0 uses the catalog's duration for the kind.
+    property int duration: 0
+    // An easing token, such as "easing-sleepy-move"; empty keeps the animation's own curve.
+    property string easing: ""
+    property bool loop: false
+    // Holds the first frame until false.
+    property bool paused: false
+    // Empty follows the scope.
+    property string kind: ""
+    // Corner radius of the content, for the bask halo, meow ring and warm-spot wash.
+    property real radius: 0
+    // Overrides the transform origin (fractions of the size); menus set it to the anchor's corner.
+    property point origin: Qt.point(-1, -1)
+
+    readonly property alias running: player.running
+    signal done()
+
+    // The share of its height it takes in a layout: Presence closes the gap after an exit with it.
+    property real gap: 1
+
+    implicitWidth: holder.childrenRect.x + holder.childrenRect.width
+    implicitHeight: (holder.childrenRect.y + holder.childrenRect.height) * gap
+    clip: gap < 1
+
+    function start() {
+        player.play(root.name, Purrimer.effectiveKind(root, root.kind), {
+            duration: root.duration > 0 ? root.duration : null,
+            delay: root.delay,
+            easing: root.easing,
+            index: root.index,
+            loop: root.loop,
+            paused: root.paused
+        })
+    }
+
+    function stop() {
+        player.reset()
+    }
+
+    property bool _started: false
+    Component.onCompleted: {
+        _started = true
+        if (trigger === "mount" || (trigger === "manual" && play))
+            start()
+        else if (trigger === "inView")
+            player.play(root.name, Purrimer.effectiveKind(root, root.kind), { paused: true })
+    }
+    onReplayChanged: if (_started) start()
+    onPlayChanged: if (_started && trigger === "manual") { if (play) start(); else stop() }
+    onPausedChanged: if (_started && !paused && trigger !== "manual") start()
+
+    // inView: plays once some of the item is inside its window.
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.trigger === "inView" && root._started && !player.running && !root._seen
+        onTriggered: {
+            const w = root.Window.window
+            if (!w || !root.visible)
+                return
+            const p = root.mapToItem(null, 0, 0)
+            if (p.x < w.width && p.y < w.height && p.x + root.width > 0 && p.y + root.height > 0) {
+                root._seen = true
+                root.start()
+            }
+        }
+    }
+    property bool _seen: false
+
+    HoverHandler {
+        enabled: root.trigger === "hover"
+        onHoveredChanged: if (root.trigger === "hover") { if (hovered) root.start(); else root.stop() }
+    }
+    onActiveFocusChanged: if (trigger === "hover") { if (activeFocus) start(); else stop() }
+
+    PmMotionPlayer {
+        id: player
+        onDone: root.done()
+    }
+
+    readonly property var frame: player.values
+    readonly property var entryOrigin: player.entry ? player.entry.origin : [0.5, 0.5]
+
+    Item {
+        id: stage
+        width: root.width
+        height: holder.childrenRect.y + holder.childrenRect.height
+        opacity: root.frame.opacity
+        transform: Matrix4x4 {
+            matrix: {
+                const o = root.origin.x >= 0 ? [root.origin.x, root.origin.y] : root.entryOrigin
+                const m = PmMotion.matrix(root.frame, root.width, stage.height, o, player.entry ? player.entry.perspective : 0)
+                return Qt.matrix4x4(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15])
+            }
+        }
+        // Blur only while it is above zero, so resting content stays crisp and cheap. The software renderer has no
+        // shader effects, so there the content fades without a blur.
+        layer.enabled: root.frame.blur > 0.05 && stage.GraphicsInfo.api !== GraphicsInfo.Software
+        layer.effect: MultiEffect {
+            blurEnabled: true
+            blurMax: 48
+            blur: Math.min(1, root.frame.blur * 2.5 / 48)
+        }
+
+        // bask: a halo that swells around the content.
+        Rectangle {
+            visible: root.frame.halo > 0.01
+            x: -root.frame.halo
+            y: -root.frame.halo
+            width: root.width + 2 * root.frame.halo
+            height: stage.height + 2 * root.frame.halo
+            radius: root.radius + root.frame.halo
+            color: "transparent"
+            border.width: root.frame.halo
+            border.color: {{ "bgColor-accent-muted" | tok }}
+        }
+
+        // warm-spot: a wash behind the content that fades.
+        Rectangle {
+            visible: root.frame.wash > 0.001
+            anchors.fill: parent
+            radius: root.radius
+            color: {{ "bgColor-attention-muted" | tok }}
+            opacity: root.frame.wash
+        }
+
+        // reveal (unfurl, peek...) opens from the top; draw (scratch) from the start side.
+        Item {
+            id: clipper
+            x: -64
+            y: -64
+            width: root.frame.draw < 0.999 ? 64 + root.frame.draw * root.width : root.width + 128
+            height: root.frame.reveal < 0.999 ? root.frame.reveal * (stage.height + 64) : stage.height + 128
+            clip: root.frame.reveal < 0.999 || root.frame.draw < 0.999
+
+            Item {
+                id: holder
+                x: 64
+                y: 64
+                width: root.width
+                height: stage.height
+            }
+        }
+
+        // meow: a ring that grows from the content's edge and fades.
+        Rectangle {
+            visible: root.frame.ringO > 0.001
+            anchors.fill: parent
+            radius: root.radius
+            color: "transparent"
+            border.width: {{ px("borderWidth-thick") }} / root.frame.ringS
+            border.color: {{ "borderColor-accent-emphasis" | tok }}
+            opacity: root.frame.ringO
+            scale: root.frame.ringS
+        }
+    }
+}

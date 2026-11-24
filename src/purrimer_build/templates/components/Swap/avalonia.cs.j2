@@ -1,0 +1,82 @@
+// {{ note }}
+// {{ c.summary }}
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Templates;
+using Avalonia.Metadata;
+
+namespace {{ ns }};
+
+// Shows its Content; when Content changes, the old content plays Exit and leaves while the new one plays Enter.
+// Both share one cell while they overlap, so the size settles to the larger of the two.
+public class Swap : Panel
+{
+    public static readonly StyledProperty<object?> ContentProperty =
+        AvaloniaProperty.Register<Swap, object?>(nameof(Content));
+
+    public static readonly StyledProperty<IDataTemplate?> ContentTemplateProperty =
+        AvaloniaProperty.Register<Swap, IDataTemplate?>(nameof(ContentTemplate));
+
+    public static readonly StyledProperty<string> EnterProperty =
+        AvaloniaProperty.Register<Swap, string>(nameof(Enter), "{{ c.spec.props.enter.default }}");
+
+    public static readonly StyledProperty<string> ExitProperty =
+        AvaloniaProperty.Register<Swap, string>(nameof(Exit), "{{ c.spec.props.exit.default }}");
+
+    public static readonly StyledProperty<double> DurationProperty =
+        AvaloniaProperty.Register<Swap, double>(nameof(Duration));
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Swap, string>(nameof(Kind), "");
+
+    private Motion? _current;
+
+    static Swap()
+    {
+        ContentProperty.Changed.AddClassHandler<Swap>((s, _) => s.Add(s.VisualRoot is not null));
+    }
+
+    [Content]
+    public object? Content { get => GetValue(ContentProperty); set => SetValue(ContentProperty, value); }
+
+    public IDataTemplate? ContentTemplate { get => GetValue(ContentTemplateProperty); set => SetValue(ContentTemplateProperty, value); }
+
+    public string Enter { get => GetValue(EnterProperty); set => SetValue(EnterProperty, value); }
+
+    public string Exit { get => GetValue(ExitProperty); set => SetValue(ExitProperty, value); }
+
+    // Entrance duration in ms; 0 uses the catalog's.
+    public double Duration { get => GetValue(DurationProperty); set => SetValue(DurationProperty, value); }
+
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+
+    private void Add(bool animate)
+    {
+        var layer = new Motion
+        {
+            MotionName = Enter,
+            Trigger = "presence",
+            Duration = Duration,
+            Kind = Kind,
+            Child = new ContentControl { Content = Content, ContentTemplate = ContentTemplate },
+        };
+        Children.Add(layer);
+        if (animate)
+            layer.Start();
+        var old = _current;
+        _current = layer;
+        if (old is null)
+            return;
+        old.IsHitTestVisible = false;
+        if (!animate)
+        {
+            Children.Remove(old);
+            return;
+        }
+        old.MotionName = Exit;
+        old.Duration = 0;
+        old.Done += (_, _) => Children.Remove(old);
+        old.Start();
+    }
+}

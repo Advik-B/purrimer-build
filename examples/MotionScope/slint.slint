@@ -1,0 +1,31 @@
+import { Card, Motion, MotionScope, Purrimer } from "purrimer-components.slint";
+
+component Note inherits Text {
+    wrap: word-wrap;
+    color: Purrimer.fg-color-default;
+}
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    // Slint cannot pass a scope down by itself, so each Motion binds its kind to the closest scope's.
+    playful := MotionScope {
+        kind: "playful";
+        VerticalLayout {
+            spacing: 12px;
+            Motion {
+                name: "pounce";
+                kind: playful.kind;
+                Card { title: "Pull request merged"; Note { text: "All checks passed. Enjoy the quiet."; } }
+            }
+            sleepy := MotionScope {
+                kind: "sleepy";
+                Motion {
+                    name: "rise";
+                    index: 1;
+                    kind: sleepy.kind;
+                    Card { title: "Billing stays sleepy"; Note { text: "Settings and errors never bounce."; } }
+                }
+            }
+        }
+    }
+}

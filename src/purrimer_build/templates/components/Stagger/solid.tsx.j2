@@ -1,0 +1,56 @@
+// {{ note }}
+// {{ c.summary }}
+import { createEffect, createSignal, onCleanup } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { wireStagger, type AttentionMotion, type ChoreographyMotion, type EnterMotion, type MotionKind } from "../motion";
+
+export type StaggerProps = {
+  name?: EnterMotion | AttentionMotion | ChoreographyMotion;
+  // The wrapper element; its children are the items (use ul with li children for a list).
+  as?: string;
+  step?: number;
+  start?: number;
+  trigger?: "mount" | "inView";
+  // Change any value to play again.
+  replay?: unknown;
+  kind?: MotionKind;
+  role?: string;
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
+};
+
+export function Stagger(props: StaggerProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "div");
+  const [el, setEl] = createSignal<HTMLElement>();
+  let wired: ReturnType<typeof wireStagger> | undefined;
+
+  createEffect(el, (node) => {
+    if (!node) return;
+    wired = wireStagger(node, {
+      name: props.name ?? "{{ c.spec.props.name.default }}",
+      step: props.step || undefined,
+      start: props.start ?? 0,
+      trigger: props.trigger ?? "mount",
+    });
+    onCleanup(() => wired?.dispose());
+  });
+
+  let started = false;
+  createEffect(
+    () => props.replay,
+    () => {
+      if (!started) {
+        started = true;
+        return;
+      }
+      wired?.replay();
+    },
+  );
+
+  return (
+    <Tag ref={setEl} class={props.class} style={props.style} data-motion={props.kind} role={props.role}>
+      {props.children}
+    </Tag>
+  );
+}

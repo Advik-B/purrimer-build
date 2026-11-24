@@ -7,10 +7,12 @@ Item {
     id: root
     property string variant: "steps"
     property string label
-    property string kind: "sleepy"
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    property string kind: ""
+    readonly property string loopKind: kind === "sleepy" || kind === "playful" ? kind : (Purrimer.motionReduced(root) ? "sleepy" : Purrimer.motionKindOf(root))
     property color color: {{ "fgColor-muted" | tok }}
     readonly property bool snooze: variant === "snooze"
-    readonly property bool playful: kind === "playful"
+    readonly property bool playful: loopKind === "playful"
     readonly property int stepCycle: playful ? {{ (ms("duration-playful-loop") * 0.7) | int }} : {{ (ms("duration-sleepy-loop") * 0.45) | int }}
     readonly property int snoozeCycle: playful ? {{ (ms("duration-playful-loop") * 0.75) | int }} : {{ (ms("duration-sleepy-loop") * 0.75) | int }}
     readonly property real dist: playful ? 18 : 8

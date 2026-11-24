@@ -1,4 +1,4 @@
-.pm-dialog-scrim { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: {{ "mobile-gutter" | tok }}; background: {{ "overlay-backdrop-bgColor" | tok }}; animation: pm-fade-in {{ "duration-slow" | tok }} {{ "easing-sleepy-enter" | tok }}; }
+.pm-dialog-scrim { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: {{ "mobile-gutter" | tok }}; background: {{ "overlay-backdrop-bgColor" | tok }}; animation: pm-backdrop var(--pm-m-short) var(--pm-m-enter) both; }
 .pm-dialog {
   display: flex;
   flex-direction: column;
@@ -10,11 +10,10 @@
   box-shadow: {{ "shadow-floating-large" | tok }};
   color: {{ "fgColor-default" | tok }};
   font: 400 14px/20px var(--font-sans);
-  animation: pm-dialog-in {{ "duration-slow" | tok }} {{ "easing-sleepy-enter" | tok }};
+  /* The dialog choreography: rise when sleepy, pounce when playful, a fade under reduced motion. */
+  animation: var(--pm-m-p-dialog) var(--pm-m-medium) var(--pm-m-big) both;
 }
 .pm-dialog__header { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 16px; border-bottom: {{ "borderWidth-thin" | tok }} solid {{ "borderColor-default" | tok }}; }
 .pm-dialog__title { flex: 1; margin: 0; font: 600 20px/32px var(--font-heading); }
 .pm-dialog__body { flex: 1; overflow: auto; padding: 16px; }
 .pm-dialog__footer { display: flex; justify-content: flex-end; gap: 8px; padding: 0 16px 16px; }
-@keyframes pm-dialog-in { from { opacity: 0; scale: 0.96; } }
-@media (prefers-reduced-motion: reduce) { .pm-dialog { animation-name: pm-fade-in; } }

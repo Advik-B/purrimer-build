@@ -43,54 +43,60 @@
   }
 }
 
-/* Motion kinds. Sleepy is the default; data-motion="playful" on any element switches its subtree. Loop values are
-   written out rather than read from the duration tokens, because reduced motion shortens those tokens. The pose
-   values size the resting snapshot a looping animation shows when animations are off, so reduced motion leaves them
-   alone. Touch feedback: surfaces compress to --pm-press-scale while held, spring back over --pm-release-*, and
-   settle after a drag over --pm-settle-*. */
-{% set kinds = {
-  "sleepy": {"loop": ms("duration-sleepy-loop"), "spin": ms("duration-sleepy-loop") * 0.4, "dots": ms("duration-sleepy-loop") * 0.45, "dist": 8, "peak": 1.03, "wave": "easing-sleepy-drift", "dash": "none",
-             "release": ("duration-sleepy-short", "easing-sleepy-enter"), "settle": ("duration-slow", "easing-sleepy-move")},
-  "playful": {"loop": ms("duration-playful-loop"), "spin": ms("duration-playful-loop") * 0.6, "dots": ms("duration-playful-loop") * 0.7, "dist": 18, "peak": 1.14, "wave": "easing-playful-snap", "dash": "pm-chase-dash",
-              "release": ("duration-playful-press", "easing-playful-pop"), "settle": ("duration-playful-medium", "easing-playful-spring")},
+/* Motion kinds. Sleepy is the default; data-motion="playful" on any element switches its subtree, and the closest scope
+   wins. Every --pm-m-* value comes from the motion catalog (data/motion.toml), which the native targets share.
+   Durations are written out rather than read from the duration tokens, because reduced motion shortens those tokens.
+   The pose values size the resting snapshot a looping animation shows when animations are off, so reduced motion
+   leaves them alone. Touch feedback: surfaces compress to --pm-press-scale while held, spring back over
+   --pm-release-*, and settle after a drag over --pm-settle-*. */
+{% set touch = {
+  "sleepy": {"release": ("duration-sleepy-short", "easing-sleepy-enter"), "settle": ("duration-slow", "easing-sleepy-move")},
+  "playful": {"release": ("duration-playful-press", "easing-playful-pop"), "settle": ("duration-playful-medium", "easing-playful-spring")},
 } %}
-{% macro motion_vars(k, dist=None, pose=True) %}
-  --pm-m-loop: {{ k.loop | num }}ms;
-  --pm-m-spin-dur: {{ k.spin | num }}ms;
-  --pm-m-dots-dur: {{ k.dots | num }}ms;
-  --pm-m-dist: {{ (k.dist if dist is none else dist) | num }}px;
-  --pm-m-peak: {{ (k.peak if dist is none else 1) | num }};
-  --pm-m-wave: var(--{{ k.wave }});
-  --pm-m-dash: {{ k.dash }};
-  --pm-press-scale: {{ 0.96 if pose else 1 }};
-  --pm-release-dur: var(--{{ k.release[0] }});
-  --pm-release-ease: var(--{{ k.release[1] }});
-  --pm-settle-dur: var(--{{ k.settle[0] }});
-  --pm-settle-ease: var(--{{ k.settle[1] }});
+{% macro motion_vars(kind, feel, press=True, pose=True) %}
+{% for n, v in motion.css_vars(tokens, kind) %}
+  --{{ n }}: {{ v }};
+{% endfor %}
+  --pm-press-scale: {{ 0.96 if press else 1 }};
+  --pm-release-dur: var(--{{ touch[feel].release[0] }});
+  --pm-release-ease: var(--{{ touch[feel].release[1] }});
+  --pm-settle-dur: var(--{{ touch[feel].settle[0] }});
+  --pm-settle-ease: var(--{{ touch[feel].settle[1] }});
 {% if pose %}
-  --pm-m-pose-dist: {{ k.dist | num }}px;
-  --pm-m-pose-peak: {{ k.peak | num }};
+  --pm-m-pose-dist: {{ motion.kinds[kind].dist | num }}px;
+  --pm-m-pose-peak: {{ motion.kinds[kind].peak | num }};
 {% endif %}
 {% endmacro %}
 :root,
 [data-motion="sleepy"] {
-  {{ motion_vars(kinds.sleepy) | trim }}
+  {{ motion_vars("sleepy", "sleepy") | trim }}
 }
 
 [data-motion="playful"] {
-  {{ motion_vars(kinds.playful) | trim }}
+  {{ motion_vars("playful", "playful") | trim }}
 }
 
 /* Reduced motion: playful falls back to sleepy, and sleepy keeps its fades but drops movement. */
 @media (prefers-reduced-motion: reduce) {
   :root,
   [data-motion="sleepy"] {
-    {{ motion_vars(kinds.sleepy, 0, False) | trim | indent(2) }}
+    {{ motion_vars("reduced", "sleepy", False, False) | trim | indent(2) }}
   }
 
   [data-motion="playful"] {
-    {{ motion_vars(kinds.sleepy, None, False) | trim | indent(2) }}
+    {{ motion_vars("sleepy", "sleepy", False, False) | trim | indent(2) }}
   }
+}
+
+/* The same fallback as an in-app setting: data-motion-reduce on html or any ancestor (MotionScope reduce). */
+[data-motion-reduce],
+[data-motion-reduce] [data-motion="sleepy"] {
+  {{ motion_vars("reduced", "sleepy", False, False) | trim }}
+}
+
+[data-motion-reduce][data-motion="playful"],
+[data-motion-reduce] [data-motion="playful"] {
+  {{ motion_vars("sleepy", "sleepy", False, False) | trim }}
 }
 
 @keyframes pm-fade-in {

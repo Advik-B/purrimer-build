@@ -13,7 +13,7 @@
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:CounterLabel">
-        <Border Height="18" MinWidth="20" Padding="6,0" CornerRadius="9" Background="{TemplateBinding Background}">
+        <Border Name="PART_Pill" Height="18" MinWidth="20" Padding="6,0" CornerRadius="9" Background="{TemplateBinding Background}">
           <TextBlock Text="{TemplateBinding Text}" HorizontalAlignment="Center" VerticalAlignment="Center" />
         </Border>
       </ControlTemplate>

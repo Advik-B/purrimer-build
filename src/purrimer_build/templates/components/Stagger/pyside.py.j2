@@ -1,0 +1,46 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtWidgets import QBoxLayout, QWidget
+
+from .motion import Motion
+
+# The first 12 are staggered; the rest arrive together after them, so long lists never wait.
+MAX_STEPS = 12
+
+
+class Stagger(QWidget):
+    """Plays the same entrance on each widget added with `add_widget`, one stagger step after the last. Items sit in
+    `body`, a vertical box (or horizontal with horizontal=True)."""
+
+    def __init__(self, name: str = "{{ c.spec.props.name.default }}", step: int = 0, start: int = 0,
+                 trigger: str = "mount", kind: str = "", horizontal: bool = False, spacing: int = 0,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.name = name
+        self.step = step
+        self.start = start
+        self.trigger = trigger
+        self.kind = kind
+        direction = QBoxLayout.Direction.LeftToRight if horizontal else QBoxLayout.Direction.TopToBottom
+        self.body = QBoxLayout(direction, self)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.body.setSpacing(spacing)
+        self.items: list[Motion] = []
+
+    def add_widget(self, widget: QWidget) -> Motion:
+        position = self.start + min(len(self.items), MAX_STEPS)
+        # A custom step replaces the kind's stagger with a plain delay.
+        motion = Motion(self.name, trigger=self.trigger, kind=self.kind, index=0 if self.step else position,
+                        delay=position * self.step if self.step else 0)
+        motion.add_widget(widget)
+        self.body.addWidget(motion)
+        self.items.append(motion)
+        return motion
+
+    def replay(self) -> None:
+        for item in self.items:
+            item.replay()

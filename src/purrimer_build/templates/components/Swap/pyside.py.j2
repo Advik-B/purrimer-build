@@ -1,0 +1,51 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QGridLayout, QWidget
+
+from .motion import Motion
+
+
+class Swap(QWidget):
+    """Shows one widget at a time; `swap(widget)` plays the current one out (exit) and the new one in (enter). Both
+    share one cell while they overlap, so the width settles to the wider of the two."""
+
+    def __init__(self, widget: QWidget | None = None, enter: str = "{{ c.spec.props.enter.default }}",
+                 exit: str = "{{ c.spec.props.exit.default }}", duration: int = 0, kind: str = "",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.enter = enter
+        self.exit = exit
+        self.duration = duration
+        self.kind = kind
+        self._grid = QGridLayout(self)
+        self._grid.setContentsMargins(0, 0, 0, 0)
+        self._current: Motion | None = None
+        self.current: QWidget | None = None
+        if widget is not None:
+            self.swap(widget, animate=False)
+
+    def swap(self, widget: QWidget, animate: bool = True) -> None:
+        old = self._current
+        layer = Motion(self.enter, trigger="manual" if animate else "presence", play=False, kind=self.kind,
+                       duration=self.duration)
+        layer.add_widget(widget)
+        self._grid.addWidget(layer, 0, 0)
+        self._current = layer
+        self.current = widget
+        if animate:
+            layer.start()
+        if old is not None:
+            old.name, old.duration = self.exit, 0
+            old.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+            old.done.connect(old.deleteLater)
+            old.done.connect(lambda o=old: self._grid.removeWidget(o))
+            if animate:
+                old.start()
+            else:
+                self._grid.removeWidget(old)
+                old.deleteLater()

@@ -1,0 +1,18 @@
+import { CountUp, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits HorizontalLayout {
+    alignment: start;
+    spacing: 32px;
+    CountUp { to: 1284; }
+    VerticalLayout {
+        alignment: end;
+        CountUp {
+            to: 3742.5;
+            decimals: 2;
+            prefix: "€";
+            mode: "roll";
+            font-size: Purrimer.text-stat-small.font-size;
+            line-height: Purrimer.text-stat-small.line-height;
+        }
+    }
+}

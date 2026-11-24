@@ -9,9 +9,11 @@ Item {
     property string size: "medium"
     property int pixelSize: size === "small" ? {{ c.spec.sizes.small }} : size === "large" ? {{ c.spec.sizes.large }} : {{ c.spec.sizes.medium }}
     property string label: "{{ c.spec.props.label.default }}"
-    property string kind: "sleepy"
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    property string kind: ""
+    readonly property string loopKind: kind === "sleepy" || kind === "playful" ? kind : (Purrimer.motionReduced(root) ? "sleepy" : Purrimer.motionKindOf(root))
     readonly property real stroke: pixelSize / 8
-    readonly property int turn: kind === "playful" ? {{ (ms("duration-playful-loop") * 0.6) | int }} : {{ (ms("duration-sleepy-loop") * 0.4) | int }}
+    readonly property int turn: loopKind === "playful" ? {{ (ms("duration-playful-loop") * 0.6) | int }} : {{ (ms("duration-sleepy-loop") * 0.4) | int }}
     // Arc length and offset, in degrees. Playful stretches them; sleepy keeps a steady quarter.
     property real arcLength: 26 * 3.6
     property real arcOffset: 0
@@ -57,7 +59,7 @@ Item {
     }
 
     SequentialAnimation {
-        running: root.visible && root.kind === "playful" && !Purrimer.pauseLoops
+        running: root.visible && root.loopKind === "playful" && !Purrimer.pauseLoops
         loops: Animation.Infinite
         onRunningChanged: if (!running) { root.arcLength = 26 * 3.6; root.arcOffset = 0 }
         ParallelAnimation {

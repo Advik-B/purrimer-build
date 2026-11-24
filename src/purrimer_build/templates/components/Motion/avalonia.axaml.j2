@@ -1,0 +1,11 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Motion}" TargetType="pm:Motion">
+    <Setter Property="HaloBrush" Value="{{ "bgColor-accent-muted" | tok }}" />
+    <Setter Property="WashBrush" Value="{{ "bgColor-attention-muted" | tok }}" />
+    <Setter Property="RingBrush" Value="{{ "borderColor-accent-emphasis" | tok }}" />
+  </ControlTheme>
+</ResourceDictionary>

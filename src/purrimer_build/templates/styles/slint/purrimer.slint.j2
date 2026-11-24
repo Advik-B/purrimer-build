@@ -76,8 +76,11 @@ export global PurrimerMotion {
     in-out property <bool> pause-loops: false;
     // The clock looping animations read: animation-tick(), or zero while loops are paused.
     out property <duration> loop-tick: self.pause-loops ? 0ms : animation-tick();
-    // The default motion kind for springs and touch feedback: sleepy, or playful when set.
+    // The default motion kind: sleepy, or playful when set. Slint cannot see a component's ancestors, so a
+    // MotionScope passes its kind down by hand (each motion component has a kind property).
     in-out property <bool> playful: false;
+    // An in-app "Reduce motion" setting: playful plays as sleepy, and sleepy only fades.
+    in-out property <bool> reduce: false;
     out property <float> press-scale: 0.96;
     out property <duration> long-press: 450ms;
     out property <length> slop: 8px;

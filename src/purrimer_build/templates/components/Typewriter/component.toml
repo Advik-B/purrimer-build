@@ -1,0 +1,42 @@
+name = "Typewriter"
+group = "Motion"
+order = 107
+summary = "Types text one character at a time, with a mauve caret."
+
+[props.text]
+type = "string"
+default = ""
+doc = "Short greetings, a hero line, an assistant's first sentence: under 80 characters. Screen readers hear it all at once."
+
+[props.speed]
+type = "int"
+default = 0
+doc = "Milliseconds per character; 0 uses 62 sleepy, 28 playful. Sleepy pauses after punctuation; playful types with a little jitter."
+
+[props.delay]
+type = "int"
+default = 0
+doc = "Milliseconds before the first character."
+
+[props.caret]
+type = "enum"
+default = "true"
+doc = "true hides the caret when done, always keeps it blinking, false never shows it."
+values = ["true", "always", "false"]
+
+[props.trigger]
+type = "enum"
+default = "mount"
+doc = "mount, or inView to wait until it scrolls into view."
+values = ["mount", "inView"]
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind; empty follows the scope."
+values = ["", "sleepy", "playful"]
+
+[props.textStyle]
+type = "string"
+default = "text-body-medium"
+doc = "Native targets: the type style; the web takes a text-* class."

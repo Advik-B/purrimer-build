@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="12">
+    <pm:Motion MotionName="rise">
+      <pm:Card Title="Saved to drafts">
+        <TextBlock Text="Your reply is waiting in Drafts." TextWrapping="Wrap" />
+      </pm:Card>
+    </pm:Motion>
+    <pm:Motion MotionName="pounce" Index="1">
+      <pm:Card Title="New badge">
+        <TextBlock Text="You reviewed ten pull requests this week." TextWrapping="Wrap" />
+      </pm:Card>
+    </pm:Motion>
+    <pm:Motion MotionName="bask" Index="2" Radius="12">
+      <pm:Card Title="Linked from the release notes">
+        <TextBlock Text="A halo shows where the link points." TextWrapping="Wrap" />
+      </pm:Card>
+    </pm:Motion>
+  </StackPanel>
+</UserControl>

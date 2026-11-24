@@ -1,0 +1,97 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createEffect, createSignal, onCleanup, untrack } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { countUp, effectiveKind, formatNumber, inView, numberPieces, rollCells, type MotionKind } from "../motion";
+
+export type CountUpProps = {
+  to: number;
+  from?: number;
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  locale?: string;
+  format?: (value: number) => string;
+  // count: the number ticks. roll: each digit rolls like an odometer.
+  mode?: "count" | "roll";
+  duration?: number;
+  trigger?: "mount" | "inView";
+  play?: boolean;
+  kind?: MotionKind;
+  class?: string;
+};
+
+export function CountUp(props: CountUpProps): JSX.Element {
+  const [el, setEl] = createSignal<HTMLElement>();
+  const [seen, setSeen] = createSignal(false);
+  const [value, setValue] = createSignal(untrack(() => props.from ?? 0));
+  const [rolled, setRolled] = createSignal(false);
+  const [still, setStill] = createSignal(false);
+  let previous = untrack(() => props.from ?? 0);
+  const fmt = () => ({ decimals: props.decimals, prefix: props.prefix, suffix: props.suffix, locale: props.locale, format: props.format });
+  const go = () => ((props.trigger ?? "mount") === "inView" ? seen() : props.play !== false);
+
+  createEffect(
+    () => ((props.trigger ?? "mount") === "inView" ? el() : undefined),
+    (node) => {
+      if (node) onCleanup(inView(node, setSeen));
+    },
+  );
+
+  createEffect(
+    () => [props.to, go(), el()] as const,
+    ([target, going, node]) => {
+      if (!going || !node) return;
+      const k = effectiveKind(node, props.kind);
+      setStill(k === "still");
+      const start = previous;
+      previous = target;
+      if (props.mode === "roll") {
+        // Two frames, so the columns render at their start digits before they roll.
+        let raf = requestAnimationFrame(() => (raf = requestAnimationFrame(() => setRolled(true))));
+        onCleanup(() => cancelAnimationFrame(raf));
+        return;
+      }
+      onCleanup(countUp(start, target, k, { duration: props.duration, decimals: props.decimals }, setValue));
+    },
+  );
+
+  const final = () => formatNumber(props.to, fmt());
+  const row: JSX.CSSProperties = { display: "inline-flex" };
+  const column = (digit: number, index: number): JSX.CSSProperties => ({ "--d": String(digit), "--pm-m-i": String(index) });
+
+  return (
+    <Show
+      when={props.mode === "roll"}
+      fallback={
+        <span ref={setEl} class={["pm-countup", still() && "pm-m pm-m-wake", props.class]} data-motion={props.kind}>
+          <span class="pm-sr-only">{final()}</span>
+          <span aria-hidden="true">
+            <For each={numberPieces(formatNumber(value(), fmt()))}>
+              {(piece) => (piece.sep ? <span class="pm-countup__sep">{piece.text}</span> : piece.text)}
+            </For>
+          </span>
+        </span>
+      }
+    >
+      <span ref={setEl} class={["pm-countup", "pm-countup--roll", props.class]} data-motion={props.kind}>
+        <span class="pm-sr-only">{final()}</span>
+        <span aria-hidden="true" style={row}>
+          <For each={rollCells(final(), props.from ?? 0)}>
+            {(cell) =>
+              cell.digit ? (
+                <span class="pm-countup__digit">
+                  <span class="pm-countup__col" style={column(rolled() || still() ? Number(cell.ch) : cell.start, cell.index)}>
+                    <For each={[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}>{(n) => <span>{n}</span>}</For>
+                  </span>
+                </span>
+              ) : (
+                <span class={cell.sep ? "pm-countup__sep" : undefined}>{cell.ch}</span>
+              )
+            }
+          </For>
+        </span>
+      </span>
+    </Show>
+  );
+}

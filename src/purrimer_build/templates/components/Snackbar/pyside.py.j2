@@ -4,11 +4,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPoint, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QFontMetrics, QPainter
-from PySide6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QWidget
+from PySide6.QtWidgets import QSizePolicy, QWidget
 
-from ..motion import Spring, VelocityTracker
+from ..motion import MotionEffect, MotionPlayer, Spring, VelocityTracker, effective_kind
 from ..theme import theme
 
 
@@ -17,27 +17,31 @@ class Snackbar(QWidget):
 
     Swipe it sideways to dismiss it: it follows the pointer and fades, and past 30% of its width, or on a flick, it
     slides out and emits `closed`. Its timer pauses while the pointer is held on it.
+
+    It arrives with the toast choreography (rise when sleepy, slink in from the end side when playful) and leaves with
+    toast-out, in the kind of the closest MotionScope (or `kind`).
     """
 
     actionTriggered = Signal()
     closed = Signal()
 
     def __init__(self, message: str = "", action: str = "", duration: int = {{ c.spec.props.duration.default }},
-                 parent: QWidget | None = None) -> None:
+                 kind: str = "", parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.kind = kind
         self._message = message
         self._action = action
         self._duration = duration
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.dismiss)
-        self._opacity = QGraphicsOpacityEffect(self)
-        self._opacity.setOpacity(0.0)
-        self.setGraphicsEffect(self._opacity)
-        self._fade = QPropertyAnimation(self._opacity, b"opacity", self)
-        self._fade.setDuration(theme.duration({{ "duration-sleepy-medium" | tok }}))
-        self._fade.setEasingCurve(theme.easing({{ "easing-sleepy-enter" | tok }}))
-        self._fade.finished.connect(self._faded)
+        # One effect draws both the toast choreography and the swipe's fade.
+        self._effect = MotionEffect(self)
+        self.setGraphicsEffect(self._effect)
+        self._swipe_fade = 1.0
+        self._motion = MotionPlayer(self)
+        self._motion.frame.connect(lambda _values: self._draw_frame())
+        self._motion.done.connect(self._motion_done)
         self._font = (theme.font({{ "text-body-medium" | tok }}))
         self._dx = Spring(0.0, precision=0.5, parent=self)
         self._dx.changed.connect(self._slid)
@@ -59,15 +63,16 @@ class Snackbar(QWidget):
             self._duration = duration
         self.show()
         self.raise_()
-        self._fade_to(1.0)
+        self._swipe_fade = 1.0
+        self._motion.play("toast", effective_kind(self, self.kind or None))
         self._timer.stop()
         if self._duration > 0:
             self._timer.start(self._duration)
 
     def dismiss(self) -> None:
         self._timer.stop()
-        if self.isVisible():
-            self._fade_to(0.0)
+        if self.isVisible() and not self._leaving:
+            self._motion.play("toast-out", effective_kind(self, self.kind or None))
             self.closed.emit()
 
     def sizeHint(self) -> QSize:
@@ -83,13 +88,15 @@ class Snackbar(QWidget):
         if self._home is not None:
             self.move(self._home + QPoint(round(dx), 0))
         if not self._leaving:
-            self._opacity.setOpacity(max(0.0, 1 - abs(dx) / (self.width() * 0.6)))
+            self._swipe_fade = max(0.0, 1 - abs(dx) / (self.width() * 0.6))
+            self._draw_frame()
 
     def _settled(self) -> None:
         if self._leaving:
             self._leaving = False
             self.hide()
-            self._opacity.setOpacity(0.0)
+            self._motion.reset()
+            self._swipe_fade = 1.0
             self._dx.set(0.0)
             self._home = None
             self.closed.emit()
@@ -130,7 +137,8 @@ class Snackbar(QWidget):
             flick = abs(velocity) > 0.6 and (velocity > 0) == (dx > 0)
             if abs(dx) >= self.width() * 0.3 or flick:
                 self._leaving = True
-                self._fade_to(0.0)
+                self._swipe_fade = 0.0
+                self._draw_frame()
                 self._dx.to((1 if dx > 0 else -1) * self.width() * 1.2)
             else:
                 self._dx.to(0.0)
@@ -165,12 +173,14 @@ class Snackbar(QWidget):
             right = rect.left() - 8
         painter.drawText(QRectF(16, 0, right - 16, self.height()), Qt.AlignmentFlag.AlignVCenter, self._message)
 
-    def _fade_to(self, value: float) -> None:
-        self._fade.stop()
-        self._fade.setStartValue(self._opacity.opacity())
-        self._fade.setEndValue(value)
-        self._fade.start()
+    def _draw_frame(self) -> None:
+        values = dict(self._motion.current)
+        values["opacity"] *= self._swipe_fade
+        entry = self._motion.entry() if self._motion.name else None
+        self._effect.set_frame(values, tuple(entry["origin"]) if entry else (0.5, 0.5))
 
-    def _faded(self) -> None:
-        if self._opacity.opacity() == 0.0:
+    def _motion_done(self) -> None:
+        # toast-out holds its end state; once it is over the bar goes.
+        if self._motion.name == "toast-out":
             self.hide()
+            self._motion.reset()

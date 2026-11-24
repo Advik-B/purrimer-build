@@ -1,0 +1,41 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import { untrack, type Snippet } from "svelte";
+  import { swapLayers, type EnterMotion, type ExitMotion } from "../motion";
+
+  let {
+    swapKey,
+    enter = "{{ c.spec.props.enter.default }}",
+    exit = "{{ c.spec.props.exit.default }}",
+    duration,
+    as = "span",
+    "aria-live": live,
+    class: className = "",
+    children,
+  }: {
+    swapKey: string | number | boolean;
+    enter?: EnterMotion;
+    exit?: ExitMotion;
+    duration?: number;
+    as?: string;
+    "aria-live"?: "polite" | "assertive" | "off";
+    class?: string;
+    children?: Snippet;
+  } = $props();
+
+  let layer: HTMLElement | undefined = $state();
+  let last = untrack(() => swapKey);
+
+  // Runs before the DOM updates, so the copy that leaves still shows the old content.
+  $effect.pre(() => {
+    const key = swapKey;
+    if (key === last || !layer) return;
+    last = key;
+    swapLayers(layer, enter, exit, duration);
+  });
+</script>
+
+<svelte:element this={as} class={["pm-swap", className]} aria-live={live}>
+  <span bind:this={layer}>{@render children?.()}</span>
+</svelte:element>

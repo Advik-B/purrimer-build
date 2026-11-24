@@ -1,0 +1,57 @@
+name = "CountUp"
+group = "Motion"
+order = 106
+summary = "Animates a number to its value: ticking up, or rolling each digit like an odometer."
+
+[props.to]
+type = "number"
+default = 0
+doc = "The value it settles on. Screen readers hear only this."
+
+[props.from]
+type = "number"
+default = 0
+doc = "Where it starts."
+
+[props.decimals]
+type = "int"
+default = 0
+doc = "Digits after the decimal point."
+
+[props.prefix]
+type = "string"
+default = ""
+doc = "Before the number, such as a currency sign."
+
+[props.suffix]
+type = "string"
+default = ""
+doc = "After the number, such as a unit."
+
+[props.mode]
+type = "enum"
+default = "count"
+doc = "count ticks the number (sleepy eases out over 900ms; playful springs past and settles); roll rolls each digit, the rightmost first, on the kind's stagger."
+values = ["count", "roll"]
+
+[props.duration]
+type = "int"
+default = 0
+doc = "Count duration in ms; 0 uses 900 sleepy, 800 playful."
+
+[props.trigger]
+type = "enum"
+default = "mount"
+doc = "mount, or inView to wait until it scrolls into view."
+values = ["mount", "inView"]
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind; empty follows the scope."
+values = ["", "sleepy", "playful"]
+
+[props.textStyle]
+type = "string"
+default = "text-stat"
+doc = "Native targets: the type style (text-stat-large, text-stat, text-stat-small). The web takes a text-stat* class."

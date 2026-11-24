@@ -28,3 +28,204 @@
   clip-path: inset(50%);
   white-space: nowrap;
 }
+
+/* Motion library. Add pm-m and one catalog class: the class plays once on insertion and holds its end state, in the
+   kind of its scope. Per element, set --pm-m-duration, --pm-m-easing, --pm-m-delay and --pm-m-i (stagger index).
+   The keyframes are written from the motion catalog, which the native targets play too. */
+.pm-m {
+  --_pm-d: var(--pm-m-medium);
+  --_pm-e: var(--pm-m-enter);
+  --_pm-n: 1;
+  animation-duration: var(--pm-m-duration, var(--_pm-d));
+  animation-timing-function: var(--pm-m-easing, var(--_pm-e));
+  animation-delay: calc(var(--pm-m-i, 0) * var(--pm-m-stagger) + var(--pm-m-delay, 0ms));
+  animation-iteration-count: var(--_pm-n);
+  animation-fill-mode: both;
+}
+
+.pm-m.pm-m-loop { --_pm-n: infinite; }
+.pm-m.pm-m-once { --_pm-n: 1; }
+.pm-m.pm-m-alternate { animation-direction: alternate; }
+.pm-m.pm-m-paused { animation-play-state: paused; }
+.pm-m.pm-m-hover:not(:hover):not(:focus-visible) { animation-name: none; }
+
+@keyframes pm-hold {
+  from { opacity: 1; }
+  to { opacity: 1; }
+}
+
+{% for a in motion.anims.values() %}
+{{ motion.css_class(a) }}
+{% if a.css == "auto" and a.use is none %}
+{{ motion.css_keyframes(a, tokens) }}
+{% endif %}
+{% endfor %}
+
+/* meow: a ring that grows from the element's edge and fades; the element itself holds still. */
+.pm-m-meow { position: relative; }
+.pm-m-meow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: var(--borderWidth-thick) solid var(--borderColor-accent-emphasis);
+  pointer-events: none;
+  opacity: 0;
+  animation: pm-meow var(--pm-m-duration, var(--_pm-d)) var(--pm-m-leave) var(--pm-m-delay, 0ms) var(--_pm-n) both;
+}
+.pm-m.pm-m-hover.pm-m-meow:not(:hover):not(:focus-visible)::after { animation-name: none; }
+@keyframes pm-meow {
+  from { opacity: 0.9; transform: scale(1); }
+  to { opacity: 0; transform: scale(var(--pm-m-ring)); }
+}
+
+/* scratch: draws the strokes inside. Give each shape pathLength="100". */
+.pm-m-scratch :is(path, line, polyline, polygon, circle, ellipse, rect) {
+  stroke-dasharray: 100;
+  animation: pm-scratch var(--pm-m-duration, var(--pm-m-long)) var(--pm-m-easing, var(--pm-m-enter)) calc(var(--pm-m-i, 0) * var(--pm-m-stagger) + var(--pm-m-delay, 0ms)) both;
+}
+@keyframes pm-scratch {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+/* Scroll reveal: any enter class plus pm-m-scroll plays as the element scrolls into view. */
+@supports (animation-timeline: view()) {
+  .pm-m.pm-m-scroll {
+    animation-timeline: view();
+    animation-range: entry 0% cover 30%;
+    animation-duration: auto;
+    animation-delay: 0s;
+    animation-timing-function: var(--pm-m-easing, var(--pm-m-move));
+  }
+}
+
+/* Hover and press utilities: transitions, not keyframes. Add the class alone, without pm-m. */
+.pm-m-lift {
+  transition: transform var(--pm-m-short) var(--pm-m-enter), box-shadow var(--pm-m-short) var(--pm-m-enter);
+}
+.pm-m-lift:hover,
+.pm-m-lift:focus-visible {
+  transform: translateY(calc(var(--pm-m-lift) * -1));
+  box-shadow: var(--shadow-resting-medium);
+}
+.pm-m-squish {
+  transition: transform var(--pm-m-press) var(--pm-m-pop);
+}
+.pm-m-squish:active {
+  transform: scale(var(--pm-m-press-scale));
+}
+.pm-m-stalk .pm-icon:last-child,
+.pm-m-stalk [data-stalk] {
+  transition: transform var(--pm-m-short) var(--pm-m-enter);
+}
+.pm-m-stalk:hover .pm-icon:last-child,
+.pm-m-stalk:hover [data-stalk],
+.pm-m-stalk:focus-visible .pm-icon:last-child,
+.pm-m-stalk:focus-visible [data-stalk] {
+  transform: translateX(calc(var(--pm-m-dist) * 0.3 + 1px));
+}
+.pm-m-underline {
+  position: relative;
+  text-decoration: none;
+}
+.pm-m-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  transition: transform var(--pm-m-short) var(--pm-m-enter);
+}
+.pm-m-underline:hover::after,
+.pm-m-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+.pm-m-chevron {
+  transition: transform var(--pm-m-short) var(--pm-m-move);
+}
+[aria-expanded="true"] > .pm-m-chevron,
+[aria-expanded="true"] .pm-m-chevron,
+.pm-m-chevron[data-open="true"] {
+  transform: rotate(180deg);
+}
+.pm-m-highlight {
+  position: relative;
+  isolation: isolate;
+}
+.pm-m-highlight::before {
+  content: "";
+  position: absolute;
+  inset: 0.1em -0.15em;
+  z-index: -1;
+  border-radius: var(--borderRadius-small);
+  background: var(--pm-m-flash, var(--bgColor-attention-muted));
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  animation: pm-highlight var(--pm-m-duration, var(--pm-m-long)) var(--pm-m-enter) calc(var(--pm-m-i, 0) * var(--pm-m-stagger) + var(--pm-m-delay, 0ms)) both;
+}
+@keyframes pm-highlight {
+  to { transform: scaleX(1); }
+}
+
+/* View Transitions, used by motion.transition(). */
+html.pm-vt::view-transition-old(root) {
+  animation: var(--pm-m-exit) var(--pm-m-leave) both pm-doze;
+}
+html.pm-vt::view-transition-new(root) {
+  animation: var(--pm-m-long) var(--pm-m-enter) both pm-page;
+}
+html.pm-vt::view-transition-group(*) {
+  animation-duration: var(--pm-m-medium);
+  animation-timing-function: var(--pm-m-move);
+}
+
+/* CSS-only stagger: children of pm-m-stagger get --pm-m-i from their position; from the thirteenth on they arrive
+   together. */
+{% for i in range(1, 14) %}
+.pm-m-stagger > :nth-child({{ i }}) { --pm-m-i: {{ i - 1 }}; }
+{% endfor %}
+.pm-m-stagger > :nth-child(n + 14) { --pm-m-i: 12; }
+
+/* Reduced motion: decorative loops stop, whatever the kind. Spinners, dots and progress keep going. */
+{% set loops = motion.anims.values() | selectattr("decorative") | map(attribute="name") | list %}
+@media (prefers-reduced-motion: reduce) {
+  {% for n in loops %}.pm-m-{{ n }}, {% endfor %}.pm-m.pm-m-loop {
+    animation-iteration-count: 1;
+    animation-play-state: paused;
+  }
+  html.pm-vt::view-transition-group(*),
+  html.pm-vt::view-transition-old(root),
+  html.pm-vt::view-transition-new(root) {
+    animation-duration: var(--duration-reduced);
+  }
+}
+[data-motion-reduce] :is({% for n in loops %}.pm-m-{{ n }}, {% endfor %}.pm-m.pm-m-loop),
+:is({% for n in loops %}.pm-m-{{ n }}, {% endfor %}.pm-m.pm-m-loop)[data-motion-reduce] {
+  animation-iteration-count: 1;
+  animation-play-state: paused;
+}
+
+/* Burst particles are placed by script (motion.burst, Burst); this keeps them out of layout and hit-testing. */
+.pm-burst__layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+}
+.pm-burst__layer--fixed {
+  position: fixed;
+  z-index: 1000;
+}
+.pm-burst__particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  will-change: transform, opacity;
+}

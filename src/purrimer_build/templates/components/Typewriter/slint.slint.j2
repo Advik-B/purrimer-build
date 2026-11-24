@@ -1,0 +1,92 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot split a string, so pass the text twice: `text` for screen readers and `parts`, its characters, to
+// type. Playful's jitter is a fixed pattern rather than random.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+
+export component Typewriter {
+    in property <string> text;
+    in property <[string]> parts;
+    // 0ms uses 62ms sleepy, 28ms playful per character.
+    in property <duration> speed: 0ms;
+    in property <duration> delay: 0ms;
+    // "true" hides the caret when done, "always" keeps it blinking, "false" never shows it.
+    in property <string> caret: "true";
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    // Change it to type again.
+    in property <int> replay: 0;
+    in property <length> font-size: Purrimer.text-body-medium.font-size;
+    in property <int> font-weight: Purrimer.text-body-medium.font-weight;
+    in property <color> color: Purrimer.fg-color-default;
+    callback done();
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <bool> still: (root.reduce || PurrimerMotion.reduce) && !root.playful;
+    property <bool> brisk: root.playful && !(root.reduce || PurrimerMotion.reduce);
+    property <int> count: root.parts.length;
+    property <bool> typing;
+    // Everything shows at once while loops are paused or motion is reduced, whenever that is switched on.
+    property <int> shown: PurrimerMotion.pause-loops || root.still ? root.parts.length : root.count;
+    property <duration> base: root.speed > 0ms ? root.speed : root.brisk ? 28ms : 62ms;
+    property <string> previous: root.count > 0 ? root.parts[root.count - 1] : "";
+    property <bool> paused-after: root.previous == "." || root.previous == "," || root.previous == ";" || root.previous == ":" || root.previous == "!" || root.previous == "?";
+    property <duration> next: root.count == 0 ? Math.max(root.delay, 1ms)
+        : root.base + (root.paused-after ? root.base * (root.brisk ? 4 : 6) : 0ms) + (root.brisk ? root.base * mod(root.count * 7, 10) / 10 : 0ms);
+
+    public function begin() {
+        if PurrimerMotion.pause-loops || root.still {
+            root.count = root.parts.length;
+            root.typing = false;
+            root.done();
+            return;
+        }
+        root.count = 0;
+        root.typing = true;
+    }
+
+    init => { root.begin(); }
+    changed replay => { root.begin(); }
+
+    Timer {
+        interval: root.next;
+        running: root.typing;
+        triggered => {
+            root.count += 1;
+            if root.count >= root.parts.length {
+                root.typing = false;
+                root.done();
+            }
+        }
+    }
+
+    accessible-role: AccessibleRole.text;
+    accessible-label: root.text;
+
+    HorizontalLayout {
+        alignment: start;
+        for part[i] in root.parts: Rectangle {
+            width: i < root.shown ? glyph.preferred-width : 0px;
+            glyph := Text {
+                visible: i < root.shown;
+                text: part;
+                font-size: root.font-size;
+                font-weight: root.font-weight;
+                color: root.color;
+            }
+        }
+        Rectangle {
+            width: 3px;
+            Rectangle {
+                x: 1px;
+                width: 2px;
+                height: root.font-size * 1.1;
+                border-radius: 1px;
+                background: {{ "fgColor-accent" | tok }};
+                visible: root.caret != "false" && (root.shown < root.parts.length || root.caret == "always")
+                    && (PurrimerMotion.pause-loops || mod(PurrimerMotion.loop-tick / 1ms, (root.brisk ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}) * 0.3) < (root.brisk ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}) * 0.15);
+            }
+        }
+    }
+}

@@ -14,7 +14,7 @@
   white-space: nowrap;
   cursor: pointer;
   user-select: none;
-  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale var(--pm-m-press) var(--pm-m-pop);
 }
 .pm-button:hover { background: {{ "button-default-bgColor-hover" | tok }}; }
 .pm-button:active { background: {{ "button-default-bgColor-active" | tok }}; }
@@ -39,4 +39,6 @@
   cursor: not-allowed;
 }
 [data-density="touch"] .pm-button { height: {{ "touch-target-min" | tok }}; font-size: 16px; }
+/* Playful scopes press to 95% and spring back; sleepy keeps the calm chrome (control-press is 1 there). */
+.pm-button:active:not(:disabled) { scale: var(--pm-m-control-press); }
 @media (pointer: coarse) { .pm-button:active:not(:disabled) { scale: 0.96; } }

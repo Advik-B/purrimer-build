@@ -1,0 +1,130 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Wraps its child and bursts celebration particles from its centre when Fire changes (or Burst() is called):
+// confetti when playful, motes drifting up when sleepy, a ring, or rain across the window. Reduced motion shows
+// nothing in sleepy and motes in playful. Fire it once per achievement.
+public class Burst : Decorator
+{
+    public static readonly StyledProperty<int> FireProperty = AvaloniaProperty.Register<Burst, int>(nameof(Fire));
+    public static readonly StyledProperty<string> VariantProperty = AvaloniaProperty.Register<Burst, string>(nameof(Variant), "");
+    public static readonly StyledProperty<int> CountProperty = AvaloniaProperty.Register<Burst, int>(nameof(Count));
+    public static readonly StyledProperty<double> SpreadProperty = AvaloniaProperty.Register<Burst, double>(nameof(Spread));
+    public static readonly StyledProperty<double> OriginXProperty = AvaloniaProperty.Register<Burst, double>(nameof(OriginX), 0.5);
+    public static readonly StyledProperty<double> OriginYProperty = AvaloniaProperty.Register<Burst, double>(nameof(OriginY), 0.5);
+    public static readonly StyledProperty<bool> OnMountProperty = AvaloniaProperty.Register<Burst, bool>(nameof(OnMount));
+    public static readonly StyledProperty<int> SeedProperty = AvaloniaProperty.Register<Burst, int>(nameof(Seed));
+    public static readonly StyledProperty<string> KindProperty = AvaloniaProperty.Register<Burst, string>(nameof(Kind), "");
+
+    static Burst()
+    {
+        FireProperty.Changed.AddClassHandler<Burst>((b, _) => b.Throw());
+    }
+
+    // Change it to burst.
+    public int Fire { get => GetValue(FireProperty); set => SetValue(FireProperty, value); }
+    // confetti, motes, ring or rain; empty uses the kind's (confetti playful, motes sleepy).
+    public string Variant { get => GetValue(VariantProperty); set => SetValue(VariantProperty, value); }
+    public int Count { get => GetValue(CountProperty); set => SetValue(CountProperty, value); }
+    public double Spread { get => GetValue(SpreadProperty); set => SetValue(SpreadProperty, value); }
+    public double OriginX { get => GetValue(OriginXProperty); set => SetValue(OriginXProperty, value); }
+    public double OriginY { get => GetValue(OriginYProperty); set => SetValue(OriginYProperty, value); }
+    public bool OnMount { get => GetValue(OnMountProperty); set => SetValue(OnMountProperty, value); }
+    // A seed makes the burst repeat exactly; 0 picks a new one each time.
+    public int Seed { get => GetValue(SeedProperty); set => SetValue(SeedProperty, value); }
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (OnMount)
+            Dispatcher.UIThread.Post(Throw, DispatcherPriority.Background);
+    }
+
+    // Bursts now, whatever Fire is.
+    public void Throw()
+    {
+        // With loops paused (screenshots) a burst would land on a random frame, so it shows nothing.
+        if (PurrimerMotion.PauseLoops || VisualRoot is null || OverlayLayer.GetOverlayLayer(this) is not { } overlay)
+            return;
+        var particles = PurrimerBurst.Particles(PurrimerMotion.EffectiveKind(this, Kind), Variant, Count, Spread, (uint)Seed);
+        if (particles.Count == 0)
+            return;
+        var origin = Variant == "rain" ? new Point(0, 0)
+            : this.TranslatePoint(new Point(Bounds.Width * OriginX, Bounds.Height * OriginY), overlay) ?? new Point(0, 0);
+        overlay.Children.Add(new BurstLayer(this, particles, origin));
+    }
+
+    // Draws one burst over the whole window, so particles can fly past the wrapper's edges.
+    private sealed class BurstLayer : Control
+    {
+        private readonly Burst _owner;
+        private readonly List<PurrimerBurstParticle> _particles;
+        private readonly Point _origin;
+        private readonly double _length;
+        private readonly Stopwatch _clock = Stopwatch.StartNew();
+        private readonly DispatcherTimer _timer;
+
+        public BurstLayer(Burst owner, List<PurrimerBurstParticle> particles, Point origin)
+        {
+            _owner = owner;
+            _particles = particles;
+            _origin = origin;
+            _length = PurrimerBurst.Length(particles);
+            IsHitTestVisible = false;
+            _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
+            _timer.Start();
+        }
+
+        private void Tick()
+        {
+            if (_clock.Elapsed.TotalMilliseconds >= _length)
+            {
+                _timer.Stop();
+                if (Parent is Panel panel)
+                    panel.Children.Remove(this);
+                return;
+            }
+            InvalidateVisual();
+        }
+
+        public override void Render(DrawingContext context)
+        {
+            var elapsed = _clock.Elapsed.TotalMilliseconds;
+            foreach (var p in _particles)
+            {
+                var (x, y, rotate, scale, opacity) = PurrimerBurst.State(p, elapsed, Bounds.Width, Bounds.Height);
+                if (opacity <= 0)
+                    continue;
+                var brush = _owner.TryFindResource("Pm" + Pascal(p.Color), _owner.ActualThemeVariant, out var found) && found is IBrush b ? b : Brushes.Gray;
+                var cx = _origin.X + x + p.Width / 2;
+                var cy = _origin.Y + y + p.Height / 2;
+                // Rotate and scale about the particle's centre, as CSS does.
+                var matrix = Matrix.CreateScale(scale, scale) * Matrix.CreateRotation(rotate * Math.PI / 180) * Matrix.CreateTranslation(cx, cy);
+                var radius = p.Shape == "circle" ? Math.Min(p.Width, p.Height) / 2 : 2;
+                using (context.PushTransform(matrix))
+                using (context.PushOpacity(opacity))
+                    context.DrawRectangle(brush, null, new Rect(-p.Width / 2, -p.Height / 2, p.Width, p.Height), radius, radius);
+            }
+        }
+
+        private static string Pascal(string name)
+        {
+            var parts = name.Split('-');
+            for (var i = 0; i < parts.Length; i++)
+                parts[i] = char.ToUpperInvariant(parts[i][0]) + parts[i][1..];
+            return string.Concat(parts);
+        }
+    }
+}

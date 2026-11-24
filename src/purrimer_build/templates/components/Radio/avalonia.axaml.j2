@@ -12,12 +12,13 @@
     <Setter Property="Template">
       <ControlTemplate TargetType="RadioButton">
         <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
-          <Panel Width="16" Height="16" VerticalAlignment="Center">
+          <!-- The dot pops in on the kind's curve; in a playful scope the circle presses to 95%. -->
+          <Panel Width="16" Height="16" VerticalAlignment="Center" pm:PurrimerControlMotion.Role="press">
             <Border Name="focusRing" Margin="-4" CornerRadius="12" BorderThickness="2" IsVisible="False"
                     BorderBrush="{{ "focus-outlineColor" | tok }}" />
             <Border Name="box" CornerRadius="8" Background="{{ "control-bgColor-rest" | tok }}"
                     BorderBrush="{{ "control-borderColor-rest" | tok }}" BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}">
-              <Ellipse Name="dot" Width="6" Height="6" Fill="{{ "fgColor-onEmphasis" | tok }}" IsVisible="False" />
+              <Ellipse Name="dot" Width="6" Height="6" pm:PurrimerControlMotion.Role="mark" Fill="{{ "fgColor-onEmphasis" | tok }}" IsVisible="False" />
             </Border>
           </Panel>
           <ContentPresenter Name="PART_ContentPresenter" Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"

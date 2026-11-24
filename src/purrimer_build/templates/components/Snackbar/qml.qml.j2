@@ -3,9 +3,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
+import "PmMotion.js" as PmMotion
 
 // A short message with one optional action. Swipe it sideways to dismiss it: it follows the pointer and fades, and
 // past 30% of its width, or on a flick, it slides out and closes. Its timer pauses while the pointer is held on it.
+// It arrives with the toast choreography (rise when sleepy, slink in from the end side when playful) and leaves with
+// toast-out.
 T.Popup {
     id: control
     property string message
@@ -15,6 +18,12 @@ T.Popup {
     property bool leaving: false
     property var samples: []
     readonly property real fade: leaving ? 0 : Math.max(0, 1 - Math.abs(dx) / (width * 0.6))
+    // sleepy or playful; empty follows Purrimer.motionKind (a popup sits in the overlay, outside any MotionScope).
+    property string kind: ""
+    readonly property string effectiveKind: Purrimer.effectiveKind(control, control.kind)
+    property string motionName: "toast"
+    property real motionProgress: 1
+    readonly property var frame: Purrimer.pauseLoops ? PmMotion.rest() : PmMotion.sample(motionName, effectiveKind, motionProgress)
     signal actionTriggered()
 
     parent: T.Overlay.overlay
@@ -22,17 +31,38 @@ T.Popup {
     focus: false
     closePolicy: T.Popup.NoAutoClose
     width: parent ? Math.min(parent.width - 2 * {{ "mobile-gutter" | tok }}, 560) : 328
-    x: (parent ? (parent.width - width) / 2 : 0) + dx
-    y: parent ? parent.height - height - {{ "mobile-bottomNav-height" | tok }} - {{ "base-size-16" | tok }} : 0
+    x: (parent ? (parent.width - width) / 2 : 0) + dx + frame.tx + frame.txp * width
+    y: (parent ? parent.height - height - {{ "mobile-bottomNav-height" | tok }} - {{ "base-size-16" | tok }} : 0) + frame.ty + frame.typ * height
+    opacity: frame.opacity
+    scale: frame.sx
     implicitHeight: Math.max(48, row.implicitHeight + 8)
     leftPadding: 16
     rightPadding: 4
 
     enter: Transition {
-        NumberAnimation { property: "opacity"; from: 0; to: 1; duration: {{ "duration-sleepy-medium" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+        SequentialAnimation {
+            PropertyAction { target: control; property: "motionName"; value: "toast" }
+            NumberAnimation {
+                target: control
+                property: "motionProgress"
+                from: 0
+                to: 1
+                duration: Purrimer.pauseLoops ? 0 : PmMotion.entry("toast", control.effectiveKind).dur
+            }
+        }
     }
+    // A swipe has already taken it away; otherwise it leaves with toast-out.
     exit: Transition {
-        NumberAnimation { property: "opacity"; to: 0; duration: {{ "duration-sleepy-exit" | tok }} }
+        SequentialAnimation {
+            PropertyAction { target: control; property: "motionName"; value: "toast-out" }
+            NumberAnimation {
+                target: control
+                property: "motionProgress"
+                from: 0
+                to: 1
+                duration: Purrimer.pauseLoops || control.leaving ? 0 : PmMotion.entry("toast-out", control.effectiveKind).dur
+            }
+        }
     }
 
     Behavior on dx {

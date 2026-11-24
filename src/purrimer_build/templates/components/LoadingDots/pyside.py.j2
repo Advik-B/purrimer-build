@@ -8,6 +8,7 @@ from PySide6.QtCore import QElapsedTimer, QPointF, QSize, Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..motion import loop_kind
 from ..theme import theme
 
 # Per motion kind: step cycle and snooze loop (ms), travel (px), peak scale and the easing of a step.
@@ -23,10 +24,11 @@ BUBBLES = (7, 5, 4)
 class LoadingDots(QWidget):
     """Three dots stepping in turn, or three bubbles drifting up. They animate while visible."""
 
-    def __init__(self, variant: str = "steps", label: str = "", kind: str = "sleepy",
+    def __init__(self, variant: str = "steps", label: str = "", kind: str = "",
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._snooze = variant == "snooze"
+        self._explicit = kind
         self._kind = KINDS.get(kind, KINDS["sleepy"])
         self._wave = theme.easing(self._kind["wave"])
         self._drift = theme.easing({{ "easing-sleepy-drift" | tok }})
@@ -43,8 +45,14 @@ class LoadingDots(QWidget):
     def sizeHint(self) -> QSize:
         return QSize(28, 24) if self._snooze else QSize(26, 20)
 
+    def _resolve_kind(self) -> None:
+        """Empty kind follows the closest MotionScope."""
+        self._kind = KINDS[loop_kind(self, self._explicit)]
+        self._wave = theme.easing(self._kind["wave"])
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._resolve_kind()
         if not theme.pause_loops:
             self._timer.start()
 

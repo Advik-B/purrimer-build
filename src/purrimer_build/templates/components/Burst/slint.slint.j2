@@ -1,0 +1,136 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot generate random particles, so each kind and variant has two fixed sets, taken in turn each time it
+// fires. Rain falls across the Burst's own area (Slint cannot see the window). Particles draw past its edges.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PmMotionCatalog } from "../motion.slint";
+
+{% macro f(v) %}{{ "%.4f" | format(v) }}{% endmacro %}
+{% macro particle(p) %}
+{%- set fr = p.frames if p.frames | length == 3 else [p.frames[0], p.frames[1], p.frames[1]] -%}
+{%- set e0 = p.easings[0] -%}
+{%- set e1 = p.easings[1] if p.easings | length > 1 else p.easings[0] -%}
+{ shape: {{ ["circle", "square", "bar"].index(p.shape) }}, w: {{ f(p.width) }}, h: {{ f(p.height) }}, color: {{ ["bgColor-accent-emphasis", "bgColor-done-emphasis", "bgColor-info-emphasis", "bgColor-success-emphasis", "bgColor-attention-emphasis", "bgColor-severe-emphasis"].index(p.color) }}, duration: {{ f(p.duration) }}, delay: {{ f(p.delay) }}, at1: {{ f(fr[1].at if p.frames | length == 3 else 1) }}, {% for k in ["x", "y", "xf", "yf", "rotate", "scale", "opacity"] %}{{ k }}0: {{ f(fr[0][k]) }}, {{ k }}1: {{ f(fr[1][k]) }}, {{ k }}2: {{ f(fr[2][k]) }}, {% endfor %}linear0: {{ "true" if e0 == "linear" else "false" }}, a0: {{ f(0 if e0 == "linear" else e0[0]) }}, b0: {{ f(0 if e0 == "linear" else e0[1]) }}, c0: {{ f(0 if e0 == "linear" else e0[2]) }}, d0: {{ f(0 if e0 == "linear" else e0[3]) }}, linear1: {{ "true" if e1 == "linear" else "false" }}, a1: {{ f(0 if e1 == "linear" else e1[0]) }}, b1: {{ f(0 if e1 == "linear" else e1[1]) }}, c1: {{ f(0 if e1 == "linear" else e1[2]) }}, d1: {{ f(0 if e1 == "linear" else e1[3]) }} }
+{%- endmacro %}
+struct PmParticle {
+    shape: int, w: float, h: float, color: int, duration: float, delay: float, at1: float,
+{% for k in ["x", "y", "xf", "yf", "rotate", "scale", "opacity"] %}
+    {{ k }}0: float, {{ k }}1: float, {{ k }}2: float,
+{% endfor %}
+    linear0: bool, a0: float, b0: float, c0: float, d0: float,
+    linear1: bool, a1: float, b1: float, c1: float, d1: float,
+}
+
+global PmBurstSets {
+    // kind: 0 sleepy, 1 playful (reduced motion: playful plays as sleepy, sleepy shows nothing).
+    public pure function particles(kind: int, variant: string, set: int) -> [PmParticle] {
+{% for kind, kind_index in [("sleepy", 0), ("playful", 1)] %}
+{% for variant in ["confetti", "motes", "ring", "rain"] %}
+{% for seed in [1, 2] %}
+        if kind == {{ kind_index }} && variant == "{{ variant }}" && set == {{ seed - 1 }} {
+            return [{% for p in burst_particles(kind, variant, none, none, seed) %}{{ particle(p) }}{{ ", " if not loop.last }}{% endfor %}];
+        }
+{% endfor %}
+{% endfor %}
+{% endfor %}
+        return [];
+    }
+}
+
+export component Burst {
+    // Change it to burst.
+    in property <int> fire: 0;
+    // confetti, motes, ring or rain; empty uses the kind's (confetti playful, motes sleepy).
+    in property <string> variant: "";
+    in property <float> origin-x: 0.5;
+    in property <float> origin-y: 0.5;
+    in property <bool> on-mount: false;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <bool> reduced: root.reduce || PurrimerMotion.reduce;
+    // Reduced motion shows nothing in sleepy.
+    property <bool> silent: root.reduced && !root.playful;
+    property <int> kind-index: root.playful && !root.reduced ? 1 : 0;
+    property <string> shape-set: root.variant != "" ? root.variant : root.kind-index == 1 ? "confetti" : "motes";
+    property <int> shots;
+    property <bool> active;
+    property <duration> started;
+    property <float> elapsed: root.active ? (animation-tick() - root.started) / 1ms : 0;
+    property <[PmParticle]> particles: root.active ? PmBurstSets.particles(root.kind-index, root.shape-set, mod(root.shots, 2)) : [];
+    property <bool> rain: root.shape-set == "rain";
+
+    public function throw() {
+        if PurrimerMotion.pause-loops || root.silent {
+            return;
+        }
+        root.shots += 1;
+        root.started = animation-tick();
+        root.active = true;
+    }
+
+    init => {
+        if root.on-mount {
+            root.throw();
+        }
+    }
+    changed fire => { root.throw(); }
+
+    Timer {
+        interval: 100ms;
+        running: root.active;
+        triggered => {
+            if root.elapsed > 5000 {
+                root.active = false;
+            }
+        }
+    }
+
+    pure function progress(p: PmParticle) -> float {
+        return Math.clamp((root.elapsed - p.delay) / p.duration, 0, 1);
+    }
+    pure function eased(p: PmParticle) -> float {
+        let t = root.progress(p);
+        if t <= p.at1 {
+            let local = p.at1 == 0 ? 0 : t / p.at1;
+            return p.linear0 ? local : PmMotionCatalog.cubic-bezier(p.a0, p.b0, p.c0, p.d0, local);
+        }
+        let local = (t - p.at1) / (1 - p.at1);
+        return 1 + (p.linear1 ? local : PmMotionCatalog.cubic-bezier(p.a1, p.b1, p.c1, p.d1, local));
+    }
+    // A value through the three frames: the segment is the whole part of `e`, its eased progress the rest.
+    pure function through(e: float, v0: float, v1: float, v2: float) -> float {
+        return e <= 1 ? v0 + (v1 - v0) * e : v1 + (v2 - v1) * (e - 1);
+    }
+    pure function ink(i: int) -> color {
+        return i == 0 ? Purrimer.bg-color-accent-emphasis : i == 1 ? Purrimer.bg-color-done-emphasis
+            : i == 2 ? Purrimer.bg-color-info-emphasis : i == 3 ? Purrimer.bg-color-success-emphasis
+            : i == 4 ? Purrimer.bg-color-attention-emphasis : Purrimer.bg-color-severe-emphasis;
+    }
+
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+    min-width: content.min-width;
+    min-height: content.min-height;
+
+    content := VerticalLayout {
+        @children
+    }
+
+    for p in root.particles: Rectangle {
+        property <float> e: root.eased(p);
+        width: p.w * 1px;
+        height: p.h * 1px;
+        x: (root.rain ? 0px : root.width * root.origin-x) + root.through(self.e, p.x0, p.x1, p.x2) * 1px
+            + root.through(self.e, p.xf0, p.xf1, p.xf2) * root.width;
+        y: (root.rain ? 0px : root.height * root.origin-y) + root.through(self.e, p.y0, p.y1, p.y2) * 1px
+            + root.through(self.e, p.yf0, p.yf1, p.yf2) * root.height;
+        opacity: Math.clamp(root.through(self.e, p.opacity0, p.opacity1, p.opacity2), 0, 1);
+        transform-rotation: root.through(self.e, p.rotate0, p.rotate1, p.rotate2) * 1deg;
+        transform-scale: root.through(self.e, p.scale0, p.scale1, p.scale2);
+        border-radius: p.shape == 0 ? Math.min(p.w, p.h) * 0.5px : 2px;
+        background: root.ink(p.color);
+    }
+}

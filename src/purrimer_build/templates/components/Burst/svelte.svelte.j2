@@ -1,0 +1,59 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { burst, burstAt, effectiveKind, type BurstVariant, type MotionKind } from "../motion";
+
+  let {
+    fire,
+    onMount = false,
+    variant,
+    count,
+    spread,
+    originX = 0.5,
+    originY = 0.5,
+    seed,
+    kind,
+    as = "span",
+    class: className = "",
+    style = "",
+    children,
+  }: {
+    // Change any value to burst.
+    fire?: unknown;
+    onMount?: boolean;
+    variant?: BurstVariant;
+    count?: number;
+    spread?: number;
+    originX?: number;
+    originY?: number;
+    seed?: number;
+    kind?: MotionKind;
+    as?: string;
+    class?: string;
+    style?: string;
+    children?: Snippet;
+  } = $props();
+
+  let host: HTMLElement | undefined = $state();
+  let layer: HTMLElement | undefined = $state();
+  let first = true;
+
+  $effect(() => {
+    void fire;
+    if (first) {
+      first = false;
+      if (!onMount) return;
+    }
+    if (!host || !layer) return;
+    const opts = { variant, count, spread, seed, kind };
+    // Rain covers the viewport.
+    if (variant === "rain") void burst(null, opts);
+    else void burstAt(layer, host.clientWidth * originX, host.clientHeight * originY, effectiveKind(host, kind), opts);
+  });
+</script>
+
+<svelte:element this={as} bind:this={host} class={["pm-burst", className]} style={style || undefined} data-motion={kind}>
+  {@render children?.()}
+  <span bind:this={layer} class="pm-burst__layer" aria-hidden="true"></span>
+</svelte:element>

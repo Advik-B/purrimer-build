@@ -1,0 +1,31 @@
+name = "Presence"
+group = "Motion"
+order = 102
+summary = "Keeps its content until its exit animation has finished, so things leave as gently as they arrived."
+requires = ["Motion"]
+
+[props.show]
+type = "bool"
+default = true
+doc = "Plays enter when it turns true and exit when it turns false; the content goes once the exit ends."
+
+[props.enter]
+type = "string"
+default = "rise"
+doc = "An entrance or choreography preset. Pair it with its exit: rise and lie-down, pounce and tuck, unfurl and furl, dialog and dialog-out, toast and toast-out."
+
+[props.exit]
+type = "string"
+default = "lie-down"
+doc = "An exit or choreography preset."
+
+[props.collapse]
+type = "bool"
+default = false
+doc = "Also closes the height gap after the exit, so rows below slide up instead of jumping."
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind; empty follows the scope."
+values = ["", "sleepy", "playful"]

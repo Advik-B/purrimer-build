@@ -1,0 +1,26 @@
+import { Card, Motion, Purrimer } from "purrimer-components.slint";
+
+component Note inherits Text {
+    wrap: word-wrap;
+    color: Purrimer.fg-color-default;
+}
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    spacing: 12px;
+    Motion {
+        name: "rise";
+        Card { title: "Saved to drafts"; Note { text: "Your reply is waiting in Drafts."; } }
+    }
+    Motion {
+        name: "pounce";
+        index: 1;
+        Card { title: "New badge"; Note { text: "You reviewed ten pull requests this week."; } }
+    }
+    Motion {
+        name: "bask";
+        index: 2;
+        radius: 12px;
+        Card { title: "Linked from the release notes"; Note { text: "A halo shows where the link points."; } }
+    }
+}

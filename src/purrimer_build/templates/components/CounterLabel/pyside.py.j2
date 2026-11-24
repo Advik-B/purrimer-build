@@ -8,6 +8,7 @@ from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..motion import play
 from ..theme import theme
 
 VARIANTS = {
@@ -17,7 +18,7 @@ VARIANTS = {
 
 
 class CounterLabel(QWidget):
-    """A rounded count, 18px tall."""
+    """A rounded count, 18px tall. A changed count hops, in the kind of the closest MotionScope."""
 
     def __init__(self, text: str | int = "", variant: str = "secondary", parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -36,10 +37,13 @@ class CounterLabel(QWidget):
         return self._text
 
     def set_text(self, text: str | int) -> None:
+        changed = str(text) != self._text
         self._text = str(text)
         self.setAccessibleName(self._text)
         self.updateGeometry()
         self.update()
+        if changed and self.isVisible():
+            play(self, "hop")
 
     def set_variant(self, variant: str) -> None:
         if variant not in VARIANTS:

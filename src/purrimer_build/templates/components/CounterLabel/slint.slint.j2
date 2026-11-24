@@ -1,27 +1,66 @@
 // {{ note }}
 // {{ c.summary }}
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PmMotionCatalog, PmMotionFrame } from "../motion.slint";
 
 export component CounterLabel inherits Rectangle {
     in property <string> text;
     // secondary or primary
     in property <string> variant: "secondary";
+    // sleepy or playful; empty follows PurrimerMotion.playful. Slint cannot see a MotionScope, so set it by hand.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+
+    // A changed count hops. It ticks only while it moves.
+    property <int> kind-index: PmMotionCatalog.kind-index(root.kind, root.reduce);
+    property <bool> active;
+    property <duration> started;
+    property <float> length: PmMotionCatalog.entry("hop", root.kind-index).dur / 1ms;
+    property <float> elapsed: root.active ? (animation-tick() - root.started) / 1ms : 100000;
+    property <PmMotionFrame> frame: PurrimerMotion.pause-loops || !root.active
+        ? { opacity: 1, sx: 1, sy: 1, reveal: 1, ring-s: 1, draw: 1 }
+        : PmMotionCatalog.sample("hop", root.kind-index, Math.clamp(root.elapsed / root.length, 0, 1), "");
+
+    changed text => {
+        root.started = animation-tick();
+        root.active = !PurrimerMotion.pause-loops;
+    }
+
+    Timer {
+        interval: 16ms;
+        running: root.active;
+        triggered => {
+            if PurrimerMotion.pause-loops || root.elapsed >= root.length {
+                root.active = false;
+            }
+        }
+    }
 
     height: 18px;
     min-width: 20px;
     preferred-width: max(20px, label.preferred-width + 12px);
-    border-radius: 9px;
-    background: root.variant == "primary" ? {{ "bgColor-neutral-emphasis" | tok }} : {{ "bgColor-neutral-muted" | tok }};
     accessible-role: AccessibleRole.text;
     accessible-label: root.text;
 
-    label := Text {
-        text: root.text;
-        color: root.variant == "primary" ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-default" | tok }};
-        font-family: {{ "text-caption" | tok }}.font-family;
-        font-size: 12px;
-        font-weight: 600;
-        horizontal-alignment: center;
-        vertical-alignment: center;
+    pill := Rectangle {
+        x: root.frame.tx * 1px + root.frame.txp * root.width;
+        y: root.frame.ty * 1px + root.frame.typ * root.height;
+        width: root.width;
+        height: root.height;
+        transform-scale-x: root.frame.sx;
+        transform-scale-y: root.frame.sy;
+        transform-rotation: root.frame.rot * 1deg;
+        border-radius: 9px;
+        background: root.variant == "primary" ? {{ "bgColor-neutral-emphasis" | tok }} : {{ "bgColor-neutral-muted" | tok }};
+
+        label := Text {
+            text: root.text;
+            color: root.variant == "primary" ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-default" | tok }};
+            font-family: {{ "text-caption" | tok }}.font-family;
+            font-size: 12px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
     }
 }

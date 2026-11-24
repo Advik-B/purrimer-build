@@ -1,0 +1,60 @@
+// {{ note }}
+// {{ c.summary }}
+// Items come from `model` and `delegate`; a delegate that declares `property var modelData` (and `property int
+// itemIndex`) receives them. The first 12 are staggered; the rest arrive together after them.
+pragma ComponentBehavior: Bound
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+Grid {
+    id: root
+
+    property var model
+    property Component delegate
+    property string name: "{{ c.spec.props.name.default }}"
+    // ms between items; 0 uses the kind's stagger.
+    property int step: 0
+    property int start: 0
+    // mount or inView
+    property string trigger: "mount"
+    // Empty follows the scope.
+    property string kind: ""
+    property bool horizontal: false
+    // Change it to play again.
+    property int replay: 0
+
+    columns: horizontal ? Math.max(1, items.count) : 1
+
+    Repeater {
+        id: items
+        model: root.model
+        delegate: Item {
+            id: cell
+            required property int index
+            required property var modelData
+            readonly property int position: root.start + Math.min(index, 12)
+            implicitWidth: motion.implicitWidth
+            implicitHeight: motion.implicitHeight
+            width: implicitWidth
+            height: implicitHeight
+
+            Motion {
+                id: motion
+                name: root.name
+                trigger: root.trigger
+                kind: root.kind
+                index: root.step > 0 ? 0 : cell.position
+                delay: root.step > 0 ? cell.position * root.step : 0
+                replay: root.replay
+                Loader {
+                    sourceComponent: root.delegate
+                    // The delegate's own properties, when it declares them.
+                    onLoaded: {
+                        PmMotion.assign(item, "modelData", cell.modelData)
+                        PmMotion.assign(item, "itemIndex", cell.index)
+                    }
+                }
+            }
+        }
+    }
+}

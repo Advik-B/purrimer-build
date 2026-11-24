@@ -1,0 +1,99 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import { untrack, type Snippet } from "svelte";
+  import { closeGap, effectiveKind, motionStyleText, type EnterMotion, type ExitMotion, type ChoreographyMotion, type MotionKind } from "../motion";
+
+  let {
+    show = true,
+    enter = "{{ c.spec.props.enter.default }}",
+    exit = "{{ c.spec.props.exit.default }}",
+    collapse = false,
+    duration,
+    delay,
+    index,
+    kind,
+    onexited,
+    as = "div",
+    class: className = "",
+    style = "",
+    children,
+  }: {
+    show?: boolean;
+    enter?: EnterMotion | ChoreographyMotion;
+    exit?: ExitMotion | ChoreographyMotion;
+    collapse?: boolean;
+    duration?: number;
+    delay?: number;
+    index?: number;
+    kind?: MotionKind;
+    onexited?: () => void;
+    as?: string;
+    class?: string;
+    style?: string;
+    children?: Snippet;
+  } = $props();
+
+  let phase: "enter" | "exit" | "gone" = $state(untrack(() => show) ? "enter" : "gone");
+  let el: HTMLElement | undefined = $state();
+
+  $effect(() => {
+    if (show && phase !== "enter") phase = "enter";
+    else if (!show && phase === "enter") phase = "exit";
+  });
+
+  // Waits for the exit, then closes the gap (with collapse) before the content goes.
+  $effect(() => {
+    if (phase !== "exit" || !el) return;
+    const node = el;
+    let over = false;
+    let gap: Animation | null = null;
+    const done = () => {
+      if (over) return;
+      over = true;
+      phase = "gone";
+      onexited?.();
+    };
+    const ended = () => {
+      if (collapse) {
+        gap = closeGap(node, effectiveKind(node, kind));
+        if (gap) {
+          gap.finished.then(done, done);
+          return;
+        }
+      }
+      done();
+    };
+    const onEnd = (e: AnimationEvent) => {
+      if (e.target === node) ended();
+    };
+    node.addEventListener("animationend", onEnd);
+    // With animations off there is no animationend: finish at once.
+    const raf = requestAnimationFrame(() => {
+      if (!node.getAnimations().some((a) => a.playState === "running")) ended();
+    });
+    const timer = setTimeout(ended, 2000);
+    return () => {
+      node.removeEventListener("animationend", onEnd);
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      gap?.cancel();
+    };
+  });
+
+  const css = $derived(
+    [motionStyleText({ duration, index, delay: phase === "enter" ? delay : undefined }), style].filter(Boolean).join("; "),
+  );
+</script>
+
+{#if phase !== "gone"}
+  <svelte:element
+    this={as}
+    bind:this={el}
+    data-motion={kind}
+    class={["pm-m", `pm-m-${phase === "enter" ? enter : exit}`, collapse && phase === "exit" && "pm-presence--closing", className]}
+    style={css || undefined}
+  >
+    {@render children?.()}
+  </svelte:element>
+{/if}

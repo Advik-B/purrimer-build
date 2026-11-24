@@ -1,0 +1,118 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Opens and closes its child to and from its natural height on the kind's move curve, eased from wherever it was,
+// as a CSS transition does. Closed content is hidden, so it cannot be focused and screen readers skip it.
+public class Collapse : Decorator
+{
+    public static readonly StyledProperty<bool> IsOpenProperty =
+        AvaloniaProperty.Register<Collapse, bool>(nameof(IsOpen));
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Collapse, string>(nameof(Kind), "");
+
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _from;
+    private double _to;
+    private double _progress;
+
+    static Collapse()
+    {
+        IsOpenProperty.Changed.AddClassHandler<Collapse>((c, _) => c.Animate());
+    }
+
+    public Collapse()
+    {
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
+    }
+
+    public event EventHandler<bool>? Toggled;
+
+    public bool IsOpen { get => GetValue(IsOpenProperty); set => SetValue(IsOpenProperty, value); }
+
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (!_timer.IsEnabled)
+        {
+            _progress = _from = _to = IsOpen ? 1 : 0;
+            Sync();
+        }
+    }
+
+    private PurrimerMotionEntry Timing => PurrimerMotionCatalog.Entry("tab-next", PurrimerMotion.EffectiveKind(this, Kind));
+
+    private void Animate()
+    {
+        _from = _progress;
+        _to = IsOpen ? 1 : 0;
+        if (Child is { } child)
+            child.IsVisible = true;
+        if (PurrimerMotion.PauseLoops || VisualRoot is null)
+        {
+            _progress = _to;
+            Settle();
+            return;
+        }
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    private void Tick()
+    {
+        var timing = Timing;
+        var p = Math.Min(1, _clock.Elapsed.TotalMilliseconds / Math.Max(1, timing.Duration));
+        _progress = _from + (_to - _from) * PurrimerMotionCatalog.Ease(timing.Easing, p);
+        Sync();
+        if (p >= 1)
+            Settle();
+    }
+
+    private void Settle()
+    {
+        _timer.Stop();
+        Sync();
+        Toggled?.Invoke(this, IsOpen);
+    }
+
+    private void Sync()
+    {
+        if (Child is { } child)
+        {
+            child.IsVisible = _progress > 0.001;
+            child.Opacity = Math.Clamp(_progress, 0, 1);
+        }
+        InvalidateMeasure();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var size = base.MeasureOverride(availableSize.WithHeight(double.PositiveInfinity));
+        if (Child is { } child && !child.IsVisible)
+        {
+            child.IsVisible = true;
+            child.Measure(availableSize.WithHeight(double.PositiveInfinity));
+            size = child.DesiredSize;
+            child.IsVisible = false;
+        }
+        return new Size(size.Width, size.Height * Math.Max(0, _progress));
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        if (Child is { } child)
+            child.Arrange(new Rect(0, 0, finalSize.Width, child.DesiredSize.Height));
+        return finalSize;
+    }
+}

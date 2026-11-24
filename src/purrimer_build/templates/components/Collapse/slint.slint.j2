@@ -1,0 +1,40 @@
+// {{ note }}
+// {{ c.summary }}
+// Closed content is clipped to zero height and faded out; Slint has no way to take it out of the focus chain, so
+// keep focusable children disabled while closed.
+import { PurrimerMotion } from "../purrimer.slint";
+import { PmMotionCatalog } from "../motion.slint";
+
+export component Collapse inherits Rectangle {
+    in property <bool> open: false;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    out property <float> progress: root.open ? 1 : 0;
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <int> kind-index: root.reduce || PurrimerMotion.reduce ? (root.playful ? 0 : 2) : (root.playful ? 1 : 0);
+    // The kind's move curve and medium duration (the same as tab-next).
+    property <duration> length: PurrimerMotion.pause-loops ? 0ms : PmMotionCatalog.entry("tab-next", root.kind-index).dur;
+
+    animate progress {
+        duration: root.length;
+        easing: root.playful && root.kind-index == 1 ? {{ "easing-playful-spring" | tok }} : {{ "easing-sleepy-move" | tok }};
+    }
+
+    clip: true;
+    preferred-width: inner.preferred-width;
+    min-width: inner.min-width;
+    preferred-height: inner.preferred-height * Math.max(0, root.progress);
+    min-height: inner.min-height * Math.max(0, root.progress);
+    max-height: inner.preferred-height * Math.max(0, root.progress);
+
+    inner := VerticalLayout {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: self.preferred-height;
+        opacity: Math.clamp(root.progress, 0, 1);
+        @children
+    }
+}

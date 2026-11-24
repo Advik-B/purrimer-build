@@ -7,16 +7,33 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QCheckBox, QWidget
 
+from ..motion import IndicatorMotion
+
 
 class Checkbox(QCheckBox):
-    """A check box; the stylesheet draws it. Set indeterminate for the mixed state."""
+    """A check box; the stylesheet draws it. Set indeterminate for the mixed state.
+
+    The mark pops in when it turns on, on the kind's curve, and in a playful scope the box presses to 95% while
+    held."""
 
     def __init__(self, text: str = "", checked: bool = False, indeterminate: bool = False,
                  parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._motion = IndicatorMotion(self, {{ px("borderRadius-small") - 2 }})
         if indeterminate:
             self.setTristate(True)
             self.setCheckState(Qt.CheckState.PartiallyChecked)
         else:
             self.setChecked(checked)
+        self.checkStateChanged.connect(self._state_changed)
+
+    def _state_changed(self, state: Qt.CheckState) -> None:
+        if state != Qt.CheckState.Unchecked:
+            self._motion.pop()
+
+    def paintEvent(self, event) -> None:
+        if self._motion.active:
+            self._motion.paint()
+        else:
+            super().paintEvent(event)

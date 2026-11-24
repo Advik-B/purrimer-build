@@ -1,13 +1,45 @@
 // {{ note }}
 // {{ c.summary }}
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
 
 namespace {{ ns }};
 
-// A rounded count, 18px tall.
+// A rounded count, 18px tall. A changed count hops, in the kind of the closest MotionScope.
+[TemplatePart("PART_Pill", typeof(Control))]
 public class CounterLabel : TemplatedControl
 {
+    private readonly PurrimerMotionPlayer _hop = new();
+    private Control? _pill;
+
+    static CounterLabel()
+    {
+        TextProperty.Changed.AddClassHandler<CounterLabel>((c, _) => c.Hop());
+    }
+
+    public CounterLabel()
+    {
+        _hop.Frame += f =>
+        {
+            if (_pill != null)
+                PurrimerMotionVisual.Apply(_pill, f, _hop.Entry);
+        };
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        _pill = e.NameScope.Find<Control>("PART_Pill");
+    }
+
+    private void Hop()
+    {
+        if (IsLoaded)
+            _hop.Play("hop", PurrimerMotion.EffectiveKind(this));
+    }
+
     public static readonly StyledProperty<string?> TextProperty =
         AvaloniaProperty.Register<CounterLabel, string?>(nameof(Text));
 

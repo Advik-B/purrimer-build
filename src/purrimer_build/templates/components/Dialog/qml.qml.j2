@@ -4,12 +4,21 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
 import QtQuick.Effects
+import "PmMotion.js" as PmMotion
 
 T.Popup {
     id: control
     property string title
     default property alias content: body.data
     property alias footer: footerRow.data
+    // sleepy or playful; empty follows Purrimer.motionKind (a popup sits in the overlay, outside any MotionScope).
+    property string kind: ""
+
+    // The dialog choreography: rise when sleepy, pounce when playful; dialog-out when it closes.
+    readonly property string effectiveKind: Purrimer.effectiveKind(control, control.kind)
+    property string motionName: "dialog"
+    property real motionProgress: 1
+    readonly property var frame: Purrimer.pauseLoops ? PmMotion.rest() : PmMotion.sample(motionName, effectiveKind, motionProgress)
 
     parent: T.Overlay.overlay
     modal: true
@@ -21,19 +30,43 @@ T.Popup {
     implicitHeight: contentItem.implicitHeight
     closePolicy: T.Popup.CloseOnEscape | T.Popup.CloseOnPressOutside
 
-    T.Overlay.modal: Rectangle { color: {{ "overlay-backdrop-bgColor" | tok }} }
+    // The backdrop fades on its own curve: in over the kind's short duration, out over its exit.
+    T.Overlay.modal: Rectangle {
+        color: {{ "overlay-backdrop-bgColor" | tok }}
+        opacity: Purrimer.pauseLoops ? 1 : PmMotion.sample(control.motionName === "dialog" ? "backdrop" : "backdrop-out", control.effectiveKind,
+            Math.min(1, control.motionProgress * PmMotion.entry(control.motionName, control.effectiveKind).dur / PmMotion.entry(control.motionName === "dialog" ? "backdrop" : "backdrop-out", control.effectiveKind).dur)).opacity
+    }
+
+    opacity: frame.opacity
+    scale: frame.sx
 
     enter: Transition {
-        ParallelAnimation {
-            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
-            NumberAnimation { property: "scale"; from: 0.96; to: 1; duration: {{ "duration-slow" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-sleepy-enter" | tok }} }
+        SequentialAnimation {
+            PropertyAction { target: control; property: "motionName"; value: "dialog" }
+            NumberAnimation {
+                target: control
+                property: "motionProgress"
+                from: 0
+                to: 1
+                duration: Purrimer.pauseLoops ? 0 : PmMotion.entry("dialog", control.effectiveKind).dur
+            }
         }
     }
     exit: Transition {
-        NumberAnimation { property: "opacity"; to: 0; duration: {{ "duration-sleepy-exit" | tok }} }
+        SequentialAnimation {
+            PropertyAction { target: control; property: "motionName"; value: "dialog-out" }
+            NumberAnimation {
+                target: control
+                property: "motionProgress"
+                from: 0
+                to: 1
+                duration: Purrimer.pauseLoops ? 0 : PmMotion.entry("dialog-out", control.effectiveKind).dur
+            }
+        }
     }
 
     background: Rectangle {
+        transform: Translate { x: control.frame.tx; y: control.frame.ty }
         radius: {{ "borderRadius-large" | tok }}
         color: {{ "overlay-bgColor" | tok }}
         border.width: {{ "borderWidth-thin" | tok }}
@@ -52,6 +85,7 @@ T.Popup {
     }
 
     contentItem: Column {
+        transform: Translate { x: control.frame.tx; y: control.frame.ty }
         Item {
             width: parent.width
             height: 48

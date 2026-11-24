@@ -8,9 +8,11 @@ Item {
     property string variant: "text"
     property string effect: "sunbeam"
     property int lines: 1
-    property string kind: "sleepy"
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    property string kind: ""
+    readonly property string loopKind: kind === "sleepy" || kind === "playful" ? kind : (Purrimer.motionReduced(root) ? "sleepy" : Purrimer.motionKindOf(root))
     readonly property int count: variant === "text" ? Math.max(1, lines) : 1
-    readonly property int loop: kind === "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}
+    readonly property int loop: loopKind === "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }}
     readonly property color base: {{ "bgColor-neutral-muted" | tok }}
     readonly property color beam: Purrimer.dark ? {{ "borderColor-default" | tok }} : {{ "bgColor-default" | tok }}
     // Sweep progress, 0 to 1; paused, the band rests at the left edge as it does on the web.

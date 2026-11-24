@@ -6,13 +6,22 @@ from __future__ import annotations
 
 from PySide6.QtWidgets import QProgressBar, QWidget
 
+from ..motion import Tween, controls_for, effective_kind
+
 
 class ProgressBar(QProgressBar):
-    """A thin progress bar; the stylesheet draws it. Indeterminate sets a busy range."""
+    """A thin progress bar; the stylesheet draws it. Indeterminate sets a busy range.
 
-    def __init__(self, value: int = 0, tone: str = "accent", indeterminate: bool = False,
+    Once it is on screen, a new value eases in on the kind's curve, in the kind of the closest MotionScope (or
+    `kind`). value() and valueChanged give the new value at once."""
+
+    def __init__(self, value: int = 0, tone: str = "accent", indeterminate: bool = False, kind: str = "",
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self.kind = kind
+        self._target = value
+        self._fill = Tween(float(value), self)
+        self._fill.changed.connect(self._show_fill)
         self.setTextVisible(False)
         self.setFixedHeight(8)
         if indeterminate:
@@ -22,3 +31,23 @@ class ProgressBar(QProgressBar):
             self.setValue(value)
         if tone != "accent":
             self.setProperty("tone", tone)
+
+    def value(self) -> int:
+        return self._target
+
+    def setValue(self, value: int) -> None:
+        changed = value != self._target
+        self._target = value
+        if self.minimum() == self.maximum() or not self.isVisible():
+            self._fill.set(float(value))
+        else:
+            c = controls_for(effective_kind(self, self.kind or None))
+            self._fill.to(float(value), c["progressDur"], c["progressEase"])
+        if changed:
+            self.valueChanged.emit(value)
+
+    def _show_fill(self, value: float) -> None:
+        # The bar draws the in-between values without signalling them; the spring's overshoot stays in range.
+        self.blockSignals(True)
+        super().setValue(round(min(max(value, self.minimum()), self.maximum())))
+        self.blockSignals(False)

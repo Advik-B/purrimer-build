@@ -1,0 +1,174 @@
+// {{ note }}
+// {{ c.summary }}
+// Digits are JetBrains Mono at 500 with a slashed zero, and separators are pulled in so 1,284 reads as one number.
+// Screen readers hear only the final value.
+pragma ComponentBehavior: Bound
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+Item {
+    id: root
+
+    property real to: 0
+    property real from: 0
+    property int decimals: 0
+    property string prefix: ""
+    property string suffix: ""
+    // count, or roll: each digit rolls like an odometer, the rightmost first.
+    property string mode: "{{ c.spec.props.mode.default }}"
+    // ms; 0 uses 900 sleepy, 800 playful.
+    property int duration: 0
+    // mount or inView
+    property string trigger: "mount"
+    // Empty follows the scope.
+    property string kind: ""
+    property font font: Purrimer.textStat
+    property real lineHeight: Purrimer.textStatLineHeight
+    property color color: {{ "fgColor-default" | tok }}
+
+    property real value: from
+    property real startValue: from
+    property real elapsed: 0
+    readonly property string finalText: format(to)
+    readonly property string effective: Purrimer.effectiveKind(root, root.kind)
+    readonly property font digitFont: Qt.font({ family: font.family, pixelSize: font.pixelSize, weight: 500, letterSpacing: font.letterSpacing, features: { "zero": 1, "tnum": 1 } })
+
+    implicitWidth: row.implicitWidth
+    implicitHeight: lineHeight
+    Accessible.role: Accessible.StaticText
+    Accessible.name: finalText
+
+    function format(v) {
+        const text = Math.abs(v).toLocaleString(Qt.locale("en_US"), "f", decimals)
+        return prefix + (v < 0 ? "-" : "") + text + suffix
+    }
+
+    function countEase(p) {
+        if (effective !== "playful")
+            return 1 - Math.pow(1 - p, 5)
+        const zeta = 0.55, omega = 12, t = p * 0.781
+        const wd = omega * Math.sqrt(1 - zeta * zeta)
+        return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + (zeta * omega / wd) * Math.sin(wd * t))
+    }
+
+    readonly property var rollEntry: PmMotion.entry("emerge", effective)
+    readonly property real length: mode === "roll" ? rollEntry.dur + digitCount() * PmMotion.stagger(effective) : (duration > 0 ? duration : (effective === "playful" ? 800 : 900))
+
+    function digitCount() {
+        return finalText.replace(/[^0-9]/g, "").length
+    }
+
+    // Each character with its roll position: a digit's column offset (0 to 9, fractional while rolling), else -1.
+    function cells() {
+        if (mode !== "roll")
+            return format(Purrimer.pauseLoops ? to : value).split("").map(ch => ({ ch: ch, roll: -1 }))
+        const start = String(Math.abs(Math.round(startValue))).split("").reverse()
+        const count = digitCount()
+        const curve = PmMotion.EASINGS[PmMotion.entry("rise", effective).ease]
+        let seen = 0
+        return finalText.split("").map(ch => {
+            if (!/[0-9]/.test(ch))
+                return { ch: ch, roll: -1 }
+            const index = count - 1 - seen++
+            const end = Number(ch)
+            if (!frames.running || Purrimer.pauseLoops)
+                return { ch: ch, roll: end }
+            const s = index < start.length ? Number(start[index]) : 0
+            const p = Math.max(0, Math.min(1, (elapsed - index * PmMotion.stagger(effective)) / rollEntry.dur))
+            return { ch: ch, roll: s + (end - s) * PmMotion.ease(curve, p) }
+        })
+    }
+
+    function begin() {
+        if (Purrimer.pauseLoops || effective === "still") {
+            value = to
+            frames.stop()
+            return
+        }
+        elapsed = 0
+        frames.start()
+    }
+
+    // Counts on from the current number.
+    function setValue(v) {
+        startValue = value
+        to = v
+        begin()
+    }
+
+    Component.onCompleted: if (trigger === "mount") begin()
+
+    Timer {
+        interval: 100
+        repeat: true
+        running: root.trigger === "inView" && !frames.running && root.value !== root.to
+        onTriggered: {
+            const w = root.Window.window
+            if (!w || !root.visible)
+                return
+            const p = root.mapToItem(null, 0, 0)
+            if (p.x < w.width && p.y < w.height && p.x + root.width > 0 && p.y + root.height > 0)
+                root.begin()
+        }
+    }
+
+    FrameAnimation {
+        id: frames
+        onTriggered: {
+            root.elapsed += frameTime * 1000
+            if (root.mode === "count") {
+                const p = Math.min(1, root.elapsed / Math.max(root.length, 1))
+                const f = Math.pow(10, root.decimals)
+                root.value = p >= 1 ? root.to : Math.round((root.startValue + (root.to - root.startValue) * root.countEase(p)) * f) / f
+            }
+            if (root.elapsed >= root.length) {
+                stop()
+                root.value = root.to
+            }
+        }
+    }
+
+    FontMetrics {
+        id: metrics
+        font: root.digitFont
+    }
+
+    Row {
+        id: row
+        Repeater {
+            model: root.cells()
+            delegate: Item {
+                id: cell
+                required property var modelData
+                readonly property bool sep: ",.'  ".indexOf(modelData.ch) >= 0
+                // Monospace gives separators a full cell; pull them in.
+                width: metrics.advanceWidth(modelData.ch) - (sep ? 0.36 * metrics.advanceWidth("0") : 0)
+                height: root.lineHeight
+                clip: modelData.roll >= 0
+
+                Text {
+                    visible: cell.modelData.roll < 0
+                    x: cell.sep ? -0.18 * metrics.advanceWidth("0") : 0
+                    height: root.lineHeight
+                    verticalAlignment: Text.AlignVCenter
+                    text: cell.modelData.ch
+                    font: root.digitFont
+                    color: root.color
+                }
+
+                Repeater {
+                    model: cell.modelData.roll >= 0 ? 10 : 0
+                    delegate: Text {
+                        required property int index
+                        y: (index - cell.modelData.roll) * root.lineHeight
+                        height: root.lineHeight
+                        verticalAlignment: Text.AlignVCenter
+                        text: index
+                        font: root.digitFont
+                        color: root.color
+                    }
+                }
+            }
+        }
+    }
+}

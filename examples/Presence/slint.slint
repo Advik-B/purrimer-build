@@ -1,0 +1,12 @@
+import { Card, Presence, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    Presence {
+        collapse: true;
+        Card {
+            title: "Draft saved";
+            Text { text: "It leaves with lie-down when dismissed."; wrap: word-wrap; color: Purrimer.fg-color-default; }
+        }
+    }
+}

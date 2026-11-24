@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Orientation="Horizontal" Spacing="32">
+    <pm:CountUp To="1284" VerticalAlignment="Bottom" />
+    <pm:CountUp To="3742.5" Decimals="2" Prefix="€" Mode="roll" VerticalAlignment="Bottom"
+                FontSize="{StaticResource PmTextStatSmallFontSize}" LineHeight="{StaticResource PmTextStatSmallLineHeight}" />
+  </StackPanel>
+</UserControl>

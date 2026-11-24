@@ -34,10 +34,12 @@ export component Skeleton {
     in property <string> effect: "sunbeam";
     in property <int> lines: 1;
     // sleepy or playful
-    in property <string> kind: "sleepy";
+    // sleepy or playful; empty follows PurrimerMotion.playful (Slint cannot see a MotionScope).
+    in property <string> kind: "";
+    property <bool> loop-playful: root.kind == "" ? PurrimerMotion.playful && !PurrimerMotion.reduce : root.kind == "playful";
 
     property <int> count: root.variant == "text" ? max(1, root.lines) : 1;
-    property <duration> loop: root.kind == "playful" ? {{ ms("duration-playful-loop") }}ms : {{ ms("duration-sleepy-loop") }}ms;
+    property <duration> loop: root.loop-playful ? {{ ms("duration-playful-loop") }}ms : {{ ms("duration-sleepy-loop") }}ms;
     property <float> t: mod(PurrimerMotion.loop-tick / (root.loop * 0.55), 1);
     // Paused, the band rests at the left edge as it does on the web.
     property <float> sweep: PurrimerMotion.pause-loops ? 1.2 / 4.4 : root.t * root.t * root.t * (root.t * (root.t * 6 - 15) + 10);

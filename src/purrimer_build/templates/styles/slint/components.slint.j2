@@ -3,6 +3,7 @@
 
 export { Purrimer, PurrimerMotion, PurrimerTheme, PurrimerShadow, PurrimerTextStyle, PmSpring } from "purrimer.slint";
 export { PurrimerIcons } from "icons.slint";
+export { PmMotionCatalog, PmMotionFrame, PmMotionEntry } from "motion.slint";
 {% for c in done %}
 export { {{ c.spec.get("slint_exports", [c.name]) | join(", ") }} } from "components/{{ c.name | kebab }}.slint";
 {% endfor %}

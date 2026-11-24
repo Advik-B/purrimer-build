@@ -9,6 +9,7 @@ from PySide6.QtGui import QFontMetrics, QPainter
 from PySide6.QtWidgets import QPushButton, QSizePolicy, QStyle, QStyleOptionButton, QStylePainter, QWidget
 
 from ..icons import paint_icon
+from ..motion import ControlPress
 from ..theme import theme
 
 VARIANTS = ("default", "primary", "danger", "invisible")
@@ -23,7 +24,8 @@ def _repolish(widget: QWidget) -> None:
 
 
 class Button(QPushButton):
-    """A labelled button. The stylesheet draws the frame from variant and size; icons are painted here."""
+    """A labelled button. The stylesheet draws the frame from variant and size; icons are painted here. In a playful
+    scope it presses to 95% and pops back."""
 
     def __init__(self, text: str = "", variant: str = "default", size: str = "medium", leading_icon: str | None = None,
                  trailing_icon: str | None = None, block: bool = False, parent: QWidget | None = None) -> None:
@@ -31,6 +33,7 @@ class Button(QPushButton):
         self._leading = leading_icon
         self._trailing = trailing_icon
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._press = ControlPress(self)
         self.set_variant(variant)
         self.set_size(size)
         if block:

@@ -32,6 +32,6 @@ doc = "Height; block defaults to 64px and circle to its width."
 
 [props.kind]
 type = "enum"
-default = "sleepy"
-doc = "Motion kind: playful sweeps faster."
-values = ["sleepy", "playful"]
+default = ""
+doc = "Motion kind; empty follows the closest MotionScope. Playful sweeps faster."
+values = ["", "sleepy", "playful"]

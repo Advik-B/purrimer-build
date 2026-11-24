@@ -1,0 +1,199 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot see a component's ancestors, so pass a MotionScope's kind and reduce down by hand. Slint has no blur:
+// entrances that clear a blur in sleepy fade instead, skewX is left out, and rotateX and rotateY flatten to a scale.
+// The software renderer (used for screenshots) does not draw rotation or scale; the GPU renderers do.
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { PmMotionCatalog, PmMotionFrame, PmMotionEntry } from "../motion.slint";
+
+export component Motion {
+    // Any catalog animation: rise, pounce, ear-twitch, dialog...
+    in property <string> name: "{{ c.spec.props.name.default }}";
+    // mount, inView (Slint cannot tell, so it plays on mount), hover or manual
+    in property <string> trigger: "mount";
+    // With trigger manual: plays while true.
+    in property <bool> play: true;
+    // Change it to play again.
+    in property <int> replay: 0;
+    // Stagger position: the delay grows by the kind's stagger per step.
+    in property <int> index: 0;
+    in property <duration> delay: 0ms;
+    // 0ms uses the catalog's duration for the kind.
+    in property <duration> duration: 0ms;
+    // An easing token, such as "easing-sleepy-move"; empty keeps the animation's own curve.
+    in property <string> easing: "";
+    in property <bool> loop: false;
+    // Holds the first frame until false.
+    in property <bool> paused: false;
+    // sleepy or playful; empty follows PurrimerMotion.playful.
+    in property <string> kind: "";
+    // Reduced motion for this element (PurrimerMotion.reduce covers the whole app).
+    in property <bool> reduce: false;
+    // Corner radius of the content, for the bask halo, meow ring and warm-spot wash.
+    in property <length> radius: 0px;
+    // Overrides the transform origin (fractions of the size); negative keeps the catalog's.
+    in property <float> origin-x: -1;
+    in property <float> origin-y: -1;
+    out property <bool> running: root.active;
+    callback done();
+
+    property <bool> playful: root.kind == "" ? PurrimerMotion.playful : root.kind == "playful";
+    property <bool> reduced: root.reduce || PurrimerMotion.reduce;
+    // 0 sleepy, 1 playful, 2 reduced (sleepy only fades): the catalog's kinds.
+    property <int> kind-index: root.reduced ? (root.playful ? 0 : 2) : (root.playful ? 1 : 0);
+    property <PmMotionEntry> entry: PmMotionCatalog.entry(root.name, root.kind-index);
+    property <duration> length: root.duration > 0ms ? root.duration : root.entry.dur;
+    property <int> count: root.loop ? -1 : root.entry.count;
+    property <duration> wait: root.delay + root.index * PmMotionCatalog.stagger(root.kind-index);
+    // idle (at rest), active (playing), holding (first frame) or finished (end frame, if it fills).
+    property <bool> active;
+    property <bool> holding;
+    property <bool> finished;
+    property <duration> started;
+    property <float> elapsed: root.active ? (animation-tick() - root.started - root.wait) / root.length : 0;
+    property <float> progress: root.finished ? 1 : root.elapsed <= 0 ? 0 : root.count >= 0 && root.elapsed >= root.count ? 1 : root.elapsed - floor(root.elapsed);
+    property <bool> shows: !PurrimerMotion.pause-loops && (root.active || root.holding || (root.finished && root.entry.fill-both));
+    property <PmMotionFrame> frame: root.shows
+        ? PmMotionCatalog.sample(root.name, root.kind-index, root.progress, root.easing)
+        : { opacity: 1, sx: 1, sy: 1, reveal: 1, ring-s: 1, draw: 1 };
+    property <float> ox: root.origin-x >= 0 ? root.origin-x : root.entry.origin-x;
+    property <float> oy: root.origin-y >= 0 ? root.origin-y : root.entry.origin-y;
+
+    // Plays from the beginning, whatever the trigger.
+    public function start() {
+        root.finished = false;
+        root.holding = false;
+        root.active = false;
+        if PurrimerMotion.pause-loops {
+            if root.count >= 0 {
+                root.done();
+            }
+            return;
+        }
+        // Decorative loops stop under reduced motion, resting on their first frame.
+        if root.kind-index == 2 && (root.entry.decorative || root.count < 0) {
+            root.holding = true;
+            return;
+        }
+        if root.paused {
+            root.holding = true;
+            return;
+        }
+        root.started = animation-tick();
+        root.active = true;
+    }
+
+    // Stops and returns to rest.
+    public function stop() {
+        root.active = false;
+        root.holding = false;
+        root.finished = false;
+    }
+
+    init => {
+        if root.trigger == "mount" || root.trigger == "inView" || (root.trigger == "manual" && root.play) {
+            root.start();
+        }
+    }
+    changed replay => { root.start(); }
+    changed play => {
+        if root.trigger == "manual" {
+            if root.play {
+                root.start();
+            } else {
+                root.stop();
+            }
+        }
+    }
+    changed paused => {
+        if !root.paused && root.trigger != "manual" {
+            root.start();
+        }
+    }
+
+    Timer {
+        interval: 16ms;
+        running: root.active && root.count >= 0;
+        triggered => {
+            if root.elapsed >= root.count {
+                root.active = false;
+                root.finished = true;
+                root.done();
+            }
+        }
+    }
+
+    preferred-width: inner.preferred-width;
+    preferred-height: inner.preferred-height;
+    min-width: inner.min-width;
+    min-height: inner.min-height;
+
+    hover := TouchArea {
+        enabled: root.trigger == "hover";
+        changed has-hover => {
+            if root.trigger == "hover" {
+                if self.has-hover {
+                    root.start();
+                } else {
+                    root.stop();
+                }
+            }
+        }
+    }
+
+    stage := Rectangle {
+        x: root.frame.tx * 1px + root.frame.txp * root.width;
+        y: root.frame.ty * 1px + root.frame.typ * root.height;
+        width: root.width;
+        height: root.height;
+        opacity: root.frame.opacity;
+        transform-rotation: root.frame.rot * 1deg;
+        transform-scale-x: root.frame.sx * Math.cos(root.frame.rot-y * 1deg);
+        transform-scale-y: root.frame.sy * Math.cos(root.frame.rot-x * 1deg);
+        transform-origin: { x: root.ox * root.width, y: root.oy * root.height };
+
+        // bask: a halo that swells around the content.
+        if root.frame.halo > 0.01: Rectangle {
+            x: -root.frame.halo * 1px;
+            y: -root.frame.halo * 1px;
+            width: root.width + 2 * root.frame.halo * 1px;
+            height: root.height + 2 * root.frame.halo * 1px;
+            border-radius: root.radius + root.frame.halo * 1px;
+            border-width: root.frame.halo * 1px;
+            border-color: {{ "bgColor-accent-muted" | tok }};
+        }
+
+        // warm-spot: a wash behind the content that fades.
+        if root.frame.wash > 0.001: Rectangle {
+            border-radius: root.radius;
+            background: {{ "bgColor-attention-muted" | tok }};
+            opacity: root.frame.wash;
+        }
+
+        // reveal (unfurl, peek...) opens from the top; draw (scratch) from the start side.
+        Rectangle {
+            x: 0px;
+            y: 0px;
+            width: root.frame.draw < 0.999 ? root.frame.draw * root.width : root.width;
+            height: root.frame.reveal < 0.999 ? Math.max(0px, root.frame.reveal * (root.height + 64px) - 64px) : root.height;
+            clip: root.frame.reveal < 0.999 || root.frame.draw < 0.999;
+
+            inner := VerticalLayout {
+                x: 0px;
+                y: 0px;
+                width: root.width;
+                height: root.height;
+                @children
+            }
+        }
+
+        // meow: a ring that grows from the content's edge and fades.
+        if root.frame.ring-o > 0.001: Rectangle {
+            border-radius: root.radius;
+            border-width: {{ px("borderWidth-thick") }}px;
+            border-color: {{ "borderColor-accent-emphasis" | tok }};
+            opacity: root.frame.ring-o;
+            transform-scale: root.frame.ring-s;
+        }
+    }
+}

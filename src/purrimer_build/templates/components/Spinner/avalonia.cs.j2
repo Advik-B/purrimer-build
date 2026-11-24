@@ -22,7 +22,7 @@ public class Spinner : Control
         AvaloniaProperty.Register<Spinner, string>(nameof(Size), "medium");
 
     public static readonly StyledProperty<string> KindProperty =
-        AvaloniaProperty.Register<Spinner, string>(nameof(Kind), "sleepy");
+        AvaloniaProperty.Register<Spinner, string>(nameof(Kind), "");
 
     public static readonly StyledProperty<string> LabelProperty =
         AvaloniaProperty.Register<Spinner, string>(nameof(Label), "{{ c.spec.props.label.default }}");
@@ -51,6 +51,9 @@ public class Spinner : Control
     }
 
     // sleepy or playful
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    private string LoopKind => Kind is "sleepy" or "playful" ? Kind : PurrimerMotion.Reduced(this) ? "sleepy" : PurrimerMotion.KindOf(this);
+
     public string Kind
     {
         get => GetValue(KindProperty);
@@ -113,7 +116,7 @@ public class Spinner : Control
     private (double Start, double Length) Arc()
     {
         var now = PurrimerMotion.PauseLoops ? 0 : _clock.Elapsed.TotalMilliseconds;
-        var playful = Kind == "playful";
+        var playful = LoopKind == "playful";
         var turn = playful ? PlayfulTurn : SleepyTurn;
         var spin = now % turn / turn * 360;
         if (!playful || PurrimerMotion.PauseLoops)

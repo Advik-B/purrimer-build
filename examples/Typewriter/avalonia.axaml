@@ -1,0 +1,5 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Typewriter Text="Good morning. Ready when you are." Caret="always"
+                 FontSize="{StaticResource PmTextBodyLargeFontSize}" LineHeight="{StaticResource PmTextBodyLargeLineHeight}" />
+</UserControl>

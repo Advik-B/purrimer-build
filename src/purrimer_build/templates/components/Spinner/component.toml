@@ -16,9 +16,9 @@ doc = "Announced to screen readers."
 
 [props.kind]
 type = "enum"
-default = "sleepy"
-doc = "Motion kind. Sleepy turns once every 1.6s with a steady arc; playful turns faster and the arc stretches."
-values = ["sleepy", "playful"]
+default = ""
+doc = "Motion kind; empty follows the closest MotionScope. Sleepy turns once every 1.6s with a steady arc; playful turns faster and the arc stretches."
+values = ["", "sleepy", "playful"]
 
 [sizes]
 small = 16

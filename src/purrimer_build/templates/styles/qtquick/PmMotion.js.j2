@@ -1,0 +1,290 @@
+.pragma library
+// {{ note }}
+// The motion catalog: the same keyframes as the web's pm-m-* classes, per kind ("reduced" is sleepy under reduced
+// motion: fades only). Each track is [[offset, value, easing or null], ...]; null means the animation's own curve.
+
+var CATALOG = {
+{% for kind in ["sleepy", "playful", "reduced"] %}
+    "{{ kind }}": {{ motion.table(tokens, kind) | tojson }}{{ "," if not loop.last }}
+{% endfor %}
+}
+
+var EASINGS = {{ motion.easings(tokens) | tojson }}
+
+var STAGGER = {{ {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": motion.stagger_ms(tokens, "playful"), "reduced": 0} | tojson }}
+
+var REST = {{ motion.rest | tojson }}
+
+// What the existing controls take from each kind: the press scale and timing, the check mark's pop, the Toggle
+// handle's travel and stretch, and the ProgressBar fill. Durations are ms; easings are easing tokens.
+var CONTROLS = {{ motion.all_controls(tokens) | tojson }}
+
+var CLAMPED = { "opacity": true, "ringO": true, "wash": true, "draw": true }
+
+function tableFor(kind) {
+    return CATALOG[kind === "still" ? "reduced" : kind] || CATALOG.sleepy
+}
+
+function has(name) {
+    return CATALOG.sleepy[name] !== undefined
+}
+
+function entry(name, kind) {
+    return tableFor(kind)[name]
+}
+
+// The control timings for an effective kind ("sleepy", "playful" or "still").
+function controls(kind) {
+    return CONTROLS[kind === "still" ? "reduced" : kind] || CONTROLS.sleepy
+}
+
+// An easing token as an easing.bezierCurve list for Easing.BezierSpline. The springs' piecewise-linear points become
+// straight cubic segments, so a Behavior plays the same curve as the web.
+function curve(token) {
+    var spec = EASINGS[token] || ["linear"]
+    if (spec[0] === "cubic")
+        return [spec[1], spec[2], spec[3], spec[4], 1, 1]
+    var pts = spec[0] === "points" ? spec[1] : [[0, 0], [1, 1]]
+    var out = []
+    for (var i = 1; i < pts.length; i++) {
+        var x0 = pts[i - 1][0], y0 = pts[i - 1][1], x1 = pts[i][0], y1 = pts[i][1]
+        out.push(x0 + (x1 - x0) / 3, y0 + (y1 - y0) / 3, x0 + 2 * (x1 - x0) / 3, y0 + 2 * (y1 - y0) / 3, x1, y1)
+    }
+    return out
+}
+
+function cubicBezier(x1, y1, x2, y2, x) {
+    if (x <= 0)
+        return 0
+    if (x >= 1)
+        return 1
+    function bx(t) { return ((1 - 3 * x2 + 3 * x1) * t + (3 * x2 - 6 * x1)) * t * t + 3 * x1 * t }
+    function by(t) { return ((1 - 3 * y2 + 3 * y1) * t + (3 * y2 - 6 * y1)) * t * t + 3 * y1 * t }
+    var t = x
+    for (var i = 0; i < 8; i++) {
+        var err = bx(t) - x
+        if (Math.abs(err) < 1e-6)
+            return by(t)
+        var d = (3 * (1 - 3 * x2 + 3 * x1) * t + 2 * (3 * x2 - 6 * x1)) * t + 3 * x1
+        if (Math.abs(d) < 1e-6)
+            break
+        t -= err / d
+    }
+    var lo = 0, hi = 1
+    t = x
+    for (var j = 0; j < 30; j++) {
+        if (bx(t) < x)
+            lo = t
+        else
+            hi = t
+        t = (lo + hi) / 2
+    }
+    return by(t)
+}
+
+function ease(spec, p) {
+    if (spec[0] === "linear")
+        return p
+    if (spec[0] === "points") {
+        var pts = spec[1]
+        if (p <= pts[0][0])
+            return pts[0][1]
+        for (var i = 1; i < pts.length; i++) {
+            if (p <= pts[i][0]) {
+                var x0 = pts[i - 1][0], y0 = pts[i - 1][1], x1 = pts[i][0], y1 = pts[i][1]
+                return x1 === x0 ? y1 : y0 + (y1 - y0) * (p - x0) / (x1 - x0)
+            }
+        }
+        return pts[pts.length - 1][1]
+    }
+    return cubicBezier(spec[1], spec[2], spec[3], spec[4], p)
+}
+
+function trackAt(track, p, fallback) {
+    if (p <= track[0][0])
+        return track[0][1]
+    for (var i = 1; i < track.length; i++) {
+        var a = track[i - 1], b = track[i]
+        if (p <= b[0]) {
+            if (b[0] === a[0])
+                return b[1]
+            return a[1] + (b[1] - a[1]) * ease(a[2] ? EASINGS[a[2]] : fallback, (p - a[0]) / (b[0] - a[0]))
+        }
+    }
+    return track[track.length - 1][1]
+}
+
+function rest() {
+    var out = {}
+    for (var k in REST)
+        out[k] = REST[k]
+    return out
+}
+
+// Every channel of `name` at `progress` (0 to 1) of one iteration, in an effective kind ("sleepy", "playful" or
+// "still").
+function sample(name, kind, progress, easing) {
+    var e = entry(name, kind)
+    var p = e.reverse ? 1 - progress : progress
+    var fallback = EASINGS[easing || e.ease]
+    var out = rest()
+    for (var ch in e.tracks) {
+        var v = trackAt(e.tracks[ch], p, fallback)
+        if (CLAMPED[ch])
+            v = Math.min(1, Math.max(0, v))
+        else if (ch === "blur")
+            v = Math.max(0, v)
+        out[ch] = v
+    }
+    if (e.tracks.orbit) {
+        var a = out.orbit * Math.PI / 180
+        out.tx += e.orbit * Math.cos(a)
+        out.ty += e.orbit * Math.sin(a)
+    }
+    return out
+}
+
+function mul(a, b) {
+    return [
+        a[0] * b[0] + a[1] * b[3] + a[2] * b[6], a[0] * b[1] + a[1] * b[4] + a[2] * b[7], a[0] * b[2] + a[1] * b[5] + a[2] * b[8],
+        a[3] * b[0] + a[4] * b[3] + a[5] * b[6], a[3] * b[1] + a[4] * b[4] + a[5] * b[7], a[3] * b[2] + a[4] * b[5] + a[5] * b[8],
+        a[6] * b[0] + a[7] * b[3] + a[8] * b[6], a[6] * b[1] + a[7] * b[4] + a[8] * b[7], a[6] * b[2] + a[7] * b[5] + a[8] * b[8]
+    ]
+}
+
+// The frame's CSS transform as a 3x3 matrix (column vectors, row-major) about the origin, in item coordinates:
+// translate, rotate, rotateX in perspective, rotateY, scale and skewX.
+function homography(f, w, h, origin, perspective) {
+    var ox = origin[0] * w, oy = origin[1] * h
+    var r = f.rot * Math.PI / 180
+    var m = [1, 0, ox + f.tx + f.txp * w, 0, 1, oy + f.ty + f.typ * h, 0, 0, 1]
+    m = mul(m, [Math.cos(r), -Math.sin(r), 0, Math.sin(r), Math.cos(r), 0, 0, 0, 1])
+    if (f.rotX) {
+        var a = f.rotX * Math.PI / 180
+        m = mul(m, [1, 0, 0, 0, Math.cos(a), 0, 0, -Math.sin(a) / (perspective || 1e9), 1])
+    }
+    var sx = f.sx * Math.cos(f.rotY * Math.PI / 180)
+    m = mul(m, [sx, 0, 0, 0, f.sy, 0, 0, 0, 1])
+    if (f.skew)
+        m = mul(m, [1, Math.tan(f.skew * Math.PI / 180), 0, 0, 1, 0, 0, 0, 1])
+    return mul(m, [1, 0, -ox, 0, 1, -oy, 0, 0, 1])
+}
+
+// The same transform as the 16 values of a Qt.matrix4x4 for a Matrix4x4 item transform.
+function matrix(f, w, h, origin, perspective) {
+    var m = homography(f, w, h, origin, perspective)
+    return [m[0], m[1], 0, m[2], m[3], m[4], 0, m[5], 0, 0, 1, 0, m[6], m[7], 0, m[8]]
+}
+
+function stagger(kind) {
+    return STAGGER[kind === "still" ? "reduced" : kind] || 0
+}
+
+// Sets a property a delegate declares, if it declares it (delegates are loaded as plain QObjects).
+function assign(target, name, value) {
+    if (target && name in target)
+        target[name] = value
+}
+
+// Burst: celebration particles, the same lists as the web's for the same seed (mulberry32).
+var BURST_COLORS = ["bgColor-accent-emphasis", "bgColor-done-emphasis", "bgColor-info-emphasis", "bgColor-success-emphasis", "bgColor-attention-emphasis", "bgColor-severe-emphasis"]
+var BURST_ENTER = [0.22, 1, 0.36, 1]
+var BURST_FALL = [0.5, 0, 0.9, 0.5]
+var BURST_SPRING = [0.34, 1.56, 0.64, 1]
+
+function seeded(seed) {
+    var a = seed >>> 0
+    return function () {
+        a = (a + 0x6d2b79f5) >>> 0
+        var t = a
+        t = Math.imul(t ^ (t >>> 15), t | 1)
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+    }
+}
+
+function frame(at, x, y, rotate, scale, opacity, xf, yf) {
+    return { at: at, x: x, y: y, xf: xf || 0, yf: yf || 0, rotate: rotate, scale: scale, opacity: opacity }
+}
+
+// The particles of one burst in an effective kind; rain's frames add xf and yf, fractions of the layer's size.
+function burstParticles(kind, variant, count, spread, seed) {
+    if (kind === "still")
+        return []
+    var playful = kind === "playful"
+    variant = variant || (playful ? "confetti" : "motes")
+    var rand = seeded(seed || Math.floor(Math.random() * 2147483647) + 1)
+    count = count || (variant === "motes" ? 9 : variant === "ring" ? 10 : variant === "rain" ? 36 : 26)
+    spread = spread || (playful ? 120 : 56)
+    var out = []
+    for (var i = 0; i < count; i++) {
+        var shape = variant === "motes" ? 0 : i % 3
+        var size = variant === "motes" ? 3 + rand() * 3 : 5 + rand() * 4
+        var p = { shape: ["circle", "square", "bar"][shape], width: shape === 2 ? size * 1.8 : size, height: shape === 2 ? size * 0.55 : size, color: BURST_COLORS[i % BURST_COLORS.length], delay: 0 }
+        if (variant === "motes") {
+            var mx = (rand() - 0.5) * spread
+            var my = -(30 + rand() * spread)
+            p.frames = [frame(0, 0, 0, 0, 0.4, 0), frame(0.3, mx * 0.4, my * 0.35, 0, 1, 0.9), frame(1, mx, my, 0, 0.8, 0)]
+            p.duration = (playful ? 900 : 1800) + rand() * 900
+            p.delay = rand() * (playful ? 120 : 400)
+            p.easings = [BURST_ENTER, BURST_ENTER]
+        } else if (variant === "ring") {
+            var a = i / count * Math.PI * 2
+            var r = spread * (playful ? 0.7 : 0.55)
+            p.frames = [frame(0, 0, 0, 0, 0.3, 0), frame(0.45, Math.cos(a) * r * 0.8, Math.sin(a) * r * 0.8, 0, 1, 1), frame(1, Math.cos(a) * r, Math.sin(a) * r, 0, 0.6, 0)]
+            p.duration = playful ? 700 : 1200
+            p.easings = playful ? [BURST_SPRING, BURST_SPRING] : [BURST_ENTER, BURST_ENTER]
+        } else if (variant === "rain") {
+            var sx = rand()
+            var drift = (rand() - 0.5) * 80
+            var rot = (rand() - 0.5) * (playful ? 720 : 180)
+            p.frames = [frame(0, 0, -20, 0, 1, 1, sx, 0), frame(1, drift, 40, rot, 1, 0.9, sx, 1)]
+            p.duration = (playful ? 1400 : 3200) + rand() * 1200
+            p.delay = rand() * (playful ? 500 : 1200)
+            p.easings = [playful ? BURST_FALL : "linear"]
+        } else {
+            var ang = -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.1
+            var v = spread * (0.6 + rand() * 0.6)
+            var dx = Math.cos(ang) * v, dy = Math.sin(ang) * v
+            var spin = (rand() - 0.5) * (playful ? 900 : 240)
+            p.frames = [frame(0, 0, 0, 0, 0.6, 1), frame(0.35, dx, dy, spin * 0.5, 1, 1), frame(1, dx * 1.3, dy + spread * (playful ? 1.1 : 0.5), spin, 0.9, 0)]
+            p.duration = (playful ? 1100 : 1700) + rand() * 400
+            p.easings = [BURST_ENTER, BURST_FALL]
+        }
+        out.push(p)
+    }
+    return out
+}
+
+function mix(from, to, e) {
+    return from + (to - from) * e
+}
+
+// One particle at `elapsed` ms after the burst: x and y (px from the origin), rotate, scale and opacity.
+function burstState(p, elapsed, width, height) {
+    var t = Math.min(1, Math.max(0, (elapsed - p.delay) / p.duration))
+    var frames = p.frames
+    for (var i = 0; i < frames.length - 1; i++) {
+        var a = frames[i], b = frames[i + 1]
+        if (t <= b.at || i === frames.length - 2) {
+            var curve = p.easings[Math.min(i, p.easings.length - 1)]
+            var local = b.at === a.at ? 0 : (t - a.at) / (b.at - a.at)
+            var e = curve === "linear" ? local : cubicBezier(curve[0], curve[1], curve[2], curve[3], local)
+            return {
+                x: mix(a.x, b.x, e) + mix(a.xf, b.xf, e) * width,
+                y: mix(a.y, b.y, e) + mix(a.yf, b.yf, e) * height,
+                rotate: mix(a.rotate, b.rotate, e),
+                scale: mix(a.scale, b.scale, e),
+                opacity: Math.min(1, Math.max(0, mix(a.opacity, b.opacity, e)))
+            }
+        }
+    }
+    return { x: 0, y: 0, rotate: 0, scale: 1, opacity: 0 }
+}
+
+function burstLength(particles) {
+    var longest = 0
+    for (var i = 0; i < particles.length; i++)
+        longest = Math.max(longest, particles[i].delay + particles[i].duration)
+    return longest
+}

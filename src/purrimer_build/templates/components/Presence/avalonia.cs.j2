@@ -1,0 +1,133 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Diagnostics;
+using Avalonia;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Plays Enter when shown and Exit when hidden, and hides its child only once the exit has finished. With Collapse
+// it then closes its height gap, so items below slide up. Exited fires when the child is gone.
+public class Presence : Motion
+{
+    public static readonly StyledProperty<bool> IsShownProperty =
+        AvaloniaProperty.Register<Presence, bool>(nameof(IsShown), true);
+
+    public static readonly StyledProperty<string> EnterProperty =
+        AvaloniaProperty.Register<Presence, string>(nameof(Enter), "{{ c.spec.props.enter.default }}");
+
+    public static readonly StyledProperty<string> ExitProperty =
+        AvaloniaProperty.Register<Presence, string>(nameof(Exit), "{{ c.spec.props.exit.default }}");
+
+    public static readonly StyledProperty<bool> CollapseProperty =
+        AvaloniaProperty.Register<Presence, bool>(nameof(Collapse));
+
+    private readonly DispatcherTimer _gapTimer;
+    private readonly Stopwatch _clock = new();
+    private double _gap = 1;
+    private bool _leaving;
+    private double _enterDelay;
+
+    static Presence()
+    {
+        IsShownProperty.Changed.AddClassHandler<Presence>((p, _) => p.ShowChanged());
+    }
+
+    public Presence()
+    {
+        Trigger = "presence";
+        _gapTimer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => CloseGap());
+        Done += (_, _) => Finished();
+    }
+
+    public event EventHandler? Exited;
+
+    public bool IsShown { get => GetValue(IsShownProperty); set => SetValue(IsShownProperty, value); }
+
+    // An entrance or choreography preset: rise, pounce, unfurl, dialog, toast...
+    public string Enter { get => GetValue(EnterProperty); set => SetValue(EnterProperty, value); }
+
+    // An exit or choreography preset: lie-down, tuck, furl, dialog-out, toast-out...
+    public string Exit { get => GetValue(ExitProperty); set => SetValue(ExitProperty, value); }
+
+    // Also closes the height gap after the exit.
+    public bool Collapse { get => GetValue(CollapseProperty); set => SetValue(CollapseProperty, value); }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        _enterDelay = Delay;
+        MotionName = Enter;
+        IsVisible = IsShown;
+        base.OnAttachedToVisualTree(e);
+        if (IsShown)
+            Start();
+    }
+
+    private void ShowChanged()
+    {
+        if (VisualRoot is null)
+        {
+            IsVisible = IsShown;
+            return;
+        }
+        _gapTimer.Stop();
+        if (IsShown)
+        {
+            _leaving = false;
+            _gap = 1;
+            InvalidateMeasure();
+            IsVisible = true;
+            MotionName = Enter;
+            Delay = _enterDelay;
+        }
+        else
+        {
+            _leaving = true;
+            MotionName = Exit;
+            Delay = 0;
+        }
+        Start();
+    }
+
+    private void Finished()
+    {
+        if (!_leaving)
+            return;
+        if (Collapse && !PurrimerMotion.PauseLoops && EffectiveKind != "still")
+        {
+            _clock.Restart();
+            _gapTimer.Start();
+        }
+        else
+            Gone();
+    }
+
+    private void CloseGap()
+    {
+        var length = EffectiveKind == "playful" ? 320 : 420;
+        var p = Math.Clamp((_clock.Elapsed.TotalMilliseconds - 120) / length, 0, 1);
+        _gap = 1 - PurrimerMotionCatalog.Ease("easing-sleepy-move", p);
+        InvalidateMeasure();
+        if (p >= 1)
+        {
+            _gapTimer.Stop();
+            Gone();
+        }
+    }
+
+    private void Gone()
+    {
+        _leaving = false;
+        IsVisible = false;
+        _gap = 1;
+        Stop();
+        Exited?.Invoke(this, EventArgs.Empty);
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var size = base.MeasureOverride(availableSize);
+        return new Size(size.Width, size.Height * _gap);
+    }
+}

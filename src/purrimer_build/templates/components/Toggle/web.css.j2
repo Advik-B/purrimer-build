@@ -20,8 +20,11 @@
   border-radius: 50%;
   background: {{ "controlKnob-bgColor-rest" | tok }};
   box-shadow: 0 0 0 1px {{ "control-borderColor-rest" | tok }};
-  transition: translate {{ "duration-base" | tok }} {{ "easing-standard" | tok }};
+  transition: translate var(--pm-m-toggle-dur) var(--pm-m-toggle-ease), width var(--pm-m-toggle-dur) var(--pm-m-toggle-ease);
 }
+/* Playful scopes stretch the handle while held (toggle-stretch is 1 in sleepy). */
+.pm-toggle__track:active:not(:disabled) .pm-toggle__knob { width: calc(14px * var(--pm-m-toggle-stretch)); }
+.pm-toggle__track[aria-checked="true"]:active:not(:disabled) .pm-toggle__knob { translate: calc(30px - 14px * var(--pm-m-toggle-stretch)) 0; }
 .pm-toggle__track[aria-checked="true"] { background: {{ "bgColor-accent-emphasis" | tok }}; border-color: {{ "bgColor-accent-emphasis" | tok }}; }
 .pm-toggle__track[aria-checked="true"] .pm-toggle__knob { translate: 16px 0; background: {{ "fgColor-onEmphasis" | tok }}; box-shadow: none; }
 .pm-toggle__track:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }

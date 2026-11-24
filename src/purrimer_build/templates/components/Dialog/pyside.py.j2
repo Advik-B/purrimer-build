@@ -4,18 +4,30 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import QPoint
 from PySide6.QtGui import QPainter
 from PySide6.QtWidgets import QDialog, QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
 
+from ..motion import MotionPlayer, effective_kind
 from ..theme import theme
 from .icon_button import IconButton
 
 
 class Dialog(QDialog):
-    """A modal dialog with a title row and close button. Add widgets to `body` and buttons to `footer`."""
+    """A modal dialog with a title row and close button. Add widgets to `body` and buttons to `footer`.
 
-    def __init__(self, title: str, parent: QWidget | None = None, width: int = 440) -> None:
+    It opens with the dialog choreography and closes with dialog-out, in the kind of the closest MotionScope (or
+    `kind`). A dialog is its own window, so it plays the choreography's fade and travel; windows cannot scale or blur.
+    """
+
+    def __init__(self, title: str, parent: QWidget | None = None, width: int = 440, kind: str = "") -> None:
         super().__init__(parent)
+        self.kind = kind
+        self._home: QPoint | None = None
+        self._result: int | None = None
+        self._motion = MotionPlayer(self)
+        self._motion.frame.connect(self._frame)
+        self._motion.done.connect(self._motion_done)
         self.setWindowTitle(title)
         self.setModal(True)
         self.setMinimumWidth(width)
@@ -47,6 +59,40 @@ class Dialog(QDialog):
         self.footer.addStretch(1)
         layout.addLayout(self.footer)
         theme.changed.connect(self.update)
+
+    def _kind(self) -> str:
+        return effective_kind(self, self.kind or None)
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._home = None
+        self._result = None
+        self._motion.play("dialog", self._kind())
+
+    def done(self, result: int) -> None:
+        """Plays dialog-out, then closes with `result`."""
+        if self._result is not None:
+            return
+        if theme.pause_loops or not self.isVisible():
+            super().done(result)
+            return
+        self._result = result
+        self._motion.play("dialog-out", self._kind())
+
+    def _frame(self, values: dict) -> None:
+        self.setWindowOpacity(values["opacity"])
+        if self._home is None:
+            self._home = self.pos()
+        self.move(self._home + QPoint(round(values["tx"] + values["txp"] * self.width()), round(values["ty"] + values["typ"] * self.height())))
+
+    def _motion_done(self) -> None:
+        if self._result is None:
+            return
+        result, self._result = self._result, None
+        super().done(result)
+        if self._home is not None:
+            self.move(self._home)
+        self.setWindowOpacity(1.0)
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

@@ -38,7 +38,8 @@
             <ContentPresenter Name="PART_OffContentPresenter" IsVisible="False" Content="{TemplateBinding OffContent}" />
             <Canvas Name="PART_SwitchKnob" Width="16" Height="20" HorizontalAlignment="Left">
               <Grid Name="PART_MovingKnobs" Width="20" Height="20" Background="Transparent">
-                <Ellipse Name="knob" Width="14" Height="14" Fill="{{ "controlKnob-bgColor-rest" | tok }}"
+                <!-- The handle travels on the kind's curve, and stretches to 120% while held when playful. -->
+                <Ellipse Name="knob" Width="14" Height="14" pm:PurrimerControlMotion.Role="knob" Fill="{{ "controlKnob-bgColor-rest" | tok }}"
                          Stroke="{{ "control-borderColor-rest" | tok }}" StrokeThickness="1" />
               </Grid>
             </Canvas>

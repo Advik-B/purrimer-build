@@ -10,8 +10,12 @@ QtObject {
     property string theme: "{{ themes[0] }}"
     // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
     property bool pauseLoops: false
-    // The default motion kind ("sleepy" or "playful") for springs and touch feedback.
+    // The default motion kind ("sleepy" or "playful"). A MotionScope (any ancestor declaring pmMotionKind) overrides
+    // it for everything inside.
     property string motionKind: "sleepy"
+    // An in-app "Reduce motion" setting: playful plays as sleepy, and sleepy only fades. A MotionScope with reduce
+    // (pmMotionReduce) does the same for its subtree.
+    property bool reduceMotion: false
     // Spring stiffness and damping per motion kind. Sleepy is critically damped; playful overshoots by about a tenth.
     readonly property var springs: ({ "sleepy": [180, 26.8], "playful": [380, 23.4] })
     readonly property real pressScale: 0.96
@@ -25,6 +29,33 @@ QtObject {
                 return true
         }
         return false
+    }
+
+    // The motion kind for an item: the closest pmMotionKind on it or an ancestor, else motionKind.
+    function motionKindOf(item) {
+        for (let node = item; node; node = node.parent) {
+            if (node.pmMotionKind === "sleepy" || node.pmMotionKind === "playful")
+                return node.pmMotionKind
+        }
+        return motionKind
+    }
+
+    function motionReduced(item) {
+        if (reduceMotion)
+            return true
+        for (let node = item; node; node = node.parent) {
+            if (node.pmMotionReduce === true)
+                return true
+        }
+        return false
+    }
+
+    // "sleepy", "playful" or "still": under reduced motion playful plays as sleepy and sleepy only fades.
+    function effectiveKind(item, explicit) {
+        const kind = explicit === "sleepy" || explicit === "playful" ? explicit : motionKindOf(item)
+        if (!motionReduced(item))
+            return kind
+        return kind === "playful" ? "sleepy" : "still"
     }
 
     function rubberBand(overshoot, dimension) {

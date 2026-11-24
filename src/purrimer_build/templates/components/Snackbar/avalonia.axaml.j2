@@ -31,13 +31,9 @@
     <Setter Property="Margin" Value="{{ px("mobile-gutter") | num }},0,{{ px("mobile-gutter") | num }},{{ (px("mobile-bottomNav-height") + px("base-size-16")) | num }}" />
     <Setter Property="MaxWidth" Value="560" />
     <Setter Property="FontSize" Value="14" />
-    <Setter Property="Opacity" Value="0" />
+    <!-- Shown and hidden from code, so the toast choreography can play in and out. -->
+    <Setter Property="IsVisible" Value="False" />
     <Setter Property="IsHitTestVisible" Value="False" />
-    <Setter Property="Transitions">
-      <Transitions>
-        <DoubleTransition Property="Opacity" Duration="{{ "duration-sleepy-medium" | tok }}" Easing="{{ "easing-sleepy-enter" | tok }}" />
-      </Transitions>
-    </Setter>
     <Setter Property="FontFamily" Value="{{ "sans" | font }}" />
     <Setter Property="Template">
       <ControlTemplate TargetType="pm:Snackbar">
@@ -52,7 +48,6 @@
       </ControlTemplate>
     </Setter>
     <Style Selector="^:open">
-      <Setter Property="Opacity" Value="1" />
       <Setter Property="IsHitTestVisible" Value="True" />
     </Style>
   </ControlTheme>

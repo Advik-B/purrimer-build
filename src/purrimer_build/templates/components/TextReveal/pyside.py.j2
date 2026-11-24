@@ -1,0 +1,104 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import random
+import re
+
+from PySide6.QtCore import QElapsedTimer, QTimer
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
+
+from ..motion import effective_kind
+from ..theme import theme
+from .motion import Motion
+
+ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+
+class TextReveal(QWidget):
+    """Reveals one line by word or by letter with any entrance (`name`), each piece one stagger step after the
+    last, or untangles it from scrambled letters (effect="tangle"). Screen readers hear the whole line."""
+
+    def __init__(self, text: str = "", by: str = "{{ c.spec.props.by.default }}", effect: str = "reveal",
+                 name: str = "{{ c.spec.props.name.default }}", step: int = 0, trigger: str = "mount",
+                 kind: str = "", text_style: str = "{{ c.spec.props.textStyle.default }}",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.text = text
+        self.by = by
+        self.effect = effect
+        self.name = name
+        self.step = step
+        self.trigger = trigger
+        self.kind = kind
+        self.text_style = text_style
+        self.setAccessibleName(text)
+        self._row = QHBoxLayout(self)
+        self._row.setContentsMargins(0, 0, 0, 0)
+        self._row.setSpacing(0)
+        self._pieces: list[Motion] = []
+        self._tangle: QLabel | None = None
+        self._clock = QElapsedTimer()
+        self._timer = QTimer(self)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._scramble)
+        self._build()
+
+    def _label(self, text: str) -> QLabel:
+        label = QLabel(text)
+        label.setStyleSheet(theme.text_css(self.text_style) + f" color: {theme.color({{ "fgColor-default" | tok }}).name()};")
+        label.setAccessibleName("")
+        return label
+
+    def _build(self) -> None:
+        if self.effect == "tangle":
+            self._tangle = self._label(self.text)
+            self._row.addWidget(self._tangle)
+            self._row.addStretch()
+            return
+        parts = list(self.text) if self.by == "letter" else [p for p in re.split(r"(\s+)", self.text) if p]
+        index = 0
+        for part in parts:
+            if part.isspace():
+                self._row.addWidget(self._label(part.replace(" ", " ")))
+                continue
+            # A custom step replaces the kind's stagger with a plain delay.
+            piece = Motion(self.name, trigger=self.trigger, kind=self.kind, index=0 if self.step else index,
+                           delay=index * self.step if self.step else 0)
+            piece.add_widget(self._label(part))
+            self._row.addWidget(piece)
+            self._pieces.append(piece)
+            index += 1
+        self._row.addStretch()
+
+    def replay(self) -> None:
+        if self.effect == "tangle":
+            self._start_tangle()
+        for piece in self._pieces:
+            piece.replay()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self.effect == "tangle" and not self._clock.isValid():
+            self._start_tangle()
+
+    def _start_tangle(self) -> None:
+        kind = effective_kind(self, self.kind or None)
+        if theme.pause_loops or kind == "still" or self._tangle is None:
+            if self._tangle is not None:
+                self._tangle.setText(self.text)
+            return
+        self._clock.start()
+        self._timer.start()
+
+    def _scramble(self) -> None:
+        kind = effective_kind(self, self.kind or None)
+        step = self.step or (22 if kind == "playful" else 48)
+        settled = self._clock.elapsed() // step
+        shown = "".join(c if i < settled or c.isspace() else random.choice(ALPHABET) for i, c in enumerate(self.text))
+        assert self._tangle is not None
+        self._tangle.setText(shown)
+        if settled >= len(self.text):
+            self._timer.stop()

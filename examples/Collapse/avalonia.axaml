@@ -1,0 +1,13 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <StackPanel Spacing="8">
+    <TextBlock Text="Advanced options" FontSize="{StaticResource PmTextTitleSmallFontSize}" FontWeight="{StaticResource PmTextTitleSmallFontWeight}" />
+    <pm:Collapse IsOpen="True">
+      <TextBlock Text="Signed commits, branch protection and merge queues." TextWrapping="Wrap" />
+    </pm:Collapse>
+    <TextBlock Text="Danger zone" FontSize="{StaticResource PmTextTitleSmallFontSize}" FontWeight="{StaticResource PmTextTitleSmallFontWeight}" />
+    <pm:Collapse>
+      <TextBlock Text="Archive or delete this repository." TextWrapping="Wrap" />
+    </pm:Collapse>
+  </StackPanel>
+</UserControl>

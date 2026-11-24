@@ -20,7 +20,7 @@ public class LoadingDots : Control
         AvaloniaProperty.Register<LoadingDots, string>(nameof(Variant), "steps");
 
     public static readonly StyledProperty<string> KindProperty =
-        AvaloniaProperty.Register<LoadingDots, string>(nameof(Kind), "sleepy");
+        AvaloniaProperty.Register<LoadingDots, string>(nameof(Kind), "");
 
     public static readonly StyledProperty<string?> LabelProperty =
         AvaloniaProperty.Register<LoadingDots, string?>(nameof(Label));
@@ -47,6 +47,9 @@ public class LoadingDots : Control
     }
 
     // sleepy or playful
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    private string LoopKind => Kind is "sleepy" or "playful" ? Kind : PurrimerMotion.Reduced(this) ? "sleepy" : PurrimerMotion.KindOf(this);
+
     public string Kind
     {
         get => GetValue(KindProperty);
@@ -67,7 +70,7 @@ public class LoadingDots : Control
     }
 
     private bool Snooze => Variant == "snooze";
-    private bool Playful => Kind == "playful";
+    private bool Playful => LoopKind == "playful";
     private double StepCycle => Playful ? {{ ms("duration-playful-loop") * 0.7 }} : {{ ms("duration-sleepy-loop") * 0.45 }};
     private double SnoozeCycle => Playful ? {{ ms("duration-playful-loop") * 0.75 }} : {{ ms("duration-sleepy-loop") * 0.75 }};
     private double Dist => Playful ? 18 : 8;

@@ -3,6 +3,7 @@
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
+import { PmMotionCatalog, PmMotionControls, PmTween } from "../motion.slint";
 
 export component IconButton inherits Rectangle {
     in property <string> icon;
@@ -12,6 +13,10 @@ export component IconButton inherits Rectangle {
     in property <string> size: "medium";
     in property <bool> enabled: true;
     callback clicked();
+    // sleepy or playful; empty follows PurrimerMotion.playful. Slint cannot see a MotionScope, so set it by hand.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    property <PmMotionControls> motion: PmMotionCatalog.controls(PmMotionCatalog.kind-index(root.kind, root.reduce));
 
     out property <bool> has-focus: focus.has-focus;
     property <bool> hovered: touch.has-hover;
@@ -28,6 +33,15 @@ export component IconButton inherits Rectangle {
         : variant == "invisible" ? (down ? {{ "control-transparent-bgColor-selected" | tok }} : hovered ? {{ "control-transparent-bgColor-hover" | tok }} : transparent)
         : (down ? {{ "button-default-bgColor-active" | tok }} : hovered ? {{ "button-default-bgColor-hover" | tok }} : {{ "button-default-bgColor-rest" | tok }});
     animate background { duration: {{ "duration-fast" | tok }}; }
+
+    // In a playful scope it presses to 95% and pops back; sleepy keeps the calm chrome.
+    press := PmTween {
+        target: root.down && root.enabled ? root.motion.press : 1;
+        length: root.motion.press-dur;
+        easing: root.motion.press-ease;
+    }
+    transform-scale-x: press.value;
+    transform-scale-y: press.value;
 
     accessible-role: button;
     accessible-enabled: root.enabled;

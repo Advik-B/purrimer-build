@@ -1,0 +1,86 @@
+// {{ note }}
+// {{ c.summary }}
+import { createEffect, createSignal, onCleanup } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { inView, motionStyle, restart, type MotionKind, type MotionName } from "../motion";
+
+export type MotionProps = {
+  name?: MotionName;
+  as?: string;
+  trigger?: {{ c.spec.props.trigger["values"] | map("tojson") | join(" | ") }};
+  play?: boolean;
+  // Change any value to play again.
+  replay?: unknown;
+  index?: number;
+  delay?: number | string;
+  duration?: number | string;
+  easing?: string;
+  loop?: boolean;
+  paused?: boolean;
+  // Drives an entrance by scroll position where the browser supports animation-timeline.
+  scroll?: boolean;
+  kind?: MotionKind;
+  once?: boolean;
+  onDone?: (event: AnimationEvent) => void;
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
+};
+
+export function Motion(props: MotionProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "div");
+  const [el, setEl] = createSignal<HTMLElement>();
+  const [seen, setSeen] = createSignal(false);
+  const trigger = () => props.trigger ?? "mount";
+
+  createEffect(
+    () => (trigger() === "inView" ? el() : undefined),
+    (node) => {
+      if (!node) return;
+      const stop = inView(node, setSeen, { once: props.once !== false });
+      onCleanup(stop);
+    },
+  );
+
+  let started = false;
+  createEffect(
+    () => props.replay,
+    () => {
+      if (!started) {
+        started = true;
+        return;
+      }
+      restart(el() ?? null);
+    },
+  );
+
+  const playing = () => (trigger() === "manual" ? props.play !== false : true);
+  const waiting = () => trigger() === "inView" && !seen();
+  const name = () => props.name ?? "{{ c.spec.props.name.default }}";
+  const style = (): JSX.CSSProperties => ({
+    ...motionStyle({ index: props.index, delay: props.delay, duration: props.duration, easing: props.easing }),
+    ...props.style,
+  });
+
+  return (
+    <Tag
+      ref={setEl}
+      data-motion={props.kind}
+      class={[
+        playing() && "pm-m",
+        playing() && `pm-m-${name()}`,
+        playing() && props.loop && "pm-m-loop",
+        playing() && trigger() === "hover" && "pm-m-hover",
+        playing() && (waiting() || props.paused) && "pm-m-paused",
+        playing() && props.scroll && "pm-m-scroll",
+        props.class,
+      ]}
+      style={style()}
+      onAnimationEnd={(e: AnimationEvent) => {
+        if (e.target === e.currentTarget) props.onDone?.(e);
+      }}
+    >
+      {props.children}
+    </Tag>
+  );
+}
