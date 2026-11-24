@@ -1,0 +1,91 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { inView, motionStyleText, restart, type MotionKind, type MotionName } from "../motion";
+
+  let {
+    name = "{{ c.spec.props.name.default }}",
+    as = "div",
+    trigger = "mount",
+    play = true,
+    replay,
+    index,
+    delay,
+    duration,
+    easing,
+    loop = false,
+    paused = false,
+    scroll = false,
+    kind,
+    once = true,
+    ondone,
+    class: className = "",
+    style = "",
+    children,
+  }: {
+    name?: MotionName;
+    as?: string;
+    trigger?: {{ c.spec.props.trigger["values"] | map("tojson") | join(" | ") }};
+    play?: boolean;
+    // Change any value to play again.
+    replay?: unknown;
+    index?: number;
+    delay?: number | string;
+    duration?: number | string;
+    easing?: string;
+    loop?: boolean;
+    paused?: boolean;
+    // Drives an entrance by scroll position where the browser supports animation-timeline.
+    scroll?: boolean;
+    kind?: MotionKind;
+    once?: boolean;
+    ondone?: (event: AnimationEvent) => void;
+    class?: string;
+    style?: string;
+    children?: Snippet;
+  } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let seen = $state(false);
+
+  $effect(() => {
+    if (trigger !== "inView" || !el) return;
+    return inView(el, (inside) => (seen = inside), { once });
+  });
+
+  let started = false;
+  $effect(() => {
+    void replay;
+    if (!started) {
+      started = true;
+      return;
+    }
+    restart(el ?? null);
+  });
+
+  const playing = $derived(trigger === "manual" ? play : true);
+  const waiting = $derived(trigger === "inView" && !seen);
+  const css = $derived([motionStyleText({ index, delay, duration, easing }), style].filter(Boolean).join("; "));
+</script>
+
+<svelte:element
+  this={as}
+  bind:this={el}
+  data-motion={kind}
+  class={[
+    playing && "pm-m",
+    playing && `pm-m-${name}`,
+    playing && loop && "pm-m-loop",
+    playing && trigger === "hover" && "pm-m-hover",
+    playing && (waiting || paused) && "pm-m-paused",
+    playing && scroll && "pm-m-scroll",
+    className,
+  ]}
+  style={css || undefined}
+  onanimationend={(e: AnimationEvent) => {
+    if (e.target === e.currentTarget) ondone?.(e);
+  }}
+>
+  {@render children?.()}
+</svelte:element>

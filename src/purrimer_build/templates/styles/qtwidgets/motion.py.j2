@@ -489,7 +489,8 @@ class MotionEffect(QGraphicsEffect):
             return
         v = self.values
         source = self.sourceBoundingRect(Qt.CoordinateSystem.LogicalCoordinates)
-        pixmap, offset = self.sourcePixmap(Qt.CoordinateSystem.LogicalCoordinates, QGraphicsEffect.PixmapPadMode.NoPad)
+        # Without padding, the pixmap covers exactly the source rect.
+        pixmap = self.sourcePixmap(Qt.CoordinateSystem.LogicalCoordinates, mode=QGraphicsEffect.PixmapPadMode.NoPad)
         w, h = source.width(), source.height()
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
@@ -515,13 +516,12 @@ class MotionEffect(QGraphicsEffect):
         if v["draw"] < 0.999:
             painter.setClipRect(QRectF(-64, -64, 64 + v["draw"] * w, h + 128), Qt.ClipOperation.IntersectClip)
         painter.setOpacity(painter.opacity() * v["opacity"])
-        delta = offset - source.topLeft().toPoint()
         if v["blur"] > 0.05:
             blurred = _blurred(pixmap, v["blur"])
             pad = int(math.ceil(v["blur"] * 3))
-            painter.drawPixmap(delta.x() - pad, delta.y() - pad, blurred)
+            painter.drawPixmap(-pad, -pad, blurred)
         else:
-            painter.drawPixmap(delta, pixmap)
+            painter.drawPixmap(0, 0, pixmap)
         painter.restore()
         if v["ringO"] > 0.001:
             painter.save()

@@ -1,0 +1,36 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import type { MotionKind } from "../motion";
+
+  let {
+    kind = "sleepy",
+    reduce = false,
+    as = "div",
+    contents = true,
+    class: className = "",
+    style = "",
+    children,
+  }: {
+    kind?: MotionKind;
+    reduce?: boolean;
+    as?: string;
+    contents?: boolean;
+    class?: string;
+    style?: string;
+    children?: Snippet;
+  } = $props();
+  // Without a class or style the scope adds no box, so it never changes layout.
+  const box = $derived(!contents || !!className || !!style);
+</script>
+
+<svelte:element
+  this={as}
+  data-motion={kind}
+  data-motion-reduce={reduce ? "" : undefined}
+  class={[!box && "pm-motion-scope", className]}
+  style={style || undefined}
+>
+  {@render children?.()}
+</svelte:element>

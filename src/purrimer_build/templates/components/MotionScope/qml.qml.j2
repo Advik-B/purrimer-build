@@ -1,0 +1,19 @@
+// {{ note }}
+// {{ c.summary }}
+// Motion components and springs inside read the closest pmMotionKind and pmMotionReduce (see
+// Purrimer.motionKindOf). It sizes to its children and adds nothing else.
+import QtQuick
+
+Item {
+    id: root
+
+    // sleepy or playful
+    property string kind: "{{ c.spec.props.kind.default }}"
+    // An in-app reduced motion setting for everything inside.
+    property bool reduce: false
+    readonly property string pmMotionKind: kind
+    readonly property bool pmMotionReduce: reduce
+
+    implicitWidth: childrenRect.x + childrenRect.width
+    implicitHeight: childrenRect.y + childrenRect.height
+}

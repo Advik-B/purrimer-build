@@ -1,0 +1,274 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// Plays one catalog animation on its child, in the kind of the closest MotionScope (or Kind). Triggers: mount plays
+// when attached; inView waits until some of it is inside its window; hover plays while hovered or focused; manual
+// plays while IsPlaying. Bump Replay to play again. Done fires when a finite animation ends.
+public class Motion : Decorator
+{
+    public static readonly StyledProperty<string> MotionNameProperty =
+        AvaloniaProperty.Register<Motion, string>(nameof(MotionName), "{{ c.spec.props.name.default }}");
+
+    public static readonly StyledProperty<string> TriggerProperty =
+        AvaloniaProperty.Register<Motion, string>(nameof(Trigger), "mount");
+
+    public static readonly StyledProperty<bool> IsPlayingProperty =
+        AvaloniaProperty.Register<Motion, bool>(nameof(IsPlaying), true);
+
+    public static readonly StyledProperty<int> ReplayProperty =
+        AvaloniaProperty.Register<Motion, int>(nameof(Replay));
+
+    public static readonly StyledProperty<int> IndexProperty =
+        AvaloniaProperty.Register<Motion, int>(nameof(Index));
+
+    public static readonly StyledProperty<double> DelayProperty =
+        AvaloniaProperty.Register<Motion, double>(nameof(Delay));
+
+    public static readonly StyledProperty<double> DurationProperty =
+        AvaloniaProperty.Register<Motion, double>(nameof(Duration));
+
+    public static readonly StyledProperty<string> MotionEasingProperty =
+        AvaloniaProperty.Register<Motion, string>(nameof(MotionEasing), "");
+
+    public static readonly StyledProperty<bool> LoopProperty =
+        AvaloniaProperty.Register<Motion, bool>(nameof(Loop));
+
+    public static readonly StyledProperty<bool> PausedProperty =
+        AvaloniaProperty.Register<Motion, bool>(nameof(Paused));
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Motion, string>(nameof(Kind), "");
+
+    public static readonly StyledProperty<double> RadiusProperty =
+        AvaloniaProperty.Register<Motion, double>(nameof(Radius));
+
+    public static readonly StyledProperty<Point?> OriginProperty =
+        AvaloniaProperty.Register<Motion, Point?>(nameof(Origin));
+
+    public static readonly StyledProperty<IBrush?> HaloBrushProperty =
+        AvaloniaProperty.Register<Motion, IBrush?>(nameof(HaloBrush));
+
+    public static readonly StyledProperty<IBrush?> WashBrushProperty =
+        AvaloniaProperty.Register<Motion, IBrush?>(nameof(WashBrush));
+
+    public static readonly StyledProperty<IBrush?> RingBrushProperty =
+        AvaloniaProperty.Register<Motion, IBrush?>(nameof(RingBrush));
+
+    private readonly PurrimerMotionPlayer _player = new();
+    private PurrimerMotionFrame _frame = PurrimerMotionFrame.Rest;
+    private DispatcherTimer? _view;
+    private bool _attached;
+
+    static Motion()
+    {
+        AffectsRender<Motion>(RadiusProperty, HaloBrushProperty, WashBrushProperty, RingBrushProperty);
+        ReplayProperty.Changed.AddClassHandler<Motion>((m, _) => { if (m._attached) m.Start(); });
+        IsPlayingProperty.Changed.AddClassHandler<Motion>((m, _) =>
+        {
+            if (!m._attached || m.Trigger != "manual")
+                return;
+            if (m.IsPlaying)
+                m.Start();
+            else
+                m.Stop();
+        });
+        PausedProperty.Changed.AddClassHandler<Motion>((m, _) => { if (m._attached && !m.Paused && m.Trigger != "manual") m.Start(); });
+    }
+
+    public Motion()
+    {
+        _player.Frame += Apply;
+        _player.Done += () => Done?.Invoke(this, EventArgs.Empty);
+        RenderTransformOrigin = RelativePoint.TopLeft;
+    }
+
+    public event EventHandler? Done;
+
+    // Any catalog animation: rise, pounce, ear-twitch, dialog...
+    public string MotionName { get => GetValue(MotionNameProperty); set => SetValue(MotionNameProperty, value); }
+
+    // mount, inView, hover or manual
+    public string Trigger { get => GetValue(TriggerProperty); set => SetValue(TriggerProperty, value); }
+
+    // With Trigger manual: plays while true.
+    public bool IsPlaying { get => GetValue(IsPlayingProperty); set => SetValue(IsPlayingProperty, value); }
+
+    // Change it to play again.
+    public int Replay { get => GetValue(ReplayProperty); set => SetValue(ReplayProperty, value); }
+
+    // Stagger position: the delay grows by the kind's stagger per step.
+    public int Index { get => GetValue(IndexProperty); set => SetValue(IndexProperty, value); }
+
+    // Extra delay, in ms.
+    public double Delay { get => GetValue(DelayProperty); set => SetValue(DelayProperty, value); }
+
+    // In ms; 0 uses the catalog's duration for the kind.
+    public double Duration { get => GetValue(DurationProperty); set => SetValue(DurationProperty, value); }
+
+    // An easing token, such as easing-sleepy-move; empty keeps the animation's own curve.
+    public string MotionEasing { get => GetValue(MotionEasingProperty); set => SetValue(MotionEasingProperty, value); }
+
+    public bool Loop { get => GetValue(LoopProperty); set => SetValue(LoopProperty, value); }
+
+    // Holds the first frame until false.
+    public bool Paused { get => GetValue(PausedProperty); set => SetValue(PausedProperty, value); }
+
+    // Empty follows the scope.
+    public string Kind { get => GetValue(KindProperty); set => SetValue(KindProperty, value); }
+
+    // Corner radius of the child, for the bask halo, meow ring and warm-spot wash.
+    public double Radius { get => GetValue(RadiusProperty); set => SetValue(RadiusProperty, value); }
+
+    // Overrides the transform origin (fractions of the size); menus set it to the anchor's corner.
+    public Point? Origin { get => GetValue(OriginProperty); set => SetValue(OriginProperty, value); }
+
+    public IBrush? HaloBrush { get => GetValue(HaloBrushProperty); set => SetValue(HaloBrushProperty, value); }
+
+    public IBrush? WashBrush { get => GetValue(WashBrushProperty); set => SetValue(WashBrushProperty, value); }
+
+    public IBrush? RingBrush { get => GetValue(RingBrushProperty); set => SetValue(RingBrushProperty, value); }
+
+    public bool Running => _player.Running;
+
+    public string EffectiveKind => PurrimerMotion.EffectiveKind(this, Kind);
+
+    // Plays from the beginning, whatever the trigger.
+    public void Start() =>
+        _player.Play(MotionName, EffectiveKind, Duration > 0 ? Duration : null, Delay,
+            string.IsNullOrEmpty(MotionEasing) ? null : MotionEasing, Index, Loop, paused: Paused);
+
+    // Stops and returns to rest.
+    public void Stop() => _player.Reset();
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _attached = true;
+        if (Trigger == "mount" || (Trigger == "manual" && IsPlaying))
+            Start();
+        else if (Trigger == "inView")
+        {
+            _player.Play(MotionName, EffectiveKind, paused: true);
+            _view = new DispatcherTimer(TimeSpan.FromMilliseconds(100), DispatcherPriority.Background, (_, _) => CheckView());
+            _view.Start();
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _attached = false;
+        _view?.Stop();
+        _player.Stop();
+    }
+
+    private void CheckView()
+    {
+        if (TopLevel.GetTopLevel(this) is not { } top || !IsEffectivelyVisible || Bounds.Width <= 0)
+            return;
+        if (this.TranslatePoint(new Point(0, 0), top) is not { } p)
+            return;
+        if (p.X < top.Bounds.Width && p.Y < top.Bounds.Height && p.X + Bounds.Width > 0 && p.Y + Bounds.Height > 0)
+        {
+            _view?.Stop();
+            Start();
+        }
+    }
+
+    protected override void OnPointerEntered(PointerEventArgs e)
+    {
+        base.OnPointerEntered(e);
+        if (Trigger == "hover")
+            Start();
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        if (Trigger == "hover")
+            Stop();
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        if (Trigger == "hover")
+            Start();
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        if (Trigger == "hover")
+            Stop();
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var size = base.ArrangeOverride(finalSize);
+        Apply(_frame);
+        return size;
+    }
+
+    private void Apply(PurrimerMotionFrame f)
+    {
+        _frame = f;
+        var size = Bounds.Size;
+        if (f.AtRest)
+        {
+            RenderTransform = null;
+            Opacity = 1;
+            Effect = null;
+            Clip = null;
+            InvalidateVisual();
+            return;
+        }
+        var entry = _player.Entry;
+        var origin = Origin ?? entry?.Origin ?? new Point(0.5, 0.5);
+        RenderTransform = new MatrixTransform(PurrimerMotionCatalog.ToMatrix(f, size, origin, entry?.Perspective ?? 0));
+        Opacity = f.Opacity;
+        // Avalonia's blur radius r gives a Gaussian of sigma 0.57735 r + 0.5; CSS blur() names the sigma.
+        Effect = f.Blur > 0.05 ? new BlurEffect { Radius = Math.Max(0, (f.Blur - 0.5) / 0.57735) } : null;
+        if (f.Reveal < 0.999 || f.Draw < 0.999)
+        {
+            var w = f.Draw < 0.999 ? 64 + f.Draw * size.Width : size.Width + 128;
+            var h = f.Reveal < 0.999 ? f.Reveal * (size.Height + 64) : size.Height + 128;
+            Clip = new RectangleGeometry(new Rect(-64, -64, Math.Max(0, w), Math.Max(0, h)));
+        }
+        else
+            Clip = null;
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        base.Render(context);
+        var f = _frame;
+        var rect = new Rect(Bounds.Size);
+        if (f.Halo > 0.01 && HaloBrush is { } halo)
+        {
+            var h = f.Halo;
+            context.DrawRectangle(null, new Pen(halo, h), rect.Inflate(h / 2), Radius + h / 2, Radius + h / 2);
+        }
+        if (f.Wash > 0.001 && WashBrush is { } wash)
+        {
+            using (context.PushOpacity(f.Wash))
+                context.DrawRectangle(wash, null, rect, Radius, Radius);
+        }
+        if (f.RingO > 0.001 && RingBrush is { } ring)
+        {
+            var c = rect.Center;
+            using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(f.RingS, f.RingS) * Matrix.CreateTranslation(c.X, c.Y)))
+            using (context.PushOpacity(f.RingO))
+                context.DrawRectangle(null, new Pen(ring, {{ px("borderWidth-thick") }} / f.RingS), rect.Deflate(1), Radius, Radius);
+        }
+    }
+}

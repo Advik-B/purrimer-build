@@ -1,0 +1,38 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtWidgets import QVBoxLayout, QWidget
+
+from ..motion import motion_kind_of
+
+
+class MotionScope(QWidget):
+    """A plain container that sets the motion kind (and optionally reduced motion) for every widget inside it. Add
+    content to `body`. The closest scope wins: it sets the pmMotion and pmMotionReduce properties that motion
+    components and springs look up."""
+
+    def __init__(self, kind: str = "{{ c.spec.props.kind.default }}", reduce: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(0, 0, 0, 0)
+        self.body.setSpacing(0)
+        self.set_kind(kind)
+        self.set_reduce(reduce)
+
+    @property
+    def kind(self) -> str:
+        return motion_kind_of(self)
+
+    def set_kind(self, kind: str) -> None:
+        self.setProperty("pmMotion", kind if kind in ("sleepy", "playful") else "sleepy")
+
+    def set_reduce(self, reduce: bool) -> None:
+        self.setProperty("pmMotionReduce", bool(reduce))
+
+    def add_widget(self, widget: QWidget) -> QWidget:
+        self.body.addWidget(widget)
+        return widget

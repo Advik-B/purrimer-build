@@ -1,0 +1,20 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:MotionScope Kind="playful">
+    <StackPanel Spacing="12">
+      <pm:Motion MotionName="pounce">
+        <pm:Card Title="Pull request merged">
+          <TextBlock Text="All checks passed. Enjoy the quiet." TextWrapping="Wrap" />
+        </pm:Card>
+      </pm:Motion>
+      <!-- The closest scope wins: this one is calm again. -->
+      <pm:MotionScope Kind="sleepy">
+        <pm:Motion MotionName="rise" Index="1">
+          <pm:Card Title="Billing stays sleepy">
+            <TextBlock Text="Settings and errors never bounce." TextWrapping="Wrap" />
+          </pm:Card>
+        </pm:Motion>
+      </pm:MotionScope>
+    </StackPanel>
+  </pm:MotionScope>
+</UserControl>

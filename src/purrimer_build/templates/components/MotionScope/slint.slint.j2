@@ -1,0 +1,12 @@
+// {{ note }}
+// {{ c.summary }}
+// Slint cannot see a component's ancestors, so the scope cannot reach its children by itself: bind each motion
+// component's kind (and reduce) to the scope's, for example `Motion { kind: scope.kind; }`.
+export component MotionScope inherits VerticalLayout {
+    // sleepy or playful
+    in property <string> kind: "{{ c.spec.props.kind.default }}";
+    // An in-app reduced motion setting for everything inside.
+    in property <bool> reduce: false;
+
+    @children
+}

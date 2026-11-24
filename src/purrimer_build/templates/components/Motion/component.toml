@@ -1,0 +1,66 @@
+name = "Motion"
+group = "Motion"
+order = 101
+summary = "Plays one catalog animation on its content, in the motion kind of its scope."
+
+[props.name]
+type = "string"
+default = "rise"
+doc = "Any catalog animation: an entrance (rise, pounce...), an exit, attention, feedback, ambient loop or choreography preset."
+
+[props.trigger]
+type = "enum"
+default = "mount"
+doc = "mount plays once when shown; inView waits until scrolled into view; hover plays while hovered or focused; manual plays while play is true."
+values = ["mount", "inView", "hover", "manual"]
+
+[props.play]
+type = "bool"
+default = true
+doc = "With trigger manual: plays while true, and returns to rest when false."
+
+[props.replay]
+type = "int"
+default = 0
+doc = "Change it to play again (the web takes any value): an error counter is a good replay for hiss."
+
+[props.index]
+type = "int"
+default = 0
+doc = "Stagger position: the delay grows by the kind's stagger (90ms sleepy, 45ms playful) per step."
+
+[props.delay]
+type = "int"
+default = 0
+doc = "Extra delay, in ms."
+
+[props.duration]
+type = "int"
+default = 0
+doc = "Duration in ms; 0 uses the catalog's for the kind."
+
+[props.easing]
+type = "string"
+default = ""
+doc = "An easing token (easing-sleepy-move...) to replace the animation's own curve; the web also takes any CSS easing."
+
+[props.loop]
+type = "bool"
+default = false
+doc = "Repeat forever. Only for ambient loops and work in progress, never attention."
+
+[props.paused]
+type = "bool"
+default = false
+doc = "Hold the first frame until false."
+
+[props.kind]
+type = "enum"
+default = ""
+doc = "Forces a kind on this element only; empty follows the scope. Prefer a MotionScope around the moment."
+values = ["", "sleepy", "playful"]
+
+[props.radius]
+type = "int"
+default = 0
+doc = "Native targets: the corner radius of the content, for the bask halo, meow ring and warm-spot wash (the web follows border-radius)."

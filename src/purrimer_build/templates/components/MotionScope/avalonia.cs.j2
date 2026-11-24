@@ -1,0 +1,48 @@
+// {{ note }}
+// {{ c.summary }}
+using Avalonia;
+using Avalonia.Controls;
+
+namespace {{ ns }};
+
+// Sets PurrimerMotionScope.Kind and Reduce on itself; both are inherited, so every motion component and spring
+// inside follows them. The closest scope wins.
+public class MotionScope : Decorator
+{
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<MotionScope, string>(nameof(Kind), "{{ c.spec.props.kind.default }}");
+
+    public static readonly StyledProperty<bool> ReduceProperty =
+        AvaloniaProperty.Register<MotionScope, bool>(nameof(Reduce));
+
+    static MotionScope()
+    {
+        KindProperty.Changed.AddClassHandler<MotionScope>((s, _) => s.Apply());
+        ReduceProperty.Changed.AddClassHandler<MotionScope>((s, _) => s.Apply());
+    }
+
+    public MotionScope()
+    {
+        Apply();
+    }
+
+    // sleepy or playful
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
+
+    // An in-app reduced motion setting for everything inside.
+    public bool Reduce
+    {
+        get => GetValue(ReduceProperty);
+        set => SetValue(ReduceProperty, value);
+    }
+
+    private void Apply()
+    {
+        PurrimerMotionScope.SetKind(this, Kind is "playful" ? "playful" : "sleepy");
+        PurrimerMotionScope.SetReduce(this, Reduce);
+    }
+}

@@ -1,0 +1,20 @@
+name = "MotionScope"
+group = "Motion"
+order = 100
+summary = "Sets the motion kind for everything inside it: sleepy, the default, or playful for a moment that deserves it."
+
+[props.kind]
+type = "enum"
+default = "sleepy"
+doc = "sleepy or playful. The closest scope wins, so a sleepy scope inside a playful one is calm again."
+values = ["sleepy", "playful"]
+
+[props.reduce]
+type = "bool"
+default = false
+doc = "An in-app reduced motion setting for everything inside: playful plays as sleepy, and sleepy only fades."
+
+[props.contents]
+type = "bool"
+default = true
+doc = "Web: renders display: contents and adds no box, unless a class or style is given. Pass false to keep a box."
