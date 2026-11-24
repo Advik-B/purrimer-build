@@ -10,8 +10,11 @@
   border-radius: {{ "borderRadius-full" | tok }};
   background: {{ "control-bgColor-rest" | tok }};
   cursor: inherit;
+  transition: scale var(--pm-m-press) var(--pm-m-pop);
 }
-.pm-radio__input::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: {{ "fgColor-onEmphasis" | tok }}; scale: 0; transition: scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+/* Playful scopes press to 95% and pop the mark; sleepy keeps the calm chrome. */
+.pm-radio__input:active:not(:disabled) { scale: var(--pm-m-control-press); }
+.pm-radio__input::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: {{ "fgColor-onEmphasis" | tok }}; scale: 0; transition: scale var(--pm-m-check-dur) var(--pm-m-check-ease); }
 .pm-radio__input:checked { background: {{ "bgColor-accent-emphasis" | tok }}; border-color: {{ "bgColor-accent-emphasis" | tok }}; }
 .pm-radio__input:checked::after { scale: 1; }
 .pm-radio__input:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }

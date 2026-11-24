@@ -15,11 +15,13 @@ export component LoadingDots {
     in property <string> variant: "steps";
     in property <string> label;
     // sleepy or playful
-    in property <string> kind: "sleepy";
+    // sleepy or playful; empty follows PurrimerMotion.playful (Slint cannot see a MotionScope).
+    in property <string> kind: "";
+    property <bool> loop-playful: root.kind == "" ? PurrimerMotion.playful && !PurrimerMotion.reduce : root.kind == "playful";
     in property <brush> color: {{ "fgColor-muted" | tok }};
 
     property <bool> snooze: root.variant == "snooze";
-    property <bool> playful: root.kind == "playful";
+    property <bool> playful: root.loop-playful;
     property <duration> step-cycle: root.playful ? {{ (ms("duration-playful-loop") * 0.7) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.45) | int }}ms;
     property <duration> snooze-cycle: root.playful ? {{ (ms("duration-playful-loop") * 0.75) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.75) | int }}ms;
     property <float> dist: root.playful ? 18 : 8;

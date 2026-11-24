@@ -7,19 +7,21 @@ export component Spinner {
     in property <string> size: "medium";
     in property <string> label: "{{ c.spec.props.label.default }}";
     // sleepy or playful
-    in property <string> kind: "sleepy";
+    // sleepy or playful; empty follows PurrimerMotion.playful (Slint cannot see a MotionScope).
+    in property <string> kind: "";
+    property <bool> loop-playful: root.kind == "" ? PurrimerMotion.playful && !PurrimerMotion.reduce : root.kind == "playful";
 
     property <length> px: root.size == "small" ? {{ c.spec.sizes.small }}px : root.size == "large" ? {{ c.spec.sizes.large }}px : {{ c.spec.sizes.medium }}px;
     property <float> box: root.px / 1px;
     property <float> stroke: root.box / 8;
     property <float> r: (root.box - root.stroke) / 2;
-    property <duration> turn: root.kind == "playful" ? {{ (ms("duration-playful-loop") * 0.6) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.4) | int }}ms;
+    property <duration> turn: root.loop-playful ? {{ (ms("duration-playful-loop") * 0.6) | int }}ms : {{ (ms("duration-sleepy-loop") * 0.4) | int }}ms;
     property <float> spin: mod(PurrimerMotion.loop-tick / root.turn, 1) * 360;
     // Playful stretches the arc between 8% and 60% of the circle and slides it forward, easing in and out.
     property <float> stretch: mod(PurrimerMotion.loop-tick / (root.turn * 1.75), 1);
     property <float> half: mod(root.stretch * 2, 1);
     property <float> eased: root.half * root.half * (3 - 2 * root.half);
-    property <bool> stretching: root.kind == "playful" && !PurrimerMotion.pause-loops;
+    property <bool> stretching: root.loop-playful && !PurrimerMotion.pause-loops;
     property <float> length: !root.stretching ? 26 : root.stretch < 0.5 ? 8 + 52 * root.eased : 60 - 52 * root.eased;
     property <float> offset: !root.stretching ? 0 : root.stretch < 0.5 ? 16 * root.eased : 16 + 76 * root.eased;
     property <angle> a0: (root.spin + root.offset * 3.6) * 1deg;

@@ -233,6 +233,14 @@ def effective_kind(obj: QObject | None, explicit: str | None = None) -> str:
     return "sleepy" if kind == "playful" else "still"
 
 
+def loop_kind(obj: QObject | None, explicit: str = "") -> str:
+    """The kind a loop (spinner, dots, skeleton) runs at: `explicit`, else the scope's. Loops carry information, so
+    reduced motion keeps them moving, at sleepy speed."""
+    if explicit in ("sleepy", "playful"):
+        return explicit
+    return "sleepy" if motion_reduced(obj) else motion_kind_of(obj)
+
+
 def table_for(kind: str) -> dict:
     return CATALOG["reduced" if kind == "still" else kind]
 

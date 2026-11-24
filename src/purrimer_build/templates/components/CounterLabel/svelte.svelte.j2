@@ -1,9 +1,20 @@
 <!-- {{ note }} -->
 <!-- {{ c.summary }} -->
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { untrack, type Snippet } from "svelte";
+  import { play } from "../motion";
 
   let { text = "", variant = "secondary", children }: { text?: string | number; variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }}; children?: Snippet } = $props();
+
+  let el: HTMLElement | undefined = $state();
+  let last = untrack(() => text);
+  // A changed count hops (the catalog's hop: a small lift in sleepy, a lift and grow in playful).
+  $effect(() => {
+    const now = text;
+    if (now === last) return;
+    last = now;
+    void play(el ?? null, "hop");
+  });
 </script>
 
-<span class={["pm-counter", variant === "primary" && "pm-counter--primary"]}>{#if children}{@render children()}{:else}{text}{/if}</span>
+<span bind:this={el} class={["pm-counter", variant === "primary" && "pm-counter--primary"]}>{#if children}{@render children()}{:else}{text}{/if}</span>

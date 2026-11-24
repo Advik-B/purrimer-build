@@ -1,9 +1,26 @@
 // {{ note }}
 // {{ c.summary }}
+import { createEffect, untrack } from "solid-js";
 import type { JSX } from "@solidjs/web";
+import { play } from "../motion";
 
 export type CounterLabelProps = { text?: string | number; variant?: {{ c.spec.props.variant["values"] | map("tojson") | join(" | ") }}; children?: JSX.Element };
 
 export function CounterLabel(props: CounterLabelProps): JSX.Element {
-  return <span class={["pm-counter", props.variant === "primary" && "pm-counter--primary"]}>{props.children ?? props.text}</span>;
+  let el: HTMLSpanElement | undefined;
+  let last = untrack(() => props.text);
+  // A changed count hops (the catalog's hop: a small lift in sleepy, a lift and grow in playful).
+  createEffect(
+    () => props.text,
+    (now) => {
+      if (now === last) return;
+      last = now;
+      void play(el ?? null, "hop");
+    },
+  );
+  return (
+    <span ref={el} class={["pm-counter", props.variant === "primary" && "pm-counter--primary"]}>
+      {props.children ?? props.text}
+    </span>
+  );
 }

@@ -16,6 +16,6 @@ doc = "Announced to screen readers; \"Loading\" for steps and \"Waiting\" for sn
 
 [props.kind]
 type = "enum"
-default = "sleepy"
-doc = "Motion kind: sleepy drifts, playful hops higher and faster."
-values = ["sleepy", "playful"]
+default = ""
+doc = "Motion kind; empty follows the closest MotionScope. Sleepy drifts, playful hops higher and faster."
+values = ["", "sleepy", "playful"]

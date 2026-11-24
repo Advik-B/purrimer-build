@@ -33,7 +33,7 @@ public class Skeleton : Control
         AvaloniaProperty.Register<Skeleton, int>(nameof(Lines), 1);
 
     public static readonly StyledProperty<string> KindProperty =
-        AvaloniaProperty.Register<Skeleton, string>(nameof(Kind), "sleepy");
+        AvaloniaProperty.Register<Skeleton, string>(nameof(Kind), "");
 
     public static readonly StyledProperty<IBrush?> BoneBrushProperty =
         AvaloniaProperty.Register<Skeleton, IBrush?>(nameof(BoneBrush));
@@ -72,6 +72,9 @@ public class Skeleton : Control
     }
 
     // sleepy or playful
+    // Empty follows the closest MotionScope; reduced motion keeps loops going, at sleepy speed.
+    private string LoopKind => Kind is "sleepy" or "playful" ? Kind : PurrimerMotion.Reduced(this) ? "sleepy" : PurrimerMotion.KindOf(this);
+
     public string Kind
     {
         get => GetValue(KindProperty);
@@ -85,7 +88,7 @@ public class Skeleton : Control
     }
 
     private int Count => Variant == "text" ? Math.Max(1, Lines) : 1;
-    private double Loop => Kind == "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }};
+    private double Loop => LoopKind == "playful" ? {{ ms("duration-playful-loop") }} : {{ ms("duration-sleepy-loop") }};
 
     protected override Size MeasureOverride(Size availableSize) => Variant switch
     {

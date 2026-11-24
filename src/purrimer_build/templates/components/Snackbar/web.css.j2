@@ -21,7 +21,8 @@
   user-select: none;
   -webkit-user-select: none;
   transition: translate var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), opacity var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease);
-  animation: pm-snackbar-in {{ "duration-sleepy-medium" | tok }} {{ "easing-sleepy-enter" | tok }};
+  /* The toast choreography: rise when sleepy, slink in from the end side when playful. */
+  animation: var(--pm-m-p-toast) var(--pm-m-medium) var(--pm-m-enter) both;
 }
 /* Swiped sideways it follows the finger and fades; once dismissed it slides on out. */
 .pm-snackbar--dragging { transition: none; }
@@ -30,7 +31,6 @@
 .pm-snackbar__action { height: 40px; padding: 0 12px; border: 0; border-radius: {{ "borderRadius-medium" | tok }}; background: transparent; color: inherit; font: 600 14px/20px var(--font-sans); text-decoration: underline; cursor: pointer; }
 .pm-snackbar__action:hover { background: rgb(from currentColor r g b / 0.12); }
 .pm-snackbar__action:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid currentColor; }
-@keyframes pm-snackbar-in { from { opacity: 0; translate: -50% 16px; } }
 @media (prefers-reduced-motion: reduce) {
   .pm-snackbar { animation-name: pm-fade-in; transition-duration: {{ "duration-reduced" | tok }}; transition-timing-function: {{ "easing-standard" | tok }}; }
 }

@@ -8,6 +8,7 @@ from PySide6.QtCore import QElapsedTimer, QRectF, QSize, Qt, QTimer
 from PySide6.QtGui import QPainter, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from ..motion import loop_kind
 from ..theme import theme
 
 SIZES = {{ c.spec.sizes | py }}
@@ -20,10 +21,11 @@ STRETCH = ((8, 0), (60, -16), (8, -92))
 class Spinner(QWidget):
     """A turning arc on a faint track. It animates while it is visible."""
 
-    def __init__(self, size: str | int = "medium", label: str = "{{ c.spec.props.label.default }}", kind: str = "sleepy",
+    def __init__(self, size: str | int = "medium", label: str = "{{ c.spec.props.label.default }}", kind: str = "",
                  parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._px = size if isinstance(size, int) else SIZES[size]
+        self._explicit = kind
         self._kind = kind if kind in TURN else "sleepy"
         self._clock = QElapsedTimer()
         self._clock.start()
@@ -37,7 +39,13 @@ class Spinner(QWidget):
         theme.changed.connect(self.update)
 
     def set_kind(self, kind: str) -> None:
-        self._kind = kind if kind in TURN else "sleepy"
+        self._explicit = kind
+        self._resolve_kind()
+        self.update()
+
+    def _resolve_kind(self) -> None:
+        """Empty kind follows the closest MotionScope."""
+        self._kind = loop_kind(self, self._explicit)
         self.update()
 
     def sizeHint(self) -> QSize:
@@ -45,6 +53,7 @@ class Spinner(QWidget):
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
+        self._resolve_kind()
         if not theme.pause_loops:
             self._timer.start()
 
