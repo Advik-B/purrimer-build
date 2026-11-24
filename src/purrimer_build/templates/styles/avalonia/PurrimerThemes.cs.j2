@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Diagnostics;
+using System.Text.Json;
 using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Styling;
@@ -46,8 +47,32 @@ public static class PurrimerMotion
     // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
     public static bool PauseLoops { get; set; }
 
-    // The default motion kind ("sleepy" or "playful") for springs and touch feedback.
+    // The default motion kind ("sleepy" or "playful"). A motion scope (PurrimerMotionScope.Kind, which MotionScope
+    // sets) overrides it for everything inside.
     public static string Kind { get; set; } = "sleepy";
+
+    // An in-app "Reduce motion" setting: playful plays as sleepy, and sleepy only fades. PurrimerMotionScope.Reduce
+    // does the same for a subtree.
+    public static bool ReduceMotion { get; set; }
+
+    // The motion kind for an element: its scope's kind, else Kind.
+    public static string KindOf(AvaloniaObject? element)
+    {
+        var scoped = element is null ? "" : PurrimerMotionScope.GetKind(element);
+        return scoped is "sleepy" or "playful" ? scoped : Kind;
+    }
+
+    public static bool Reduced(AvaloniaObject? element) =>
+        ReduceMotion || (element is not null && PurrimerMotionScope.GetReduce(element));
+
+    // "sleepy", "playful" or "still": under reduced motion playful plays as sleepy and sleepy only fades.
+    public static string EffectiveKind(AvaloniaObject? element, string? explicitKind = null)
+    {
+        var kind = explicitKind is "sleepy" or "playful" ? explicitKind : KindOf(element);
+        if (!Reduced(element))
+            return kind;
+        return kind == "playful" ? "sleepy" : "still";
+    }
 
     public const double PressScale = 0.96;
     public const int LongPressMs = 450;
@@ -222,5 +247,386 @@ public sealed class PurrimerLinearEasing : Easing
             }
         }
         return _y[^1];
+    }
+}
+
+// A motion scope: sets the kind ("sleepy" or "playful") and reduced motion for everything inside. MotionScope sets
+// it; set pm:PurrimerMotionScope.Kind="playful" on any other container. Both are inherited down the tree.
+public sealed class PurrimerMotionScope : AvaloniaObject
+{
+    public static readonly AttachedProperty<string> KindProperty =
+        AvaloniaProperty.RegisterAttached<PurrimerMotionScope, AvaloniaObject, string>("Kind", "", inherits: true);
+
+    public static readonly AttachedProperty<bool> ReduceProperty =
+        AvaloniaProperty.RegisterAttached<PurrimerMotionScope, AvaloniaObject, bool>("Reduce", inherits: true);
+
+    private PurrimerMotionScope()
+    {
+    }
+
+    public static string GetKind(AvaloniaObject element) => element.GetValue(KindProperty);
+
+    public static void SetKind(AvaloniaObject element, string value) => element.SetValue(KindProperty, value);
+
+    public static bool GetReduce(AvaloniaObject element) => element.GetValue(ReduceProperty);
+
+    public static void SetReduce(AvaloniaObject element, bool value) => element.SetValue(ReduceProperty, value);
+}
+
+// Every channel of one motion frame: the same channels as the web's keyframes.
+public sealed class PurrimerMotionFrame
+{
+{% for ch in motion.rest %}
+    public double {{ ch[0] | upper }}{{ ch[1:] }} = {{ motion.rest[ch] | num }};
+{% endfor %}
+
+    public static PurrimerMotionFrame Rest => new();
+
+    public bool AtRest =>
+{% for ch in motion.rest %}
+        Math.Abs({{ ch[0] | upper }}{{ ch[1:] }} - {{ motion.rest[ch] | num }}) < 1e-4{{ ";" if loop.last else " &&" }}
+{% endfor %}
+
+    internal void Set(string channel, double value)
+    {
+        switch (channel)
+        {
+{% for ch in motion.rest %}
+            case "{{ ch }}": {{ ch[0] | upper }}{{ ch[1:] }} = value; break;
+{% endfor %}
+        }
+    }
+}
+
+// One catalog entry for one kind.
+public sealed class PurrimerMotionEntry
+{
+    public string Category { get; init; } = "";
+    public double Duration { get; init; }
+    public string Easing { get; init; } = "";
+    // -1 repeats forever.
+    public int Count { get; init; }
+    public Point Origin { get; init; }
+    // Menus open from their anchor's corner: callers set the origin.
+    public bool MenuOrigin { get; init; }
+    public bool FillBoth { get; init; }
+    public bool Reverse { get; init; }
+    public bool Decorative { get; init; }
+    public double Perspective { get; init; }
+    public double Orbit { get; init; }
+    public IReadOnlyDictionary<string, (double At, double Value, string? Easing)[]> Tracks { get; init; } =
+        new Dictionary<string, (double, double, string?)[]>();
+}
+
+// The motion catalog: the same keyframes as the web's pm-m-* classes, per kind ("reduced" is sleepy under reduced
+// motion: fades only), and the player's maths.
+public static class PurrimerMotionCatalog
+{
+    private const string Data = """
+{{ {"tables": {"sleepy": motion.table(tokens, "sleepy"), "playful": motion.table(tokens, "playful"), "reduced": motion.table(tokens, "reduced")}, "easings": motion.easings(tokens), "stagger": {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": motion.stagger_ms(tokens, "playful"), "reduced": 0}} | tojson }}
+""";
+
+    private static readonly Dictionary<string, Dictionary<string, PurrimerMotionEntry>> Tables = new();
+    private static readonly Dictionary<string, double[]> Curves = new();
+    private static readonly Dictionary<string, double> Staggers = new();
+
+    static PurrimerMotionCatalog()
+    {
+        using var doc = JsonDocument.Parse(Data);
+        foreach (var kind in doc.RootElement.GetProperty("tables").EnumerateObject())
+        {
+            var table = new Dictionary<string, PurrimerMotionEntry>();
+            foreach (var e in kind.Value.EnumerateObject())
+            {
+                var v = e.Value;
+                var tracks = new Dictionary<string, (double, double, string?)[]>();
+                foreach (var t in v.GetProperty("tracks").EnumerateObject())
+                {
+                    var list = new List<(double, double, string?)>();
+                    foreach (var k in t.Value.EnumerateArray())
+                        list.Add((k[0].GetDouble(), k[1].GetDouble(), k[2].ValueKind == JsonValueKind.Null ? null : k[2].GetString()));
+                    tracks[t.Name] = list.ToArray();
+                }
+                var origin = v.GetProperty("origin");
+                table[e.Name] = new PurrimerMotionEntry
+                {
+                    Category = v.GetProperty("cat").GetString()!,
+                    Duration = v.GetProperty("dur").GetDouble(),
+                    Easing = v.GetProperty("ease").GetString()!,
+                    Count = v.GetProperty("count").GetInt32(),
+                    Origin = new Point(origin[0].GetDouble(), origin[1].GetDouble()),
+                    MenuOrigin = v.GetProperty("menuOrigin").GetBoolean(),
+                    FillBoth = v.GetProperty("fill").GetString() == "both",
+                    Reverse = v.GetProperty("reverse").GetBoolean(),
+                    Decorative = v.GetProperty("decorative").GetBoolean(),
+                    Perspective = v.GetProperty("perspective").GetDouble(),
+                    Orbit = v.GetProperty("orbit").GetDouble(),
+                    Tracks = tracks,
+                };
+            }
+            Tables[kind.Name] = table;
+        }
+        foreach (var c in doc.RootElement.GetProperty("easings").EnumerateObject())
+        {
+            var spec = c.Value;
+            var type = spec[0].GetString();
+            if (type == "linear")
+                Curves[c.Name] = Array.Empty<double>();
+            else if (type == "cubic")
+                Curves[c.Name] = new[] { 0.0, spec[1].GetDouble(), spec[2].GetDouble(), spec[3].GetDouble(), spec[4].GetDouble() };
+            else
+            {
+                var pts = new List<double> { 1.0 };
+                foreach (var p in spec[1].EnumerateArray())
+                {
+                    pts.Add(p[0].GetDouble());
+                    pts.Add(p[1].GetDouble());
+                }
+                Curves[c.Name] = pts.ToArray();
+            }
+        }
+        foreach (var s in doc.RootElement.GetProperty("stagger").EnumerateObject())
+            Staggers[s.Name] = s.Value.GetDouble();
+    }
+
+    public static IReadOnlyCollection<string> Names => Tables["sleepy"].Keys;
+
+    public static bool Has(string name) => Tables["sleepy"].ContainsKey(name);
+
+    // kind is an effective kind: "sleepy", "playful" or "still" (sleepy under reduced motion).
+    public static PurrimerMotionEntry Entry(string name, string kind) =>
+        Tables[kind == "still" ? "reduced" : kind == "playful" ? "playful" : "sleepy"][name];
+
+    public static double Stagger(string kind) => Staggers[kind == "still" ? "reduced" : kind == "playful" ? "playful" : "sleepy"];
+
+    public static double CubicBezier(double x1, double y1, double x2, double y2, double x)
+    {
+        if (x <= 0)
+            return 0;
+        if (x >= 1)
+            return 1;
+        double Bx(double t) => ((1 - 3 * x2 + 3 * x1) * t + (3 * x2 - 6 * x1)) * t * t + 3 * x1 * t;
+        double By(double t) => ((1 - 3 * y2 + 3 * y1) * t + (3 * y2 - 6 * y1)) * t * t + 3 * y1 * t;
+        var t = x;
+        for (var i = 0; i < 8; i++)
+        {
+            var err = Bx(t) - x;
+            if (Math.Abs(err) < 1e-6)
+                return By(t);
+            var d = (3 * (1 - 3 * x2 + 3 * x1) * t + 2 * (3 * x2 - 6 * x1)) * t + 3 * x1;
+            if (Math.Abs(d) < 1e-6)
+                break;
+            t -= err / d;
+        }
+        double lo = 0, hi = 1;
+        t = x;
+        for (var i = 0; i < 30; i++)
+        {
+            if (Bx(t) < x)
+                lo = t;
+            else
+                hi = t;
+            t = (lo + hi) / 2;
+        }
+        return By(t);
+    }
+
+    // An easing token's curve at p.
+    public static double Ease(string token, double p)
+    {
+        var c = Curves[token];
+        if (c.Length == 0)
+            return p;
+        if (c[0] == 0)
+            return CubicBezier(c[1], c[2], c[3], c[4], p);
+        if (p <= c[1])
+            return c[2];
+        for (var i = 3; i + 1 < c.Length; i += 2)
+        {
+            if (p <= c[i])
+            {
+                double x0 = c[i - 2], y0 = c[i - 1], x1 = c[i], y1 = c[i + 1];
+                return x1 == x0 ? y1 : y0 + (y1 - y0) * (p - x0) / (x1 - x0);
+            }
+        }
+        return c[^1];
+    }
+
+    private static double TrackAt((double At, double Value, string? Easing)[] track, double p, string fallback)
+    {
+        if (p <= track[0].At)
+            return track[0].Value;
+        for (var i = 1; i < track.Length; i++)
+        {
+            var a = track[i - 1];
+            var b = track[i];
+            if (p <= b.At)
+            {
+                if (b.At == a.At)
+                    return b.Value;
+                return a.Value + (b.Value - a.Value) * Ease(a.Easing ?? fallback, (p - a.At) / (b.At - a.At));
+            }
+        }
+        return track[^1].Value;
+    }
+
+    // Every channel of `name` at `progress` (0 to 1) of one iteration.
+    public static PurrimerMotionFrame Sample(string name, string kind, double progress, string? easing = null)
+    {
+        var e = Entry(name, kind);
+        var p = e.Reverse ? 1 - progress : progress;
+        var fallback = easing ?? e.Easing;
+        var f = new PurrimerMotionFrame();
+        foreach (var (ch, track) in e.Tracks)
+        {
+            var v = TrackAt(track, p, fallback);
+            if (ch is "opacity" or "ringO" or "wash" or "draw")
+                v = Math.Clamp(v, 0, 1);
+            else if (ch == "blur")
+                v = Math.Max(0, v);
+            f.Set(ch, v);
+        }
+        if (e.Tracks.ContainsKey("orbit"))
+        {
+            var a = f.Orbit * Math.PI / 180;
+            f.Tx += e.Orbit * Math.Cos(a);
+            f.Ty += e.Orbit * Math.Sin(a);
+        }
+        return f;
+    }
+
+    // The frame's CSS transform (translate, rotate, rotateX in perspective, rotateY, scale, skewX) about the origin
+    // (fractions of the size), in the control's coordinates. Use with RenderTransformOrigin at the top-left.
+    public static Matrix ToMatrix(PurrimerMotionFrame f, Size size, Point origin, double perspective = 0)
+    {
+        double ox = origin.X * size.Width, oy = origin.Y * size.Height;
+        // Built with column vectors, then transposed into Avalonia's row-vector Matrix.
+        var m = Mul(new[] { 1, 0, ox + f.Tx + f.Txp * size.Width, 0, 1, oy + f.Ty + f.Typ * size.Height, 0, 0, 1.0 },
+            Rot(f.Rot));
+        if (f.RotX != 0)
+        {
+            var a = f.RotX * Math.PI / 180;
+            m = Mul(m, new[] { 1, 0, 0, 0, Math.Cos(a), 0, 0, -Math.Sin(a) / (perspective == 0 ? 1e9 : perspective), 1 });
+        }
+        var sx = f.Sx * Math.Cos(f.RotY * Math.PI / 180);
+        m = Mul(m, new[] { sx, 0, 0, 0, f.Sy, 0, 0, 0, 1.0 });
+        if (f.Skew != 0)
+            m = Mul(m, new[] { 1, Math.Tan(f.Skew * Math.PI / 180), 0, 0, 1, 0, 0, 0, 1.0 });
+        m = Mul(m, new[] { 1, 0, -ox, 0, 1, -oy, 0, 0, 1.0 });
+        return new Matrix(m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]);
+    }
+
+    private static double[] Rot(double deg)
+    {
+        var r = deg * Math.PI / 180;
+        return new[] { Math.Cos(r), -Math.Sin(r), 0, Math.Sin(r), Math.Cos(r), 0, 0, 0, 1.0 };
+    }
+
+    private static double[] Mul(double[] a, double[] b)
+    {
+        var o = new double[9];
+        for (var r = 0; r < 3; r++)
+            for (var c = 0; c < 3; c++)
+                o[r * 3 + c] = a[r * 3] * b[c] + a[r * 3 + 1] * b[3 + c] + a[r * 3 + 2] * b[6 + c];
+        return o;
+    }
+}
+
+// Plays one catalog animation over time. Frame fires with every channel's value; Done fires when a finite animation
+// ends. While PurrimerMotion.PauseLoops is on (screenshot runs), frames stay at rest and finite animations end at
+// once, as the web does with animations off.
+public sealed class PurrimerMotionPlayer
+{
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _duration;
+    private double _delay;
+    private int _count = 1;
+    private string? _easing;
+    private bool _alternate;
+
+    public PurrimerMotionPlayer()
+    {
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Tick());
+    }
+
+    public string Name { get; private set; } = "";
+    // An effective kind: "sleepy", "playful" or "still".
+    public string Kind { get; private set; } = "sleepy";
+    public PurrimerMotionFrame Current { get; private set; } = PurrimerMotionFrame.Rest;
+    public bool Running => _timer.IsEnabled;
+    public PurrimerMotionEntry? Entry => Name.Length > 0 ? PurrimerMotionCatalog.Entry(Name, Kind) : null;
+
+    public event Action<PurrimerMotionFrame>? Frame;
+    public event Action? Done;
+
+    // duration and delay in ms; easing is an easing token; index staggers by the kind's stagger token.
+    public void Play(string name, string kind, double? duration = null, double delay = 0, string? easing = null,
+        int index = 0, bool loop = false, int? count = null, bool alternate = false, bool paused = false)
+    {
+        if (!PurrimerMotionCatalog.Has(name))
+            throw new ArgumentException($"Unknown motion: {name}", nameof(name));
+        _timer.Stop();
+        Name = name;
+        Kind = kind;
+        var e = PurrimerMotionCatalog.Entry(name, kind);
+        _duration = duration ?? e.Duration;
+        _delay = delay + index * PurrimerMotionCatalog.Stagger(kind);
+        _count = loop ? -1 : count ?? e.Count;
+        _easing = easing;
+        _alternate = alternate;
+        if (PurrimerMotion.PauseLoops)
+        {
+            Emit(PurrimerMotionFrame.Rest);
+            if (_count >= 0)
+                Done?.Invoke();
+            return;
+        }
+        // Decorative loops stop under reduced motion, resting on their first frame.
+        if (kind == "still" && (e.Decorative || _count < 0))
+        {
+            Emit(PurrimerMotionCatalog.Sample(name, kind, 0, easing));
+            return;
+        }
+        Emit(e.FillBoth ? PurrimerMotionCatalog.Sample(name, kind, 0, easing) : PurrimerMotionFrame.Rest);
+        if (paused)
+            return;
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    public void Stop() => _timer.Stop();
+
+    public void Reset()
+    {
+        _timer.Stop();
+        Emit(PurrimerMotionFrame.Rest);
+    }
+
+    private void Emit(PurrimerMotionFrame f)
+    {
+        Current = f;
+        Frame?.Invoke(f);
+    }
+
+    private void Tick()
+    {
+        var t = _clock.Elapsed.TotalMilliseconds - _delay;
+        if (t < 0)
+            return;
+        var dur = Math.Max(_duration, 1);
+        var iteration = (int)Math.Floor(t / dur);
+        if (_count >= 0 && iteration >= _count)
+        {
+            _timer.Stop();
+            var last = _alternate && (_count - 1) % 2 == 1;
+            Emit(Entry!.FillBoth ? PurrimerMotionCatalog.Sample(Name, Kind, last ? 0 : 1, _easing) : PurrimerMotionFrame.Rest);
+            Done?.Invoke();
+            return;
+        }
+        var p = (t - iteration * dur) / dur;
+        if (_alternate && iteration % 2 == 1)
+            p = 1 - p;
+        Emit(PurrimerMotionCatalog.Sample(Name, Kind, p, _easing));
     }
 }

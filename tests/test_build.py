@@ -44,7 +44,7 @@ def test_component_files_for_every_target(built: Path, name: str) -> None:
 
 def test_generated_files_carry_the_note(built: Path) -> None:
     for path in built.rglob("*"):
-        if path.suffix in {".css", ".ts", ".tsx", ".svelte", ".py", ".qml", ".axaml", ".cs", ".slint", ".qss"}:
+        if path.suffix in {".css", ".ts", ".tsx", ".svelte", ".py", ".qml", ".js", ".axaml", ".cs", ".slint", ".qss"}:
             assert GENERATED_NOTE in path.read_text(encoding="utf-8"), path
 
 

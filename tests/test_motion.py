@@ -102,3 +102,19 @@ def test_reduced_motion_only_fades(catalog: Catalog, tokens: Tokens) -> None:
         s = sample(reduced, easings, name, 0)
         assert (s["tx"], s["ty"], s["rot"], s["sx"], s["blur"]) == (0, 0, 0, 1, 0), name
         assert reduced[name]["dur"] == 200
+
+
+def test_native_targets_carry_the_catalog(built: Path, catalog: Catalog) -> None:
+    files = {
+        "qtwidgets/purrimer_qt/motion.py": "CATALOG = {",
+        "qtquick/Purrimer/PmMotion.js": "var CATALOG = {",
+        "avalonia/Purrimer/PurrimerThemes.cs": "public static class PurrimerMotionCatalog",
+        "slint/motion.slint": "export global PmMotionCatalog",
+    }
+    for rel, marker in files.items():
+        text = (built / rel).read_text(encoding="utf-8")
+        assert marker in text, rel
+        for name in catalog.anims:
+            assert f'"{name}"' in text or f"'{name}'" in text, (rel, name)
+    assert "PmMotionPlayer 1.0 PmMotionPlayer.qml" in (built / "qtquick/Purrimer/qmldir").read_text(encoding="utf-8")
+    assert "PmMotionCatalog" in (built / "slint/purrimer-components.slint").read_text(encoding="utf-8")

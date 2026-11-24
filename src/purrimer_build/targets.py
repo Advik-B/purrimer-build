@@ -9,6 +9,7 @@ import sys
 from .components import Component
 from .engine import GENERATED_NOTE, Build, checked
 from .model import DARK_THEMES
+from .motion import slint_source
 from .naming import camel, kebab, num, pascal, snake
 
 ALL_TARGETS = ("css", "svelte", "solid", "qtwidgets", "qtquick", "avalonia", "slint")
@@ -229,6 +230,8 @@ def build_qtquick(build: Build) -> None:
     build.render(env, "t/styles/qtquick/Purrimer.qml.j2", f"{mod}/Purrimer.qml", fonts=build.static_fonts)
     build.render(env, "t/styles/qtquick/Octicons.qml.j2", f"{mod}/Octicons.qml", icons=build.icons)
     build.render(env, "t/styles/qtquick/PmSpring.qml.j2", f"{mod}/PmSpring.qml")
+    build.render(env, "t/styles/qtquick/PmMotion.js.j2", f"{mod}/PmMotion.js")
+    build.render(env, "t/styles/qtquick/PmMotionPlayer.qml.j2", f"{mod}/PmMotionPlayer.qml")
     done = []
     for comp in build.components:
         if comp.has("qml"):
@@ -324,6 +327,11 @@ def build_slint(build: Build) -> None:
     _copy_ttf(build, "slint/fonts")
     build.render(env, "t/styles/slint/purrimer.slint.j2", "slint/purrimer.slint", fonts=build.static_fonts)
     build.render(env, "t/styles/slint/icons.slint.j2", "slint/icons.slint", icons=build.icons)
+    build.write(
+        "slint/motion.slint",
+        f"// {GENERATED_NOTE}\n// The motion catalog: the same keyframes as the web's pm-m-* classes.\n\n"
+        + slint_source(build.motion, t),
+    )
     done = []
     for comp in build.components:
         if comp.has("slint"):

@@ -328,6 +328,10 @@ class Catalog:
                     raise ValueError(f"{anim.name}: uses {anim.source(kind)!r}, which has no keyframes of its own")
         return cls(raw["kinds"], anims)
 
+    @property
+    def rest(self) -> dict[str, float]:
+        return dict(REST)
+
     def params(self, kind: str) -> dict:
         return {k: v for k, v in self.kinds[kind].items() if not isinstance(v, dict)}
 
@@ -427,7 +431,7 @@ class Catalog:
         out.append(("pm-m-dots-dur", f"{num(round(ms['loop'] * (0.7 if kind == 'playful' else 0.45), 3))}ms"))
         out += [(f"pm-m-{slot}", f"var(--{k['easings'][slot]})") for slot in EASE_SLOTS]
         units = {"dist": "px", "far": "px", "lift": "px", "blur": "px", "rot": "deg", "spin": "deg"}
-        for p in ("dist", "far", "scale", "peak", "rot", "spin", "blur", "sx", "sy", "amp", "n", "lift", "breath", "ring"):
+        for p in "dist far scale peak rot spin blur sx sy amp n lift breath ring".split():
             out.append((f"pm-m-{p}", f"{num(k[p])}{units.get(p, '')}"))
         out.append(("pm-m-press-scale", num(k["press"])))
         out.append(("pm-m-control-press", num(k["control"])))
@@ -550,10 +554,7 @@ def _css_group(anim: Anim, group: str, vals: dict[str, str], used: set[str]) -> 
         return f"clip-path: inset(-64px -64px {bottom} -64px);"
     if group == "halo":
         spread = css_value(vals["halo"], "px")
-        return (
-            "box-shadow: var(--pm-m-shadow, 0 0 0 0 rgba(0, 0, 0, 0)), "
-            f"0 0 0 {spread} var(--bgColor-accent-muted);"
-        )
+        return f"box-shadow: var(--pm-m-shadow, 0 0 0 0 rgba(0, 0, 0, 0)), 0 0 0 {spread} var(--bgColor-accent-muted);"
     if group == "wash":
         w = float(evaluate(parse_expr(vals["wash"]), {}))
         color = "var(--pm-m-flash, var(--bgColor-attention-muted))"
@@ -600,6 +601,142 @@ def _css_transform(anim: Anim, vals: dict[str, str], used: set[str]) -> str:
     if "skew" in used:
         parts.append(f"skewX({v('skew', 'deg')})")
     return " ".join(parts) or "none"
+
+
+SLINT_FIELDS = {ch: re.sub(r"([A-Z])", lambda m: "-" + m.group(1).lower(), ch) for ch in REST}
+SLINT_KINDS = {"sleepy": 0, "playful": 1, "reduced": 2}
+
+
+def _sf(v: float) -> str:
+    text = num(round(v, 6))
+    return text if "." in text or "e" in text else text + ".0"
+
+
+def slint_source(catalog: Catalog, tokens: Tokens) -> str:
+    """The catalog for Slint, which has no loops or dynamic data: one pure sample() with every track written out as
+    a piecewise expression, per animation and kind (0 sleepy, 1 playful, 2 reduced)."""
+    easings = catalog.easings(tokens)
+    out: list[str] = []
+    w = out.append
+    fields = ", ".join(f"{f}: float" for f in SLINT_FIELDS.values())
+    w(f"export struct PmMotionFrame {{ {fields} }}")
+    w(
+        "export struct PmMotionEntry { dur: duration, count: int, origin-x: float, origin-y: float, menu-origin: bool,"
+        " fill-both: bool, reverse: bool, decorative: bool, perspective: float, ease: string }"
+    )
+    w("")
+    w("export global PmMotionCatalog {")
+    w("    // One Newton step towards the curve parameter whose x is `x`.")
+    w("    pure function newton(ax: float, bx: float, cx: float, x: float, t: float) -> float {")
+    w("        let d = (3 * ax * t + 2 * bx) * t + cx;")
+    w("        let err = ((ax * t + bx) * t + cx) * t - x;")
+    w("        return Math.abs(d) < 0.000001 ? t : Math.clamp(t - err / d, 0, 1);")
+    w("    }")
+    w("")
+    w("    public pure function cubic-bezier(x1: float, y1: float, x2: float, y2: float, x: float) -> float {")
+    w("        if x <= 0 { return 0; }")
+    w("        if x >= 1 { return 1; }")
+    w("        let ax = 1 - 3 * x2 + 3 * x1;")
+    w("        let bx = 3 * x2 - 6 * x1;")
+    w("        let cx = 3 * x1;")
+    prev = "x"
+    for i in range(1, 9):
+        w(f"        let t{i} = self.newton(ax, bx, cx, x, {prev});")
+        prev = f"t{i}"
+    w("        return ((1 - 3 * y2 + 3 * y1) * t8 + (3 * y2 - 6 * y1)) * t8 * t8 + 3 * y1 * t8;")
+    w("    }")
+    w("")
+    w("    // An easing token's curve at p.")
+    w("    public pure function ease(token: string, p: float) -> float {")
+    for name, spec in easings.items():
+        if spec[0] == "linear":
+            expr = "p"
+        elif spec[0] == "cubic":
+            expr = "self.cubic-bezier(%s, p)" % ", ".join(_sf(v) for v in spec[1:])
+        else:
+            pts = spec[1]
+            expr = _sf(pts[-1][1])
+            for (x0, y0), (x1, y1) in reversed(list(zip(pts, pts[1:], strict=False))):
+                if x1 == x0:
+                    continue
+                seg = f"{_sf(y0)} + {_sf(y1 - y0)} * (p - {_sf(x0)}) / {_sf(x1 - x0)}"
+                expr = f"p <= {_sf(x1)} ? {seg} : {expr}"
+            expr = f"p <= {_sf(pts[0][0])} ? {_sf(pts[0][1])} : {expr}"
+        w(f'        if token == "{name}" {{ return {expr}; }}')
+    w("        return p;")
+    w("    }")
+    w("")
+    w("    public pure function has(name: string) -> bool {")
+    names = " || ".join(f'name == "{n}"' for n in catalog.anims)
+    w(f"        return {names};")
+    w("    }")
+    w("")
+    tables = {k: catalog.table(tokens, k) for k in KINDS}
+    w("    public pure function entry(name: string, kind: int) -> PmMotionEntry {")
+    for name in catalog.anims:
+        rows = []
+        for kind in KINDS:
+            e = tables[kind][name]
+            ox, oy = e["origin"]
+            rows.append(
+                f"{{ dur: {num(round(e['dur'], 3))}ms, count: {e['count']}, origin-x: {_sf(ox)}, origin-y: {_sf(oy)},"
+                f" menu-origin: {str(e['menuOrigin']).lower()}, fill-both: {str(e['fill'] == 'both').lower()},"
+                f" reverse: {str(e['reverse']).lower()}, decorative: {str(e['decorative']).lower()},"
+                f' perspective: {_sf(e["perspective"])}, ease: "{e["ease"]}" }}'
+            )
+        w(f'        if name == "{name}" {{ return kind == 1 ? {rows[1]} : kind == 2 ? {rows[2]} : {rows[0]}; }}')
+    w('        return { dur: 1ms, count: 1, origin-x: 0.5, origin-y: 0.5, fill-both: true, ease: "easing-linear" };')
+    w("    }")
+    w("")
+    w("    // Every channel of `name` at `progress` (0 to 1) of one iteration. `easing` overrides the animation's own")
+    w('    // curve ("" keeps it).')
+    w("    public pure function sample(name: string, kind: int, progress: float, easing: string) -> PmMotionFrame {")
+    for name in catalog.anims:
+        w(f'        if name == "{name}" {{')
+        for kind in ("playful", "reduced", "sleepy"):
+            e = tables[kind][name]
+            p = "(1 - progress)" if e["reverse"] else "progress"
+            d = f'(easing == "" ? "{e["ease"]}" : easing)'
+            values = {ch: _sf(REST[ch]) for ch in REST}
+            for ch, track in e["tracks"].items():
+                expr = _sf(track[-1][1])
+                for (t0, v0, e0), (t1, v1, _e1) in reversed(list(zip(track, track[1:], strict=False))):
+                    if t1 == t0:
+                        continue
+                    curve = f'"{e0}"' if e0 else d
+                    local = f"({p} - {_sf(t0)}) / {_sf(t1 - t0)}" if t0 else f"{p} / {_sf(t1 - t0)}"
+                    seg = _sf(v0) if v0 == v1 else f"{_sf(v0)} + {_sf(v1 - v0)} * self.ease({curve}, {local})"
+                    expr = seg if expr == seg else f"{p} <= {_sf(t1)} ? {seg} : {expr}"
+                expr = f"{p} <= {_sf(track[0][0])} ? {_sf(track[0][1])} : {expr}" if track[0][0] > 0 else expr
+                if ch in CLAMPED:
+                    expr = f"Math.clamp({expr}, 0, 1)"
+                elif ch in NON_NEGATIVE:
+                    expr = f"Math.max({expr}, 0)"
+                values[ch] = expr
+            if "orbit" in e["tracks"]:
+                a = f"({values['orbit']}) * 1deg"
+                values["tx"] = f"{_sf(e['orbit'])} * Math.cos({a})"
+                values["ty"] = f"{_sf(e['orbit'])} * Math.sin({a})"
+            literal = ", ".join(f"{SLINT_FIELDS[ch]}: {v}" for ch, v in values.items())
+            cond = {"playful": "kind == 1", "reduced": "kind == 2", "sleepy": None}[kind]
+            if cond:
+                w(f"            if {cond} {{ return {{ {literal} }}; }}")
+            else:
+                w(f"            return {{ {literal} }};")
+        w("        }")
+    rest = ", ".join(f"{SLINT_FIELDS[ch]}: {_sf(v)}" for ch, v in REST.items())
+    w(f"        return {{ {rest} }};")
+    w("    }")
+    w("")
+    stagger = {k: catalog.stagger_ms(tokens, k) for k in KINDS}
+    w("    public pure function stagger(kind: int) -> duration {")
+    w(
+        f"        return kind == 1 ? {num(stagger['playful'])}ms : kind == 2 ? {num(stagger['reduced'])}ms"
+        f" : {num(stagger['sleepy'])}ms;"
+    )
+    w("    }")
+    w("}")
+    return "\n".join(out) + "\n"
 
 
 def _token_ms(tokens: Tokens, src) -> float:
