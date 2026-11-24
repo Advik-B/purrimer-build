@@ -16,7 +16,9 @@ def example() -> QWidget:
     for title, tone in SLIDES:
         slide = QLabel(title)
         slide.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignBottom)
-        slide.setStyleSheet(f"background: {theme.color(tone).name()}; padding: 16px; font-size: 16px;")
+        slide.setIndent(0)
+        background = theme.color(tone).name()
+        slide.setStyleSheet(theme.text_css("text-body-large") + f"background: {background}; padding: 16px;")
         carousel.add_slide(slide)
     carousel.changed.connect(lambda index: print("slide", index))
     return carousel
