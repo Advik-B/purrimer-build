@@ -2,12 +2,13 @@ import QtQuick
 import Purrimer
 
 Item {
-    width: 358
-    height: 308
+    width: 390
+    height: 340
 
     Row {
-        x: 16
-        width: parent.width - 20
+        x: 32
+        y: 16
+        width: parent.width - 52
         Text {
             width: parent.width - info.width
             anchors.verticalCenter: parent.verticalCenter

@@ -2,7 +2,7 @@
   import { InfoButton } from "$lib/purrimer";
 </script>
 
-<div class="text-body-medium" style="display: flex; align-items: center; padding: 0 4px 0 16px">
+<div class="text-body-medium" style="display: flex; align-items: center; padding: 16px 20px 0 32px">
   <span style="flex: 1">Estimated delivery: Tue 14 Jan</span>
   <InfoButton
     defaultOpen

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QVBoxLayout, QWidget
 def example() -> QWidget:
     screen = QWidget()
     column = QVBoxLayout(screen)
-    column.setContentsMargins(16, 0, 4, 0)
+    column.setContentsMargins(32, 16, 20, 0)
     row = QHBoxLayout()
     row.addWidget(QLabel("Estimated delivery: Tue 14 Jan"), 1)
     row.addWidget(
