@@ -642,10 +642,7 @@ class Slider(QWidget):
         self.touch.released.connect(self.sliderReleased)
         self.bar.hide()
         self._layout.addWidget(self.touch)
-        font = theme.font({{ "text-body-medium" | tok }})
-        font.setPixelSize(16)
-        font.setBold(True)
-        self.label.setFont(font)
+        self.label.setStyleSheet(theme.text_css({{ "text-body-medium" | tok }}) + "font-size: 16px; font-weight: 600;")
         # The touch head is a 24px line, as on the web.
         self.label.setFixedHeight(24)
         self._show_touch_value()
