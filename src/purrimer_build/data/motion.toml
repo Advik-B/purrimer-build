@@ -1,0 +1,803 @@
+# The Purrimer motion catalog, transcribed from the design system's animations.md and bundle.css.
+#
+# One source for every target: purrimer-build writes the CSS @keyframes and .pm-m-* classes from it, and the native
+# targets get per-kind tables of the same keyframes, so a rise is the same curve everywhere.
+#
+# Values are expressions over the kind parameters below (dist, far, scale, peak, rot, spin, blur, sx, sy, amp, n,
+# breath, ring). Channels:
+#   opacity                      0 to 1
+#   tx, ty                       px            txp, typ   fraction of the element's own width or height
+#   rot, skew, rotX, rotY        degrees       sx, sy     scale (s sets both)
+#   blur, halo                   px            reveal     clip opening from the top: 0 closed, 1 open
+#   wash                         0 to 1 of the flash colour behind the element
+#   ringS, ringO                 the meow ring's scale and opacity
+#   draw                         stroke drawn, 0 to 1
+#   orbit                        degrees around the element's centre at `orbit` px (moth)
+# A frame with `none = true` puts every transform channel at rest. Within one frame, transform channels left out are
+# at rest too, as in CSS. `ease` on a frame sets the curve of the segment that starts there.
+#
+# Durations name a slot (short, medium, long, exit, attn, loop, loopLong, spin) with an optional factor; easings name
+# a slot (enter, big, leave, move, wave, pop, fall) or a fixed curve (linear, drift).
+
+[kinds.sleepy]
+dist = 8
+far = 24
+scale = 0.96
+peak = 1.03
+rot = 2
+spin = 60
+blur = 6
+sx = 1
+sy = 1
+amp = 1
+n = 1
+lift = 1
+breath = 1.015
+ring = 1.3
+press = 0.985
+control = 1
+stretch = 1
+durations = { short = "duration-sleepy-short", medium = "duration-sleepy-medium", long = "duration-sleepy-long", exit = "duration-sleepy-exit", attn = "duration-sleepy-attention", loop = "duration-sleepy-loop", loopLong = "duration-sleepy-loop-long", stagger = "duration-sleepy-stagger", press = "duration-fast", spin = "duration-sleepy-loop * 0.4" }
+easings = { enter = "easing-sleepy-enter", big = "easing-sleepy-enter", leave = "easing-sleepy-exit", move = "easing-sleepy-move", wave = "easing-sleepy-drift", pop = "easing-sleepy-enter", fall = "easing-sleepy-enter" }
+
+[kinds.playful]
+dist = 18
+far = 56
+scale = 0.5
+peak = 1.14
+rot = 9
+spin = 360
+blur = 0
+sx = 1.2
+sy = 0.8
+amp = 2.5
+n = 2
+lift = 4
+breath = 1.05
+ring = 1.7
+press = 0.94
+control = 0.95
+stretch = 1.2
+durations = { short = "duration-playful-short", medium = "duration-playful-medium", long = "duration-playful-long", exit = "duration-playful-exit", attn = "duration-playful-attention", loop = "duration-playful-loop", loopLong = "duration-playful-loop-long", stagger = "duration-playful-stagger", press = "duration-playful-press", spin = "duration-playful-loop * 0.6" }
+easings = { enter = "easing-playful-spring", big = "easing-playful-bounce", leave = "easing-playful-exit", move = "easing-playful-spring", wave = "easing-playful-snap", pop = "easing-playful-pop", fall = "easing-playful-fall" }
+
+# Reduced motion: sleepy with every travel, scale, rotation and blur at zero, and entrances and exits as quick fades.
+# Playful under reduced motion is plain sleepy.
+[kinds.reduced]
+dist = 0
+far = 0
+scale = 1
+peak = 1
+rot = 0
+spin = 0
+blur = 0
+sx = 1
+sy = 1
+amp = 0
+n = 1
+lift = 0
+breath = 1
+ring = 1
+press = 1
+control = 1
+stretch = 1
+durations = { short = "duration-reduced", medium = "duration-reduced", long = "duration-reduced", exit = "duration-reduced", attn = "duration-sleepy-attention", loop = "duration-sleepy-loop", loopLong = "duration-sleepy-loop-long", stagger = 0, press = "duration-fast", spin = "duration-sleepy-loop * 0.4" }
+easings = { enter = "easing-sleepy-enter", big = "easing-sleepy-enter", leave = "easing-sleepy-exit", move = "easing-sleepy-move", wave = "easing-sleepy-drift", pop = "easing-sleepy-enter", fall = "easing-sleepy-enter" }
+
+# Enter: play on insertion and hold the end state.
+
+[anim.wake]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", blur = "blur" },
+  { at = [1], opacity = "1", blur = "0" },
+]
+
+[anim.rise]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", ty = "dist", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.hop-down]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", ty = "dist * -1", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.slink-left]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", tx = "far * -1", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.slink-right]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", tx = "far", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.pounce]
+cat = "enter"
+ease = "big"
+frames = [
+  { at = [0], opacity = "0", s = "scale" },
+  { at = [0.3], opacity = "1" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.land]
+cat = "enter"
+dur = "long"
+ease = "linear"
+origin = [0.5, 1]
+frames = [
+  { at = [0], opacity = "0", ty = "far * -1", ease = "fall" },
+  { at = [0.45], opacity = "1", ty = "0", sx = "sx", sy = "sy", ease = "wave" },
+  { at = [0.65], ty = "dist * -0.25 * (amp - 1)", sx = "sy", sy = "sx", ease = "wave" },
+  { at = [0.82], ty = "0", sx = "(sx + 1) / 2", sy = "(sy + 1) / 2", ease = "wave" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.uncurl]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", rot = "rot * -2", s = "scale", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.roll-over]
+cat = "enter"
+perspective = 600
+frames = [
+  { at = [0], opacity = "0", rotX = "rot * -7", blur = "blur" },
+  { at = [1], opacity = "1", rotX = "0", blur = "0" },
+]
+
+[anim.unfurl]
+cat = "enter"
+frames = [
+  { at = [0], opacity = "0", reveal = "0", ty = "dist * -0.5" },
+  { at = [0.2], opacity = "1" },
+  { at = [1], opacity = "1", reveal = "1", none = true },
+]
+
+[anim.peek]
+cat = "enter"
+frames = [
+  { at = [0], typ = "1", reveal = "0" },
+  { at = [1], none = true, reveal = "1" },
+]
+
+[anim.open-eyes]
+cat = "enter"
+dur = "short"
+frames = [
+  { at = [0], opacity = "0", sy = "0.05" },
+  { at = [0.4], opacity = "1" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.emerge]
+cat = "enter"
+dur = "long"
+frames = [
+  { at = [0], opacity = "0", s = "1.04", blur = "blur * 2 + 2" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.tumble]
+cat = "enter"
+dur = "long"
+frames = [
+  { at = [0], opacity = "0", tx = "far * -1.5", rot = "spin * -1" },
+  { at = [0.3], opacity = "1" },
+  { at = [1], opacity = "1", none = true },
+]
+
+# Exit: shorter than entrances, and they hold their end state.
+
+[anim.doze]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", blur = "0" },
+  { at = [1], opacity = "0", blur = "blur" },
+]
+
+[anim.lie-down]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", ty = "dist" },
+]
+
+[anim.hop-up]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", ty = "dist * -1" },
+]
+
+[anim.slink-out-left]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", tx = "far * -1" },
+]
+
+[anim.slink-out-right]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", tx = "far" },
+]
+
+[anim.tuck]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", s = "scale" },
+]
+
+[anim.curl-up]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [1], opacity = "0", rot = "rot * 2", s = "scale" },
+]
+
+[anim.furl]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], reveal = "1", none = true },
+  { at = [0.8], opacity = "1" },
+  { at = [1], opacity = "0", reveal = "0", ty = "dist * -0.5" },
+]
+
+[anim.duck]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], none = true, reveal = "1" },
+  { at = [1], typ = "1", reveal = "0" },
+]
+
+[anim.close-eyes]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true },
+  { at = [0.6], opacity = "1" },
+  { at = [1], opacity = "0", sy = "0.05" },
+]
+
+[anim.slip-away]
+cat = "exit"
+dur = "exit"
+ease = "leave"
+frames = [
+  { at = [0], opacity = "1", none = true, blur = "0" },
+  { at = [1], opacity = "0", s = "0.98", blur = "blur * 2 + 2" },
+]
+
+[anim.scamper]
+cat = "exit"
+dur = "exit * 1.6"
+ease = "linear"
+frames = [
+  { at = [0], opacity = "1", none = true, ease = "wave" },
+  { at = [0.3], opacity = "1", ty = "dist * -0.6", rot = "rot * -0.5", ease = "leave" },
+  { at = [1], opacity = "0", tx = "far * 3", rot = "rot" },
+]
+
+# Attention: start and end at rest. Sleepy plays once; playful plays twice where it says n.
+
+[anim.ear-twitch]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+count = "n"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 0.4, 1], none = true },
+  { at = [0.1], rot = "rot" },
+  { at = [0.2], rot = "rot * -0.6" },
+  { at = [0.3], rot = "rot * 0.3" },
+]
+
+[anim.tail-swish]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+count = "n"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.25], rot = "rot * 1.5" },
+  { at = [0.75], rot = "rot * -1.5" },
+]
+
+[anim.head-tilt]
+cat = "attention"
+dur = "attn * 1.4"
+ease = "wave"
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.25, 0.7], rot = "rot * -2" },
+]
+
+[anim.paw-tap]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+count = "n"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 0.3, 0.6, 1], none = true },
+  { at = [0.15, 0.45], ty = "dist * 0.25", sx = "sx", sy = "sy" },
+]
+
+[anim.perk-up]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.35], ty = "dist * -0.4", s = "peak" },
+  { at = [0.6], ty = "dist * 0.05 * amp", s = "1 - (peak - 1) * 0.3" },
+]
+
+[anim.slow-blink]
+cat = "attention"
+dur = "attn * 1.5"
+ease = "wave"
+frames = [
+  { at = [0, 0.45, 1], opacity = "1" },
+  { at = [0.22, 0.68], opacity = "0.35" },
+]
+
+[anim.hiss]
+cat = "attention"
+dur = "attn * 0.7"
+ease = "wave"
+frames = [
+  { at = [0, 0.7, 1], none = true },
+  { at = [0.1, 0.5], tx = "dist * -0.3" },
+  { at = [0.2, 0.4], tx = "dist * 0.3" },
+  { at = [0.3], tx = "dist * -0.3" },
+  { at = [0.6], tx = "dist * 0.1" },
+]
+
+[anim.startle]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 0.7, 1], none = true },
+  { at = [0.2], ty = "dist * -1", sx = "sy", sy = "sx" },
+  { at = [0.42], ty = "0", sx = "sx", sy = "sy" },
+  { at = [0.56], ty = "dist * -0.15" },
+]
+
+[anim.purr]
+cat = "attention"
+dur = "attn"
+ease = "linear"
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.1, 0.3, 0.5, 0.7, 0.9], tx = "amp * 0.6", rot = "amp * 0.4" },
+  { at = [0.2, 0.4, 0.6, 0.8], tx = "amp * -0.6", rot = "amp * -0.4" },
+]
+
+[anim.knead]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+count = "n"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 0.5, 1], none = true },
+  { at = [0.25], sy = "1 - 0.03 * amp", skew = "rot * 0.6" },
+  { at = [0.75], sy = "1 - 0.03 * amp", skew = "rot * -0.6" },
+]
+
+[anim.bask]
+cat = "attention"
+dur = "attn * 1.5"
+ease = "wave"
+count = "n"
+frames = [
+  { at = [0.5], halo = "3 * amp + 1" },
+]
+
+# The ring is drawn by the element's ::after on the web; the element itself holds still.
+[anim.meow]
+cat = "attention"
+dur = "attn * 1.2"
+ease = "leave"
+count = "n"
+css = "manual"
+frames = [
+  { at = [0], ringS = "1", ringO = "0.9" },
+  { at = [1], ringS = "ring", ringO = "0" },
+]
+
+[anim.bat]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+frames = [
+  { at = [0, 0.75, 1], none = true },
+  { at = [0.15], tx = "dist * -0.8", rot = "rot * -1" },
+  { at = [0.3], tx = "dist * 0.64", rot = "rot * 0.6" },
+  { at = [0.45], tx = "dist * -0.4", rot = "rot * -0.4" },
+  { at = [0.6], tx = "dist * 0.24", rot = "rot * 0.2" },
+]
+
+[anim.pre-pounce]
+cat = "attention"
+dur = "attn"
+ease = "wave"
+origin = [0.5, 1]
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.12], sy = "1 - 0.02 * amp", skew = "rot * -0.8" },
+  { at = [0.24], sy = "1 - 0.02 * amp", skew = "rot * 0.8" },
+  { at = [0.36], sy = "1 - 0.02 * amp", skew = "rot * -0.6" },
+  { at = [0.48], sy = "1 - 0.02 * amp", skew = "rot * 0.6" },
+  { at = [0.62], sy = "1 - 0.05 * amp" },
+  { at = [0.78], ty = "dist * -0.5", sx = "sy", sy = "sx" },
+]
+
+# Feedback
+
+[anim.nod]
+cat = "feedback"
+dur = "medium"
+ease = "wave"
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.3], ty = "dist * 0.3" },
+  { at = [0.6], ty = "dist * -0.15" },
+]
+
+[anim.head-shake]
+cat = "feedback"
+dur = "attn"
+ease = "wave"
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.15], tx = "dist * -0.5", rotY = "rot * -2" },
+  { at = [0.35], tx = "dist * 0.4", rotY = "rot * 1.6" },
+  { at = [0.55], tx = "dist * -0.25", rotY = "rot * -1" },
+  { at = [0.75], tx = "dist * 0.1", rotY = "rot * 0.4" },
+]
+
+# Draws the strokes inside the element (SVG shapes with pathLength="100" on the web).
+[anim.scratch]
+cat = "feedback"
+dur = "long"
+css = "manual"
+frames = [
+  { at = [0], draw = "0" },
+  { at = [1], draw = "1" },
+]
+
+[anim.hop]
+cat = "feedback"
+dur = "short"
+ease = "wave"
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.4], ty = "dist * -0.4", s = "peak" },
+]
+
+[anim.warm-spot]
+cat = "feedback"
+dur = "long * 1.6"
+ease = "wave"
+fill = "none"
+frames = [
+  { at = [0], wash = "1" },
+]
+
+[anim.heartbeat]
+cat = "feedback"
+dur = "loop * 0.5"
+ease = "wave"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 0.3, 1], none = true },
+  { at = [0.12], s = "1 + 0.06 * amp" },
+  { at = [0.2], s = "1 + 0.02 * amp" },
+  { at = [0.26], s = "1 + 0.05 * amp" },
+]
+
+# Ambient: decorative loops that stop under reduced motion.
+
+[anim.breathe]
+cat = "ambient"
+dur = "loop"
+ease = "drift"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.5], s = "breath" },
+]
+
+[anim.daydream]
+cat = "ambient"
+dur = "loop"
+ease = "drift"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.5], ty = "dist * -0.5" },
+]
+
+[anim.meander]
+cat = "ambient"
+dur = "loopLong"
+ease = "drift"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.25], tx = "dist * 0.6", rot = "rot * 0.2" },
+  { at = [0.75], tx = "dist * -0.6", rot = "rot * -0.2" },
+]
+
+[anim.hammock]
+cat = "ambient"
+dur = "loopLong"
+ease = "drift"
+count = "infinite"
+decorative = true
+origin = [0.5, 0]
+frames = [
+  { at = [0, 1], none = true },
+  { at = [0.25], rot = "rot" },
+  { at = [0.75], rot = "rot * -1" },
+]
+
+[anim.firefly]
+cat = "ambient"
+dur = "loop"
+ease = "drift"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 1], opacity = "0.35" },
+  { at = [0.2], opacity = "1" },
+  { at = [0.45], opacity = "0.55" },
+  { at = [0.7], opacity = "0.95" },
+]
+
+[anim.moth]
+cat = "ambient"
+dur = "loopLong"
+ease = "linear"
+count = "infinite"
+decorative = true
+orbit = "dist * 0.75"
+frames = [
+  { at = [0], orbit = "0" },
+  { at = [1], orbit = "360" },
+]
+
+[anim.turn-around]
+cat = "ambient"
+dur = "loopLong"
+ease = "linear"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0], rot = "0" },
+  { at = [1], rot = "360" },
+]
+
+[anim.yarn-roll]
+cat = "ambient"
+dur = "loopLong"
+ease = "drift"
+count = "infinite"
+decorative = true
+frames = [
+  { at = [0, 1], tx = "far * -0.6", rot = "spin * -0.5" },
+  { at = [0.5], tx = "far * 0.6", rot = "spin * 0.5" },
+]
+
+# Loading: keep moving under reduced motion, because they carry information.
+
+# The web keeps its own pm-chase keyframes (rotate, so a transform on the SVG is untouched).
+[anim.chase]
+cat = "loading"
+dur = "spin"
+ease = "linear"
+count = "infinite"
+css = "class"
+frames = [
+  { at = [0], rot = "0" },
+  { at = [1], rot = "360" },
+]
+
+[anim.snore]
+cat = "loading"
+dur = "loop"
+ease = "drift"
+count = "infinite"
+frames = [
+  { at = [0, 1], opacity = "1" },
+  { at = [0.5], opacity = "0.5" },
+]
+
+[anim.prowl]
+cat = "loading"
+dur = "loop * 0.6"
+ease = "move"
+count = "infinite"
+frames = [
+  { at = [0], txp = "-1" },
+  { at = [1], txp = "2.5" },
+]
+
+# Choreography presets: one name per surface, the keyframes chosen by the kind.
+
+[anim.dialog]
+cat = "choreography"
+ease = "big"
+use = { sleepy = "rise", playful = "pounce" }
+
+[anim.dialog-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = { sleepy = "lie-down", playful = "tuck" }
+
+[anim.backdrop]
+cat = "choreography"
+dur = "short"
+frames = [
+  { at = [0], opacity = "0" },
+  { at = [1], opacity = "1" },
+]
+
+[anim.backdrop-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = "backdrop"
+reverse = true
+
+[anim.menu]
+cat = "choreography"
+dur = "short"
+origin = "menu"
+frames = [
+  { at = [0], opacity = "0", ty = "dist * -0.4", s = "(scale + 1) / 2" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.menu-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+origin = "menu"
+use = "menu"
+reverse = true
+
+[anim.toast]
+cat = "choreography"
+use = { sleepy = "rise", playful = "slink-right" }
+
+[anim.toast-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = { sleepy = "doze", playful = "slink-out-right" }
+
+[anim.sheet]
+cat = "choreography"
+ease = "move"
+frames = [
+  { at = [0], txp = "1", tx = "far" },
+  { at = [1], none = true },
+]
+
+[anim.sheet-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = "sheet"
+reverse = true
+
+[anim.page]
+cat = "choreography"
+dur = "long"
+frames = [
+  { at = [0], opacity = "0", ty = "dist * 1.5", blur = "blur" },
+  { at = [1], opacity = "1", none = true, blur = "0" },
+]
+
+[anim.page-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = "doze"
+
+[anim.row]
+cat = "choreography"
+frames = [
+  { at = [0], opacity = "0", ty = "dist * -0.5", s = "(scale + 3) / 4" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.row-out]
+cat = "choreography"
+dur = "exit"
+ease = "leave"
+use = "tuck"
+
+[anim.tab-next]
+cat = "choreography"
+ease = "move"
+frames = [
+  { at = [0], opacity = "0", tx = "dist" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.tab-prev]
+cat = "choreography"
+ease = "move"
+frames = [
+  { at = [0], opacity = "0", tx = "dist * -1" },
+  { at = [1], opacity = "1", none = true },
+]
+
+[anim.success]
+cat = "choreography"
+dur = "attn"
+ease = "wave"
+origin = [0.5, 1]
+use = { sleepy = "nod", playful = "perk-up" }
+
+[anim.error]
+cat = "choreography"
+dur = "attn * 0.7"
+ease = "wave"
+use = "hiss"
+
+[anim.notify]
+cat = "choreography"
+dur = "attn"
+ease = "wave"
+count = "n"
+origin = [0.5, 1]
+use = "ear-twitch"

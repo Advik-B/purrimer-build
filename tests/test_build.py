@@ -92,10 +92,23 @@ def _selectors(css: str) -> list[str]:
     selectors = []
     for prelude in re.findall(r"([^{}]+)\{", css):
         prelude = prelude.strip()
-        if prelude.startswith("@") or re.fullmatch(r"(from|to|\d+%)(\s*,\s*(from|to|\d+%))*", prelude):
+        if prelude.startswith("@") or re.fullmatch(r"(from|to|[\d.]+%)(\s*,\s*(from|to|[\d.]+%))*", prelude):
             continue
-        selectors += [s.strip() for s in prelude.split(",") if s.strip()]
+        selectors += [s.strip() for s in _top_level_commas(prelude) if s.strip()]
     return selectors
+
+
+def _top_level_commas(text: str) -> list[str]:
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(text):
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        elif ch == "," and depth == 0:
+            parts.append(text[start:i])
+            start = i + 1
+    return parts + [text[start:]]
 
 
 def test_classless_css_uses_no_classes(built: Path) -> None:

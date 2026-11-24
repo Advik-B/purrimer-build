@@ -1706,3 +1706,590 @@ export function wireTouchSlider(parts: TouchSliderParts): () => void {
     control.removeEventListener("pointercancel", onCancel);
   };
 }
+
+// The motion catalog. Every name plays as a pm-m-<name> class (see purrimer.css); the native targets play the same
+// keyframes from the same catalog.
+
+export type MotionName = {% for n in motion.anims %}"{{ n }}"{{ " | " if not loop.last }}{% endfor %};
+export type MotionCategory = "enter" | "exit" | "attention" | "feedback" | "ambient" | "loading" | "choreography" | "hover";
+{% for cat in ["enter", "exit", "attention", "feedback", "ambient", "choreography"] %}
+export type {{ cat | pascal }}Motion = {% for a in motion.anims.values() if a.cat == cat %}"{{ a.name }}"{{ " | " if not loop.last }}{% endfor %};
+{% endfor %}
+export type HoverMotion = "lift" | "squish" | "stalk" | "underline" | "chevron" | "highlight";
+
+export const catalog: { name: MotionName | HoverMotion; category: MotionCategory }[] = [
+{% for a in motion.anims.values() %}
+  { name: "{{ a.name }}", category: "{{ a.cat }}" },
+{% endfor %}
+{% for n in ["lift", "squish", "stalk", "underline", "chevron", "highlight"] %}
+  { name: "{{ n }}", category: "hover" },
+{% endfor %}
+];
+
+const CATEGORY = new Map<string, string>(catalog.map((m) => [m.name, m.category]));
+
+// The kind after reduced motion: playful falls back to sleepy, and sleepy to "still" (fades only).
+export type EffectiveKind = MotionKind | "still";
+
+// Reduced motion for an element: the media query, or data-motion-reduce on it or an ancestor (MotionScope reduce).
+export function motionReduced(el: Element | null): boolean {
+  if (reducedMotion()) return true;
+  return !!(el ? el.closest("[data-motion-reduce]") : document.documentElement.hasAttribute("data-motion-reduce"));
+}
+
+export function effectiveKind(el: Element | null, explicit?: MotionKind): EffectiveKind {
+  const kind = explicit ?? motionKind(el);
+  if (!motionReduced(el)) return kind;
+  return kind === "playful" ? "sleepy" : "still";
+}
+
+function msVar(v: number | string | undefined): string | undefined {
+  return v == null ? undefined : typeof v === "number" ? `${v}ms` : v;
+}
+
+// Per-element timing for a pm-m element, as CSS custom properties.
+export interface MotionTiming {
+  duration?: number | string;
+  delay?: number | string;
+  easing?: string;
+  index?: number;
+}
+
+export function motionStyle(t: MotionTiming): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (t.index != null) out["--pm-m-i"] = String(t.index);
+  if (t.delay != null) out["--pm-m-delay"] = msVar(t.delay)!;
+  if (t.duration != null) out["--pm-m-duration"] = msVar(t.duration)!;
+  if (t.easing != null) out["--pm-m-easing"] = t.easing;
+  return out;
+}
+
+export function motionStyleText(t: MotionTiming): string {
+  return Object.entries(motionStyle(t))
+    .map(([k, v]) => `${k}: ${v}`)
+    .join("; ");
+}
+
+// Plays the element's animations again from the start.
+export function restart(el: Element | null): void {
+  if (!el) return;
+  const list = el.getAnimations ? el.getAnimations({ subtree: true }) : [];
+  if (list.length) {
+    for (const a of list) {
+      a.cancel();
+      a.play();
+    }
+    return;
+  }
+  const cls = el.getAttribute("class") ?? "";
+  el.setAttribute("class", "");
+  void (el as HTMLElement).offsetWidth;
+  el.setAttribute("class", cls);
+}
+
+// True when nothing is animating on the element, as when animations are off; callers waiting on animationend
+// finish at once instead of waiting for an event that never comes.
+export function stillOn(el: Element): boolean {
+  return !el.getAnimations || el.getAnimations().every((a) => a.playState !== "running" && !a.pending);
+}
+
+// Calls back with true once the element scrolls into view (and false when it leaves, unless once).
+export function inView(el: Element, cb: (inside: boolean) => void, opts: { once?: boolean; rootMargin?: string; threshold?: number } = {}): () => void {
+  const once = opts.once !== false;
+  if (typeof IntersectionObserver === "undefined") {
+    cb(true);
+    return () => {};
+  }
+  const io = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          cb(true);
+          if (once) io.disconnect();
+        } else if (!once) cb(false);
+      }
+    },
+    { rootMargin: opts.rootMargin ?? "0px 0px -10% 0px", threshold: opts.threshold ?? 0.1 },
+  );
+  io.observe(el);
+  return () => io.disconnect();
+}
+
+export interface PlayOptions extends MotionTiming {
+  kind?: MotionKind;
+  // Keep the end state when done. Defaults to true for exits.
+  keep?: boolean;
+  timeout?: number;
+}
+
+// Plays one catalog animation on an element and resolves when it ends. Exits keep their end state; everything else
+// cleans up after itself.
+export function play(el: HTMLElement | null, name: MotionName, opts: PlayOptions = {}): Promise<HTMLElement | null> {
+  if (!el) return Promise.resolve(null);
+  const keep = opts.keep ?? (CATEGORY.get(name) === "exit" || name.endsWith("-out"));
+  for (const m of catalog) el.classList.remove(`pm-m-${m.name}`);
+  if (opts.kind) el.setAttribute("data-motion", opts.kind);
+  for (const [k, v] of Object.entries(motionStyle(opts))) el.style.setProperty(k, v);
+  el.classList.remove("pm-m");
+  void el.offsetWidth;
+  el.classList.add("pm-m", `pm-m-${name}`);
+  return new Promise((resolve) => {
+    const finish = () => {
+      clearTimeout(timer);
+      el.removeEventListener("animationend", onEnd);
+      if (!keep) el.classList.remove("pm-m", `pm-m-${name}`);
+      resolve(el);
+    };
+    const onEnd = (e: Event) => {
+      if (e.target === el) finish();
+    };
+    const timer = setTimeout(finish, opts.timeout ?? 4000);
+    el.addEventListener("animationend", onEnd);
+    requestAnimationFrame(() => {
+      if (stillOn(el)) finish();
+    });
+  });
+}
+
+// FLIP: measures [data-flip-key] children, runs a change, then glides each from its old place to its new one.
+export type FlipSnapshot = Record<string, DOMRect>;
+
+export function flipSnapshot(container: Element | null): FlipSnapshot {
+  const map: FlipSnapshot = {};
+  if (!container) return map;
+  for (const el of Array.from(container.querySelectorAll<HTMLElement>("[data-flip-key]"))) {
+    for (const a of el.getAnimations?.() ?? []) if (a.id === "pm-flip") a.cancel();
+    map[el.dataset.flipKey!] = el.getBoundingClientRect();
+  }
+  return map;
+}
+
+export function flipRun(container: Element | null, before: FlipSnapshot, after: FlipSnapshot, opts: { kind?: MotionKind; duration?: number; enter?: boolean } = {}): void {
+  if (!container) return;
+  const kind = effectiveKind(container, opts.kind);
+  if (kind === "still") return;
+  const easing = kind === "playful" ? cssValue(container, "--easing-playful-spring", "cubic-bezier(0.34, 1.56, 0.64, 1)") : cssValue(container, "--easing-sleepy-move", "cubic-bezier(0.65, 0, 0.35, 1)");
+  const duration = opts.duration ?? cssMs(container, "--pm-m-medium", kind === "playful" ? 560 : 600);
+  for (const el of Array.from(container.querySelectorAll<HTMLElement>("[data-flip-key]"))) {
+    const key = el.dataset.flipKey!;
+    const old = before[key];
+    const now = after[key];
+    if (!now || !el.animate) continue;
+    if (!old) {
+      if (opts.enter !== false) el.animate([{ opacity: 0, transform: "scale(0.96)" }, { opacity: 1, transform: "none" }], { id: "pm-flip", duration, easing });
+      continue;
+    }
+    const dx = old.left - now.left;
+    const dy = old.top - now.top;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }], { id: "pm-flip", duration, easing });
+  }
+}
+
+export async function flip(container: Element | null, mutate: () => unknown, opts: { kind?: MotionKind; duration?: number; enter?: boolean } = {}): Promise<void> {
+  const before = flipSnapshot(container);
+  await mutate();
+  flipRun(container, before, flipSnapshot(container), opts);
+}
+
+// Wraps a DOM change in a View Transition that follows the motion kind (web only).
+export function transition(update: () => unknown, opts: { kind?: MotionKind } = {}): Promise<unknown> {
+  const root = document.documentElement;
+  const kind = effectiveKind(root, opts.kind);
+  const doc = document as Document & { startViewTransition?: (cb: () => unknown) => { finished: Promise<void> } };
+  if (!doc.startViewTransition || kind === "still") return Promise.resolve(update());
+  const prev = root.getAttribute("data-motion");
+  root.classList.add("pm-vt");
+  if (opts.kind) root.setAttribute("data-motion", opts.kind);
+  const cleanup = () => {
+    root.classList.remove("pm-vt");
+    if (opts.kind) {
+      if (prev == null) root.removeAttribute("data-motion");
+      else root.setAttribute("data-motion", prev);
+    }
+  };
+  return doc.startViewTransition(update).finished.then(cleanup, cleanup);
+}
+
+// A small seeded random source (mulberry32), so a burst with a seed repeats exactly on every target.
+export function seeded(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Burst: celebration particles in the role colours. Circles, rounded squares and short bars; never emoji.
+export type BurstVariant = "confetti" | "motes" | "ring" | "rain";
+
+export interface BurstOptions {
+  kind?: MotionKind;
+  variant?: BurstVariant;
+  count?: number;
+  spread?: number;
+  seed?: number;
+  colors?: string[];
+}
+
+export const burstColors = ["--bgColor-accent-emphasis", "--bgColor-done-emphasis", "--bgColor-info-emphasis", "--bgColor-success-emphasis", "--bgColor-attention-emphasis", "--bgColor-severe-emphasis"];
+
+type Bezier = [number, number, number, number] | "linear";
+
+export interface BurstParticle {
+  shape: "circle" | "square" | "bar";
+  width: number;
+  height: number;
+  color: string;
+  // Keyframes in px from the origin (from the layer's top-left for rain), degrees and 0..1.
+  frames: { at: number; x: number; y: number; rotate: number; scale: number; opacity: number }[];
+  duration: number;
+  delay: number;
+  // One curve per segment.
+  easings: Bezier[];
+}
+
+const BURST_ENTER: Bezier = [0.22, 1, 0.36, 1];
+const BURST_FALL: Bezier = [0.5, 0, 0.9, 0.5];
+
+// The particles of one burst, as data, so every target draws the same list for the same seed. `width` and
+// `height` are the layer's size, which rain uses.
+export function burstParticles(kind: EffectiveKind, opts: BurstOptions, width: number, height: number): BurstParticle[] {
+  // Reduced motion turns playful into sleepy (motes) and sleepy into still (nothing).
+  if (kind === "still") return [];
+  const playful = kind === "playful";
+  const variant = opts.variant ?? (playful ? "confetti" : "motes");
+  const rand = seeded(opts.seed ?? Math.floor(Math.random() * 2 ** 31));
+  const count = opts.count ?? (variant === "motes" ? 9 : variant === "ring" ? 10 : variant === "rain" ? 36 : 26);
+  const colors = opts.colors ?? burstColors;
+  const spread = opts.spread ?? (playful ? 120 : 56);
+  const out: BurstParticle[] = [];
+  for (let i = 0; i < count; i++) {
+    const shapeIndex = variant === "motes" ? 0 : i % 3;
+    const size = variant === "motes" ? 3 + rand() * 3 : 5 + rand() * 4;
+    const p: BurstParticle = {
+      shape: (["circle", "square", "bar"] as const)[shapeIndex],
+      width: shapeIndex === 2 ? size * 1.8 : size,
+      height: shapeIndex === 2 ? size * 0.55 : size,
+      color: colors[i % colors.length],
+      frames: [],
+      duration: 0,
+      delay: 0,
+      easings: [],
+    };
+    if (variant === "motes") {
+      const mx = (rand() - 0.5) * spread;
+      const my = -(30 + rand() * spread);
+      p.frames = [
+        { at: 0, x: 0, y: 0, rotate: 0, scale: 0.4, opacity: 0 },
+        { at: 0.3, x: mx * 0.4, y: my * 0.35, rotate: 0, scale: 1, opacity: 0.9 },
+        { at: 1, x: mx, y: my, rotate: 0, scale: 0.8, opacity: 0 },
+      ];
+      p.duration = (playful ? 900 : 1800) + rand() * 900;
+      p.delay = rand() * (playful ? 120 : 400);
+      p.easings = [BURST_ENTER, BURST_ENTER];
+    } else if (variant === "ring") {
+      const a = (i / count) * Math.PI * 2;
+      const r = spread * (playful ? 0.7 : 0.55);
+      p.frames = [
+        { at: 0, x: 0, y: 0, rotate: 0, scale: 0.3, opacity: 0 },
+        { at: 0.45, x: Math.cos(a) * r * 0.8, y: Math.sin(a) * r * 0.8, rotate: 0, scale: 1, opacity: 1 },
+        { at: 1, x: Math.cos(a) * r, y: Math.sin(a) * r, rotate: 0, scale: 0.6, opacity: 0 },
+      ];
+      p.duration = playful ? 700 : 1200;
+      const e: Bezier = playful ? [0.34, 1.56, 0.64, 1] : BURST_ENTER;
+      p.easings = [e, e];
+    } else if (variant === "rain") {
+      const sx = rand() * width;
+      const drift = (rand() - 0.5) * 80;
+      const rot = (rand() - 0.5) * (playful ? 720 : 180);
+      p.frames = [
+        { at: 0, x: sx, y: -20, rotate: 0, scale: 1, opacity: 1 },
+        { at: 1, x: sx + drift, y: height + 40, rotate: rot, scale: 1, opacity: 0.9 },
+      ];
+      p.duration = (playful ? 1400 : 3200) + rand() * 1200;
+      p.delay = rand() * (playful ? 500 : 1200);
+      p.easings = [playful ? BURST_FALL : "linear"];
+    } else {
+      const ang = -Math.PI / 2 + (rand() - 0.5) * Math.PI * 1.1;
+      const v = spread * (0.6 + rand() * 0.6);
+      const dx = Math.cos(ang) * v;
+      const dy = Math.sin(ang) * v;
+      const spin = (rand() - 0.5) * (playful ? 900 : 240);
+      p.frames = [
+        { at: 0, x: 0, y: 0, rotate: 0, scale: 0.6, opacity: 1 },
+        { at: 0.35, x: dx, y: dy, rotate: spin * 0.5, scale: 1, opacity: 1 },
+        { at: 1, x: dx * 1.3, y: dy + spread * (playful ? 1.1 : 0.5), rotate: spin, scale: 0.9, opacity: 0 },
+      ];
+      p.duration = (playful ? 1100 : 1700) + rand() * 400;
+      // Thrown out fast, then falling under gravity.
+      p.easings = [BURST_ENTER, BURST_FALL];
+    }
+    out.push(p);
+  }
+  return out;
+}
+
+function bezierCss(e: Bezier): string {
+  return e === "linear" ? "linear" : `cubic-bezier(${e.join(", ")})`;
+}
+
+// Draws a burst into a layer (absolutely positioned, pointer-events none) from (x, y) in its coordinates.
+export function burstAt(layer: HTMLElement, x: number, y: number, kind: EffectiveKind, opts: BurstOptions = {}): Promise<void> {
+  const width = layer.clientWidth || window.innerWidth;
+  const height = layer.clientHeight || window.innerHeight;
+  const particles = burstParticles(kind, opts, width, height);
+  // Rain falls across the whole layer, so its frames are already in layer coordinates.
+  const rain = opts.variant === "rain";
+  const done: Promise<unknown>[] = [];
+  for (const p of particles) {
+    const el = document.createElement("span");
+    el.className = "pm-particle";
+    el.style.width = `${p.width}px`;
+    el.style.height = `${p.height}px`;
+    el.style.borderRadius = p.shape === "circle" ? "999px" : "2px";
+    el.style.background = `var(${p.color})`;
+    layer.appendChild(el);
+    if (!el.animate) {
+      el.remove();
+      continue;
+    }
+    const ox = rain ? 0 : x;
+    const oy = rain ? 0 : y;
+    const frames: Keyframe[] = p.frames.map((f, i) => ({
+      offset: f.at,
+      opacity: f.opacity,
+      transform: `translate(${ox + f.x}px, ${oy + f.y}px) rotate(${f.rotate}deg) scale(${f.scale})`,
+      ...(i < p.easings.length ? { easing: bezierCss(p.easings[i]) } : {}),
+    }));
+    const a = el.animate(frames, { duration: p.duration, delay: p.delay, fill: "both" });
+    done.push(a.finished.then(() => el.remove(), () => el.remove()));
+  }
+  return Promise.all(done).then(() => undefined);
+}
+
+// Fires a burst from an element's centre, a point, or the whole viewport for rain.
+export function burst(target: Element | { x: number; y: number } | null, opts: BurstOptions = {}): Promise<void> {
+  const el = target instanceof Element ? target : null;
+  const kind = effectiveKind(el, opts.kind);
+  const layer = document.createElement("div");
+  layer.className = "pm-burst-layer pm-burst-layer-fixed";
+  layer.setAttribute("aria-hidden", "true");
+  document.body.appendChild(layer);
+  let x = window.innerWidth / 2;
+  let y = window.innerHeight / 2;
+  if (el) {
+    const r = el.getBoundingClientRect();
+    x = r.left + r.width / 2;
+    y = r.top + r.height / 2;
+  } else if (target && "x" in target) {
+    x = target.x;
+    y = target.y;
+  }
+  return burstAt(layer, x, y, kind, opts).then(() => layer.remove());
+}
+
+// CountUp: sleepy eases out (a quintic); playful is the same spring as easing-playful-spring and passes the value.
+export function countUpEase(kind: EffectiveKind, p: number): number {
+  if (kind !== "playful") return 1 - Math.pow(1 - p, 5);
+  const zeta = 0.55;
+  const omega = 12;
+  const t = p * 0.781;
+  const wd = omega * Math.sqrt(1 - zeta * zeta);
+  return 1 - Math.exp(-zeta * omega * t) * (Math.cos(wd * t) + ((zeta * omega) / wd) * Math.sin(wd * t));
+}
+
+export interface NumberFormat {
+  decimals?: number;
+  prefix?: string;
+  suffix?: string;
+  locale?: string;
+  format?: (value: number) => string;
+}
+
+export function formatNumber(n: number, f: NumberFormat): string {
+  const decimals = f.decimals ?? 0;
+  const text = f.format ? f.format(n) : n.toLocaleString(f.locale ?? "en-US", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return (f.prefix ?? "") + text + (f.suffix ?? "");
+}
+
+const NUM_SEP = /[,.'  ]/;
+
+export function isNumberSeparator(ch: string): boolean {
+  return NUM_SEP.test(ch);
+}
+
+// Runs of a formatted number, with separators marked so they can be pulled in.
+export function numberPieces(text: string): { text: string; sep: boolean }[] {
+  const out: { text: string; sep: boolean }[] = [];
+  let run = "";
+  for (const ch of text) {
+    if (NUM_SEP.test(ch)) {
+      if (run) out.push({ text: run, sep: false });
+      run = "";
+      out.push({ text: ch, sep: true });
+    } else run += ch;
+  }
+  if (run) out.push({ text: run, sep: false });
+  return out;
+}
+
+// The odometer's cells: each digit with its stagger index (the rightmost digit is 0) and the digit it rolls from.
+export function rollCells(text: string, from: number): { ch: string; digit: boolean; sep: boolean; index: number; start: number }[] {
+  const fromDigits = Array.from(String(Math.abs(Math.round(from)))).reverse();
+  const digitCount = text.replace(/[^0-9]/g, "").length;
+  let seen = 0;
+  return Array.from(text).map((ch) => {
+    if (!/[0-9]/.test(ch)) return { ch, digit: false, sep: NUM_SEP.test(ch), index: 0, start: 0 };
+    const index = digitCount - 1 - seen++;
+    return { ch, digit: true, sep: false, index, start: Number(fromDigits[index] ?? 0) };
+  });
+}
+
+// Ticks a number from `from` to `to`, calling back with each shown value. Returns a cancel function.
+export function countUp(from: number, to: number, kind: EffectiveKind, opts: { duration?: number; decimals?: number }, onValue: (v: number) => void): () => void {
+  if (kind === "still") {
+    onValue(to);
+    return () => {};
+  }
+  const duration = opts.duration ?? (kind === "playful" ? 800 : 900);
+  const f = Math.pow(10, opts.decimals ?? 0);
+  let t0: number | null = null;
+  let raf = 0;
+  const tick = (t: number) => {
+    if (t0 == null) t0 = t;
+    const p = Math.min(1, (t - t0) / duration);
+    const v = from + (to - from) * countUpEase(kind, p);
+    onValue(p >= 1 ? to : Math.round(v * f) / f);
+    if (p < 1) raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(raf);
+}
+
+// Typewriter timing: ms per character (62 sleepy, 28 playful), a pause after punctuation (6 or 4 characters'
+// worth), and a little jitter in playful.
+export function typewriterSpeed(kind: EffectiveKind): number {
+  return kind === "playful" ? 28 : 62;
+}
+
+export function typewriterDelay(prev: string, base: number, kind: EffectiveKind, rand: () => number = Math.random): number {
+  const pause = /[.,;:!?]/.test(prev) ? base * (kind === "playful" ? 4 : 6) : 0;
+  const jitter = kind === "playful" ? rand() * base : 0;
+  return base + pause + jitter;
+}
+
+// Types `text`, calling back with the number of characters shown. Returns a cancel function.
+export function typewrite(text: string, kind: EffectiveKind, opts: { speed?: number; delay?: number }, onCount: (n: number) => void, onDone?: () => void): () => void {
+  const chars = Array.from(text);
+  if (kind === "still") {
+    onCount(chars.length);
+    onDone?.();
+    return () => {};
+  }
+  onCount(0);
+  const base = opts.speed ?? typewriterSpeed(kind);
+  let i = 0;
+  let timer = 0;
+  const next = () => {
+    i += 1;
+    onCount(i);
+    if (i >= chars.length) {
+      onDone?.();
+      return;
+    }
+    timer = window.setTimeout(next, typewriterDelay(chars[i - 1], base, kind));
+  };
+  timer = window.setTimeout(next, opts.delay ?? 0);
+  return () => clearTimeout(timer);
+}
+
+// TextReveal: the pieces a line reveals, by word (spaces kept as their own pieces) or by letter.
+export function revealPieces(text: string, by: "word" | "letter"): { text: string; space: boolean; index: number }[] {
+  const parts = by === "letter" ? Array.from(text) : text.split(/(\s+)/).filter((p) => p !== "");
+  let n = 0;
+  return parts.map((p) => {
+    const space = /^\s+$/.test(p);
+    return { text: p, space, index: space ? -1 : n++ };
+  });
+}
+
+export const tangleAlphabet = "abcdefghijklmnopqrstuvwxyz0123456789";
+
+// Tangle: scrambled letters settle left to right, one every `step` ms (48 sleepy, 22 playful).
+export function tangle(text: string, kind: EffectiveKind, opts: { step?: number }, onText: (shown: string) => void): () => void {
+  const chars = Array.from(text);
+  if (kind === "still") {
+    onText(text);
+    return () => {};
+  }
+  const step = opts.step ?? (kind === "playful" ? 22 : 48);
+  let t0: number | null = null;
+  let raf = 0;
+  const tick = (t: number) => {
+    if (t0 == null) t0 = t;
+    const settled = Math.floor((t - t0) / step);
+    onText(chars.map((c, i) => (i < settled || /\s/.test(c) ? c : tangleAlphabet[Math.floor(Math.random() * tangleAlphabet.length)])).join(""));
+    if (settled < chars.length) raf = requestAnimationFrame(tick);
+  };
+  raf = requestAnimationFrame(tick);
+  return () => cancelAnimationFrame(raf);
+}
+
+// Lean-in (tilt toward the pointer) and curious (drift toward it). For large hero cards only, never controls.
+function pointerMotion(el: HTMLElement, mode: "tilt" | "magnet", opts: { kind?: MotionKind; max?: number }): () => void {
+  const kind = effectiveKind(el, opts.kind);
+  if (kind === "still") return () => {};
+  const max = opts.max ?? (kind === "playful" ? 10 : 3);
+  const ease = kind === "playful" ? "cubic-bezier(0.34, 1.56, 0.64, 1)" : "cubic-bezier(0.22, 1, 0.36, 1)";
+  el.style.transition = `transform ${kind === "playful" ? 380 : 600}ms ${ease}`;
+  const move = (e: PointerEvent) => {
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    el.style.transform =
+      mode === "tilt"
+        ? `perspective(700px) rotateX(${(-py * max * 2).toFixed(2)}deg) rotateY(${(px * max * 2).toFixed(2)}deg)`
+        : `translate(${(px * max * 2).toFixed(2)}px, ${(py * max * 2).toFixed(2)}px)`;
+  };
+  const leave = () => {
+    el.style.transform = "";
+  };
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerleave", leave);
+  return () => {
+    el.removeEventListener("pointermove", move);
+    el.removeEventListener("pointerleave", leave);
+    el.style.transform = "";
+    el.style.transition = "";
+  };
+}
+
+export function tilt(el: HTMLElement, opts: { kind?: MotionKind; max?: number } = {}): () => void {
+  return pointerMotion(el, "tilt", opts);
+}
+
+export function magnet(el: HTMLElement, opts: { kind?: MotionKind; max?: number } = {}): () => void {
+  return pointerMotion(el, "magnet", opts);
+}
+
+// Presence's collapse: closes the height gap after an exit, on the sleepy move curve.
+export function closeGap(el: HTMLElement, kind: EffectiveKind): Animation | null {
+  if (!el.animate) return null;
+  const cs = getComputedStyle(el);
+  return el.animate(
+    [
+      { height: `${el.offsetHeight}px`, marginTop: cs.marginTop, marginBottom: cs.marginBottom },
+      { height: "0px", marginTop: "0px", marginBottom: "0px" },
+    ],
+    {
+      duration: kind === "playful" ? 320 : kind === "still" ? 1 : 420,
+      delay: kind === "still" ? 0 : 120,
+      easing: cssValue(el, "--easing-sleepy-move", "cubic-bezier(0.65, 0, 0.35, 1)"),
+      fill: "forwards",
+    },
+  );
+}
