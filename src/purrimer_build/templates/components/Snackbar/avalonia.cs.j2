@@ -12,6 +12,8 @@ using Avalonia.Media;
 namespace {{ ns }};
 
 // A short message above the bottom bar, with one optional action. It closes itself after Duration; zero keeps it open.
+// It arrives with the toast choreography (rise when sleepy, slink in from the end side when playful) and leaves with
+// toast-out; a swipe slides it away instead. The kind follows the closest MotionScope, or Kind.
 [PseudoClasses(":open")]
 [TemplatePart("PART_Action", typeof(Button))]
 public class Snackbar : TemplatedControl
@@ -43,26 +45,49 @@ public class Snackbar : TemplatedControl
     private Point? _origin;
     private char _axis;
     private bool _leaving;
+    private bool _swiped;
+    private double _swipeFade = 1;
+    private readonly PurrimerMotionPlayer _motion = new();
+
+    public static readonly StyledProperty<string> KindProperty =
+        AvaloniaProperty.Register<Snackbar, string>(nameof(Kind), "");
+
+    // sleepy or playful; empty follows the closest MotionScope.
+    public string Kind
+    {
+        get => GetValue(KindProperty);
+        set => SetValue(KindProperty, value);
+    }
 
     public Snackbar()
     {
         _timer.Tick += (_, _) => Close();
         RenderTransform = _shift;
+        _motion.Frame += _ => ApplyBar();
+        _motion.Done += () =>
+        {
+            if (!IsOpen)
+                IsVisible = false;
+        };
         _dx.Changed += v =>
         {
             _shift.X = v;
-            if (_bar != null && !_leaving)
-                _bar.Opacity = Math.Max(0, 1 - Math.Abs(v) / Math.Max(1, Bounds.Width * 0.6));
+            if (!_leaving)
+            {
+                _swipeFade = Math.Max(0, 1 - Math.Abs(v) / Math.Max(1, Bounds.Width * 0.6));
+                ApplyBar();
+            }
         };
         _dx.Settled += () =>
         {
             if (!_leaving)
                 return;
             _leaving = false;
+            _swiped = true;
             Close();
             _dx.Set(0);
-            if (_bar != null)
-                _bar.Opacity = 1;
+            _swipeFade = 1;
+            ApplyBar();
         };
     }
 
@@ -119,6 +144,7 @@ public class Snackbar : TemplatedControl
         if (change.Property == IsOpenProperty)
         {
             PseudoClasses.Set(":open", IsOpen);
+            Choreograph();
             _timer.Stop();
             if (IsOpen && Duration > TimeSpan.Zero)
             {
@@ -135,9 +161,47 @@ public class Snackbar : TemplatedControl
         base.OnApplyTemplate(e);
         _action = e.NameScope.Find<Button>("PART_Action");
         _bar = e.NameScope.Find<Border>("PART_Bar");
+        ApplyBar();
         SetActionContent();
         if (_action != null)
             _action.Click += OnActionClick;
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        if (IsOpen)
+            Choreograph();
+    }
+
+    private void ApplyBar()
+    {
+        if (_bar != null)
+            PurrimerMotionVisual.Apply(_bar, _motion.Current, _motion.Entry, _swipeFade);
+    }
+
+    private void Choreograph()
+    {
+        if (VisualRoot is null)
+        {
+            IsVisible = IsOpen;
+            return;
+        }
+        if (IsOpen)
+        {
+            _swiped = false;
+            IsVisible = true;
+            _motion.Play("toast", PurrimerMotion.EffectiveKind(this, Kind));
+        }
+        else if (_swiped)
+        {
+            // A swipe already took it away.
+            _swiped = false;
+            _motion.Reset();
+            IsVisible = false;
+        }
+        else if (IsVisible)
+            _motion.Play("toast-out", PurrimerMotion.EffectiveKind(this, Kind));
     }
 
     protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
@@ -193,8 +257,8 @@ public class Snackbar : TemplatedControl
         if (_axis == 'x' && dx != 0 && (Math.Abs(dx) >= Bounds.Width * 0.3 || flick))
         {
             _leaving = true;
-            if (_bar != null)
-                _bar.Opacity = 0;
+            _swipeFade = 0;
+            ApplyBar();
             _dx.To(Math.Sign(dx) * Bounds.Width * 1.2);
             return;
         }

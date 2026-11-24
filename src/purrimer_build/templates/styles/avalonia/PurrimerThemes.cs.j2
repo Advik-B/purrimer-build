@@ -765,3 +765,30 @@ public static class PurrimerBurst
     public static double Length(IEnumerable<PurrimerBurstParticle> particles) =>
         particles.Select(p => p.Delay + p.Duration).DefaultIfEmpty(0).Max();
 }
+
+// Applies a motion frame to a control: the same transform, opacity, blur and reveal clip as Motion, for controls
+// that animate a part of themselves (Stagger's children, Dialog's card, Snackbar's bar).
+public static class PurrimerMotionVisual
+{
+    public static void Apply(global::Avalonia.Controls.Control target, PurrimerMotionFrame f, PurrimerMotionEntry? entry, double extraOpacity = 1)
+    {
+        if (f.AtRest)
+        {
+            target.RenderTransform = null;
+            target.Opacity = extraOpacity;
+            target.Effect = null;
+            target.Clip = null;
+            return;
+        }
+        var size = target.Bounds.Size;
+        target.RenderTransformOrigin = RelativePoint.TopLeft;
+        target.RenderTransform = new global::Avalonia.Media.MatrixTransform(
+            PurrimerMotionCatalog.ToMatrix(f, size, entry?.Origin ?? new Point(0.5, 0.5), entry?.Perspective ?? 0));
+        target.Opacity = f.Opacity * extraOpacity;
+        // Avalonia's blur radius r gives a Gaussian of sigma 0.57735 r + 0.5; CSS blur() names the sigma.
+        target.Effect = f.Blur > 0.05 ? new global::Avalonia.Media.BlurEffect { Radius = Math.Max(0, (f.Blur - 0.5) / 0.57735) } : null;
+        target.Clip = f.Reveal < 0.999
+            ? new global::Avalonia.Media.RectangleGeometry(new Rect(-64, -64, size.Width + 128, Math.Max(0, f.Reveal * (size.Height + 64))))
+            : null;
+    }
+}

@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Media;
 
 namespace {{ ns }};
 
@@ -64,33 +63,11 @@ public class Stagger : StackPanel
             {
                 player = new PurrimerMotionPlayer();
                 var target = child;
-                player.Frame += f => Apply(target, f, player.Entry);
+                player.Frame += f => PurrimerMotionVisual.Apply(target, f, player.Entry);
                 _players[child] = player;
             }
             var position = Start + Math.Min(i, 12);
             player.Play(MotionName, kind, delay: Step > 0 ? position * Step : 0, index: Step > 0 ? 0 : position);
         }
-    }
-
-    // The same transform, opacity, blur and clip as Motion, applied to the child itself.
-    private static void Apply(Control target, PurrimerMotionFrame f, PurrimerMotionEntry? entry)
-    {
-        if (f.AtRest)
-        {
-            target.RenderTransform = null;
-            target.Opacity = 1;
-            target.Effect = null;
-            target.Clip = null;
-            return;
-        }
-        var size = target.Bounds.Size;
-        target.RenderTransformOrigin = RelativePoint.TopLeft;
-        target.RenderTransform = new MatrixTransform(
-            PurrimerMotionCatalog.ToMatrix(f, size, entry?.Origin ?? new Point(0.5, 0.5), entry?.Perspective ?? 0));
-        target.Opacity = f.Opacity;
-        target.Effect = f.Blur > 0.05 ? new BlurEffect { Radius = Math.Max(0, (f.Blur - 0.5) / 0.57735) } : null;
-        target.Clip = f.Reveal < 0.999
-            ? new RectangleGeometry(new Rect(-64, -64, size.Width + 128, Math.Max(0, f.Reveal * (size.Height + 64))))
-            : null;
     }
 }
