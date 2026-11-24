@@ -13,7 +13,7 @@ Status · [All components](README.md)
 | `tone` | enum | `"info"` | `info`, `success`, `attention`, `danger`, `done` | Colour role and icon. |
 | `title` | string |  |  | Bold first line. |
 | `text` | string |  |  | Body text; ends with a full stop. |
-| `dismissible` | bool | `false` |  | Shows a close button. |
+| `dismissible` | bool | `false` |  | Shows a close button. Inside a touch scope the banner also swipes sideways to dismiss. |
 
 Names follow the web targets. Qt Widgets takes `snake_case` arguments, Qt Quick `camelCase` properties, Avalonia `PascalCase` properties and Slint `kebab-case` properties; each example below shows the spelling for its target.
 

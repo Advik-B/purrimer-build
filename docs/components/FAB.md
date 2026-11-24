@@ -13,6 +13,8 @@ Mobile · [All components](README.md)
 | `icon` | icon | `"plus"` |  | Octicon at 24px. |
 | `label` | string |  |  | Accessible name; shown when extended. |
 | `extended` | bool | `false` |  | Shows the label beside the icon. |
+| `actions` | list |  |  | Two to six { icon, label, onSelect } that a press and hold opens above the FAB (see HoldMenu); a tap still runs onClick, or opens them without one. |
+| `actionsLayout` | enum | `"stack"` | `stack`, `arc` | stack of labelled options, or arc for two to four whose icons read without labels. |
 
 Names follow the web targets. Qt Widgets takes `snake_case` arguments, Qt Quick `camelCase` properties, Avalonia `PascalCase` properties and Slint `kebab-case` properties; each example below shows the spelling for its target.
 
@@ -41,7 +43,15 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </script>
 
 <div style="display: flex; gap: 16px; align-items: center">
-  <FAB label="New note" onclick={() => console.log("new note")} />
+  <FAB
+    label="New note"
+    onclick={() => console.log("new note")}
+    actions={[
+      { icon: "device-camera", label: "Take photo" },
+      { icon: "checklist", label: "Checklist" },
+    ]}
+    onaction={(item) => console.log("chose", item.label)}
+  />
   <FAB icon="pencil" label="Compose" extended />
 </div>
 ```
@@ -56,7 +66,15 @@ import { FAB } from "~/purrimer";
 export default function Example() {
   return (
     <div style={{ display: "flex", gap: "16px", "align-items": "center" }}>
-      <FAB label="New note" onClick={() => console.log("new note")} />
+      <FAB
+        label="New note"
+        onClick={() => console.log("new note")}
+        actions={[
+          { icon: "device-camera", label: "Take photo" },
+          { icon: "checklist", label: "Checklist" },
+        ]}
+        onAction={(item) => console.log("chose", item.label)}
+      />
       <FAB icon="pencil" label="Compose" extended />
     </div>
   );
@@ -69,6 +87,7 @@ export default function Example() {
 
 ```python
 from purrimer_qt.components import FAB
+from purrimer_qt.components.hold_menu import HoldMenuItem
 from PySide6.QtWidgets import QHBoxLayout, QWidget
 
 
@@ -77,8 +96,12 @@ def example() -> QWidget:
     layout = QHBoxLayout(row)
     layout.setContentsMargins(0, 0, 0, 0)
     layout.setSpacing(16)
-    note = FAB(label="New note")
+    note = FAB(
+        label="New note",
+        actions=[HoldMenuItem("Take photo", "device-camera"), HoldMenuItem("Checklist", "checklist")],
+    )
     note.clicked.connect(lambda: print("new note"))
+    note.action_selected.connect(lambda index: print("chose", index))
     layout.addWidget(note)
     layout.addWidget(FAB("pencil", "Compose", extended=True))
     layout.addStretch()
@@ -95,7 +118,15 @@ import Purrimer
 
 Row {
     spacing: 16
-    FAB { label: "New note"; onClicked: console.log("new note") }
+    FAB {
+        label: "New note"
+        actions: [
+            { icon: "device-camera", label: "Take photo" },
+            { icon: "checklist", label: "Checklist" }
+        ]
+        onClicked: console.log("new note")
+        onActionSelected: (index) => console.log("chose", index)
+    }
     FAB { iconName: "pencil"; label: "Compose"; extended: true }
 }
 ```
@@ -108,7 +139,12 @@ Row {
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:pm="using:Purrimer.Avalonia">
   <StackPanel Orientation="Horizontal" Spacing="16">
-    <pm:FAB Label="New note" />
+    <pm:FAB Label="New note">
+      <pm:FAB.Actions>
+        <pm:HoldMenuItem Label="Take photo" IconName="device-camera" />
+        <pm:HoldMenuItem Label="Checklist" IconName="checklist" />
+      </pm:FAB.Actions>
+    </pm:FAB>
     <pm:FAB IconName="pencil" Label="Compose" IsExtended="True" />
   </StackPanel>
 </UserControl>
@@ -124,7 +160,17 @@ import { FAB, PurrimerIcons } from "purrimer-components.slint";
 export component Example inherits HorizontalLayout {
     spacing: 16px;
     alignment: start;
-    FAB { label: "New note"; clicked => { debug("new note"); } }
+    FAB {
+        label: "New note";
+        screen-width: root.width;
+        screen-height: root.height;
+        actions: [
+            { label: "Take photo", icon: PurrimerIcons.device-camera-24 },
+            { label: "Checklist", icon: PurrimerIcons.checklist-24 },
+        ];
+        clicked => { debug("new note"); }
+        action-selected(index) => { debug("chose", index); }
+    }
     FAB { icon: PurrimerIcons.pencil-24; label: "Compose"; extended: true; }
 }
 ```

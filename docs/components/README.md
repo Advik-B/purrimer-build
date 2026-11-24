@@ -29,7 +29,7 @@
 | [Toggle](Toggle.md) | A switch for a setting that applies at once. |
 | [Select](Select.md) | A field that opens a list of options; the open list joins the field. |
 | [Textarea](Textarea.md) | A multi-line input with the same label, caption and validation rules as TextField. |
-| [Slider](Slider.md) | Picks a value from a continuous range by dragging a squircle thumb. |
+| [Slider](Slider.md) | Picks a value, or a low and high pair, from a range by dragging a squircle thumb. |
 
 ## Status
 
@@ -63,14 +63,26 @@
 
 | Component | Summary |
 | --- | --- |
+| [MobileScreen](MobileScreen.md) | One phone screen: AppBar on top, a scrolling body that drives the bar, an optional FAB and footer, BottomNav at the bottom. |
 | [AppBar](AppBar.md) | The bar at the top of a mobile screen: back, title and up to two actions. |
-| [BottomNav](BottomNav.md) | Three to five destinations at the bottom of the screen, marked by a bar on top. |
-| [BottomSheet](BottomSheet.md) | A sheet that rises from the bottom over a scrim; drag it down or tap the scrim to close. |
-| [ListItem](ListItem.md) | One row of a mobile list: icon tile, headline, supporting text and trailing text. |
-| [ListSection](ListSection.md) | A titled group of list rows, inset in a rounded box or plain. |
+| [BottomNav](BottomNav.md) | Three to five destinations at the bottom of the screen, marked by a bar on top that people can scrub across. |
+| [ListItem](ListItem.md) | One row of a mobile list: icon tile, headline, supporting text and trailing text, with optional swipe actions. |
 | [FAB](FAB.md) | The floating action button: one squircle for the main thing people create. |
-| [Snackbar](Snackbar.md) | A short message on an inverse surface above the bottom bar, with one optional action. |
+| [ListSection](ListSection.md) | A titled group of list rows, inset in a rounded box or plain. |
+| [BottomSheet](BottomSheet.md) | A sheet that rises from the bottom over a scrim; drag it down, tap the scrim or press Escape to close. |
+| [AlertSheet](AlertSheet.md) | A short decision in a bottom sheet: a title with a status icon, a message and stacked buttons, the accepting one last. |
+| [ActionSheet](ActionSheet.md) | A menu in a bottom sheet: 48px rows with icon tiles, submenus one level in, and Cancel within thumb reach. |
 | [SearchBar](SearchBar.md) | A rounded search field with a leading icon and a clear button. |
+| [InfoButton](InfoButton.md) | An info button that opens a short explanation in a bottom sheet, where a desktop would use a tooltip. |
+| [Snackbar](Snackbar.md) | A short message on an inverse surface above the bottom bar, with one optional action; swipe it sideways to dismiss it. |
+| [ChipGroup](ChipGroup.md) | A row of filter chips that narrow what a screen shows; one or several can be on. |
+| [KeyboardFooter](KeyboardFooter.md) | A footer for a screen's primary action that sits at the bottom of a MobileScreen and rides above the on-screen keyboard. |
+| [MobileNavigator](MobileNavigator.md) | A stack of phone screens: pushes slide in from the edge, tabs crossfade, and a swipe from the left edge goes back. |
+| [Carousel](Carousel.md) | Slides side by side on scroll snap, with a page marker that follows the scroll one to one. |
+| [WheelPicker](WheelPicker.md) | Scroll-snap wheels for picking from an ordered set on a phone: one column for a list, several for a time or date. |
+| [ReorderList](ReorderList.md) | A list people put in their own order by holding a row, or pressing its handle, and dragging it to a new place. |
+| [HoldMenu](HoldMenu.md) | Press and hold a button to open more options around it, slide onto one and release to choose it. |
+| [ImageViewer](ImageViewer.md) | A photo on a dark stage that people pinch or double-tap to zoom, drag to look around, and drag down to close. |
 
 ## Navigation
 

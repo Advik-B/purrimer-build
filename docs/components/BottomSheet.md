@@ -2,7 +2,7 @@
 
 # BottomSheet
 
-A sheet that rises from the bottom over a scrim; drag it down or tap the scrim to close.
+A sheet that rises from the bottom over a scrim; drag it down, tap the scrim or press Escape to close.
 
 Mobile · [All components](README.md)
 
@@ -12,6 +12,13 @@ Mobile · [All components](README.md)
 | --- | --- | --- | --- | --- |
 | `open` | bool | `false` |  | Whether the sheet is shown. |
 | `title` | string |  |  | Sheet title. |
+| `description` | string |  |  | A line under the title in fgColor-muted. |
+| `icon` | icon |  |  | An Octicon in a 32px tile before the title. |
+| `tone` | enum | `"accent"` | `accent`, `info`, `success`, `attention`, `danger`, `neutral` | Colours the icon tile. |
+| `size` | enum | `"auto"` | `auto`, `half`, `full` | auto fits the content; half and full set the height. |
+| `dismissible` | bool | `true` |  | Dragging, the scrim and Escape close the sheet. Off, only an action closes it. |
+| `grabber` | bool | `true` |  | Shows the drag handle. |
+| `inline` | bool | `false` |  | Draws the sheet in place with no scrim, for docs and previews. |
 
 Names follow the web targets. Qt Widgets takes `snake_case` arguments, Qt Quick `camelCase` properties, Avalonia `PascalCase` properties and Slint `kebab-case` properties; each example below shows the spelling for its target.
 
@@ -26,12 +33,20 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 ```html
 <div>
   <p class="text-body-medium" style="margin: 16px">Photo.jpg</p>
-  <div class="pm-sheet-scrim" role="presentation">
-    <div class="pm-sheet" role="dialog" aria-modal="true" aria-label="Share">
-      <div class="pm-sheet__handle" role="button" tabindex="0" aria-label="Close"><span class="pm-sheet__grabber"></span></div>
-      <h2 class="pm-sheet__title">Share</h2>
+  <div class="pm-sheet-layer">
+    <div class="pm-sheet-scrim" aria-hidden="true"></div>
+    <div class="pm-sheet" role="dialog" aria-modal="true" aria-labelledby="share-title" tabindex="-1">
+      <div class="pm-sheet__handle pm-sheet__handle--drag">
+        <span class="pm-sheet__grabber" aria-hidden="true"></span>
+        <div class="pm-sheet__head">
+          <h2 class="pm-sheet__title" id="share-title">Share</h2>
+          <p class="pm-sheet__desc">Photo.jpg, 2.4 MB</p>
+        </div>
+      </div>
       <div class="pm-sheet__body">
-        <p style="margin: 0 0 16px">Anyone with the link can view this photo.</p>
+        <p style="margin: 0">Anyone with the link can view this photo.</p>
+      </div>
+      <div class="pm-sheet__actions">
         <button type="button" class="pm-button pm-button--primary pm-button--block">Copy link</button>
       </div>
     </div>
@@ -51,9 +66,11 @@ Each example is run as it is shown here, on every push, and the screenshots are 
 </script>
 
 <p class="text-body-medium" style="margin: 16px">Photo.jpg</p>
-<BottomSheet bind:open title="Share">
-  <p style="margin: 0 0 16px">Anyone with the link can view this photo.</p>
-  <Button variant="primary" block label="Copy link" onclick={() => (open = false)} />
+<BottomSheet bind:open title="Share" description="Photo.jpg, 2.4 MB">
+  <p style="margin: 0">Anyone with the link can view this photo.</p>
+  {#snippet actions()}
+    <Button variant="primary" block label="Copy link" onclick={() => (open = false)} />
+  {/snippet}
 </BottomSheet>
 ```
 
@@ -70,9 +87,14 @@ export default function Example() {
   return (
     <div>
       <p class="text-body-medium" style={{ margin: "16px" }}>Photo.jpg</p>
-      <BottomSheet open={open()} title="Share" onClose={() => setOpen(false)}>
-        <p style={{ margin: "0 0 16px" }}>Anyone with the link can view this photo.</p>
-        <Button variant="primary" block label="Copy link" onClick={() => setOpen(false)} />
+      <BottomSheet
+        open={open()}
+        title="Share"
+        description="Photo.jpg, 2.4 MB"
+        onClose={() => setOpen(false)}
+        actions={<Button variant="primary" block label="Copy link" onClick={() => setOpen(false)} />}
+      >
+        <p style={{ margin: "0" }}>Anyone with the link can view this photo.</p>
       </BottomSheet>
     </div>
   );
@@ -97,13 +119,13 @@ def example() -> QWidget:
     layout.addStretch()
 
     # The sheet draws over its parent, so give it the screen widget.
-    sheet = BottomSheet(screen, "Share", sheet_height=200)
+    sheet = BottomSheet(screen, "Share", "Photo.jpg, 2.4 MB")
     note = QLabel("Anyone with the link can view this photo.")
     note.setWordWrap(True)
     sheet.body.addWidget(note)
     copy = Button("Copy link", "primary", block=True)
     copy.clicked.connect(sheet.close_sheet)
-    sheet.body.addWidget(copy)
+    sheet.add_action(copy)
     QTimer.singleShot(0, sheet.open)  # open once the screen is shown and has its size
     return screen
 ```
@@ -127,20 +149,20 @@ Item {
     BottomSheet {
         id: sheet
         title: "Share"
+        description: "Photo.jpg, 2.4 MB"
         Component.onCompleted: open()
 
-        Column {
+        Text {
             width: parent.width
-            spacing: 16
-            Text {
-                width: parent.width
-                wrapMode: Text.Wrap
-                text: "Anyone with the link can view this photo."
-                color: Purrimer.fgColorDefault
-                font: Purrimer.textBodyMedium
-            }
-            Button { width: parent.width; text: "Copy link"; variant: "primary"; onClicked: sheet.close() }
+            wrapMode: Text.Wrap
+            text: "Anyone with the link can view this photo."
+            color: Purrimer.fgColorDefault
+            font: Purrimer.textBodyMedium
         }
+
+        actions: [
+            Button { text: "Copy link"; variant: "primary"; onClicked: sheet.close() }
+        ]
     }
 }
 ```
@@ -155,11 +177,13 @@ Item {
   <!-- The sheet draws over its parent: put it last in a panel that covers the screen. -->
   <Panel>
     <TextBlock Margin="16" Text="Photo.jpg" />
-    <pm:BottomSheet IsOpen="True" Title="Share" SheetHeight="200">
-      <StackPanel Spacing="16">
-        <TextBlock Text="Anyone with the link can view this photo." TextWrapping="Wrap" />
-        <Button Classes="primary block" Content="Copy link" />
-      </StackPanel>
+    <pm:BottomSheet IsOpen="True" Title="Share" Description="Photo.jpg, 2.4 MB">
+      <TextBlock Text="Anyone with the link can view this photo." TextWrapping="Wrap" />
+      <pm:BottomSheet.Actions>
+        <StackPanel Spacing="8">
+          <Button Classes="primary block" Content="Copy link" />
+        </StackPanel>
+      </pm:BottomSheet.Actions>
     </pm:BottomSheet>
   </Panel>
 </UserControl>
@@ -170,7 +194,7 @@ Item {
 <img src="../screenshots/slint/BottomSheet-blanc.png" width="360" alt="BottomSheet, Slint, Blanc"> <img src="../screenshots/slint/BottomSheet-noir.png" width="360" alt="BottomSheet, Slint, Noir">
 
 ```slint
-import { BottomSheet, Button, Purrimer } from "purrimer-components.slint";
+import { BottomSheet, Purrimer } from "purrimer-components.slint";
 
 // The sheet draws over its parent: put it last in an element that covers the screen.
 export component Example inherits Rectangle {
@@ -184,16 +208,13 @@ export component Example inherits Rectangle {
     sheet := BottomSheet {
         open: true;
         title: "Share";
-        sheet-height: 200px;
-        VerticalLayout {
-            spacing: 16px;
-            alignment: start;
-            Text {
-                text: "Anyone with the link can view this photo.";
-                wrap: word-wrap;
-                color: Purrimer.fg-color-default;
-            }
-            Button { text: "Copy link"; variant: "primary"; clicked => { sheet.open = false; } }
+        description: "Photo.jpg, 2.4 MB";
+        actions: [{ label: "Copy link", variant: "primary" }];
+        action(index) => { sheet.close(); }
+        Text {
+            text: "Anyone with the link can view this photo.";
+            wrap: word-wrap;
+            color: Purrimer.fg-color-default;
         }
     }
 }

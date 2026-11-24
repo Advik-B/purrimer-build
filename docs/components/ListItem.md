@@ -2,7 +2,7 @@
 
 # ListItem
 
-One row of a mobile list: icon tile, headline, supporting text and trailing text.
+One row of a mobile list: icon tile, headline, supporting text and trailing text, with optional swipe actions.
 
 Mobile · [All components](README.md)
 
@@ -15,6 +15,8 @@ Mobile · [All components](README.md)
 | `icon` | icon |  |  | Octicon in the leading tile. |
 | `trailing` | string |  |  | Text at the end, such as a time. |
 | `chevron` | bool | `false` |  | Shows a chevron for rows that open a screen. |
+| `swipeStart` | object | `{}` |  | { label, icon, tone, onSwipe } revealed by dragging toward the end of the line; commits past 40% of the row. |
+| `swipeEnd` | object | `{}` |  | { label, icon, tone, onSwipe } revealed by dragging toward the start of the line. |
 
 Names follow the web targets. Qt Widgets takes `snake_case` arguments, Qt Quick `camelCase` properties, Avalonia `PascalCase` properties and Slint `kebab-case` properties; each example below shows the spelling for its target.
 
@@ -42,6 +44,17 @@ Each example is run as it is shown here, on every push, and the screenshots are 
     <span class="pm-list-item__text"><span class="pm-list-item__headline">Language</span></span>
     <span class="pm-list-item__trailing">English</span>
   </div>
+  <div class="pm-list-item-swipe" role="listitem">
+    <div class="pm-list-item__slide">
+      <div class="pm-list-item">
+        <span class="pm-list-item__tile"><svg class="pm-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M1.75 2h12.5c.966 0 1.75.784 1.75 1.75v8.5A1.75 1.75 0 0 1 14.25 14H1.75A1.75 1.75 0 0 1 0 12.25v-8.5C0 2.784.784 2 1.75 2ZM1.5 12.251c0 .138.112.25.25.25h12.5a.25.25 0 0 0 .25-.25V5.809L8.38 9.397a.75.75 0 0 1-.76 0L1.5 5.809v6.442Zm13-8.181v-.32a.25.25 0 0 0-.25-.25H1.75a.25.25 0 0 0-.25.25v.32L8 7.88Z"/></svg></span>
+        <span class="pm-list-item__text"><span class="pm-list-item__headline">Weekly digest</span></span>
+        <span class="pm-list-item__trailing">Mon</span>
+      </div>
+    </div>
+    <button type="button" class="pm-list-item__swipe-alt">Mark as read</button>
+    <button type="button" class="pm-list-item__swipe-alt">Archive</button>
+  </div>
 </div>
 ```
 
@@ -64,6 +77,13 @@ Each example is run as it is shown here, on every push, and the screenshots are 
     onclick={() => console.log("open notifications")}
   />
   <ListItem icon="globe" headline="Language" trailing="English" />
+  <ListItem
+    icon="mail"
+    headline="Weekly digest"
+    trailing="Mon"
+    swipeStart={{ label: "Mark as read", icon: "check", tone: "accent", onswipe: () => console.log("read") }}
+    swipeEnd={{ label: "Archive", icon: "archive", tone: "success", onswipe: () => console.log("archive") }}
+  />
 </div>
 ```
 
@@ -86,6 +106,13 @@ export default function Example() {
         onClick={() => console.log("open notifications")}
       />
       <ListItem icon="globe" headline="Language" trailing="English" />
+      <ListItem
+        icon="mail"
+        headline="Weekly digest"
+        trailing="Mon"
+        swipeStart={{ label: "Mark as read", icon: "check", tone: "accent", onSwipe: () => console.log("read") }}
+        swipeEnd={{ label: "Archive", icon: "archive", tone: "success", onSwipe: () => console.log("archive") }}
+      />
     </div>
   );
 }
@@ -97,6 +124,7 @@ export default function Example() {
 
 ```python
 from purrimer_qt.components import ListItem
+from purrimer_qt.components.list_item import SwipeAction
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 
@@ -111,6 +139,15 @@ def example() -> QWidget:
     notifications.clicked.connect(lambda: print("open notifications"))
     layout.addWidget(notifications)
     layout.addWidget(ListItem("Language", icon="globe", trailing="English"))
+    layout.addWidget(
+        ListItem(
+            "Weekly digest",
+            icon="mail",
+            trailing="Mon",
+            swipe_start=SwipeAction("Mark as read", "check", "accent", lambda: print("read")),
+            swipe_end=SwipeAction("Archive", "archive", "success", lambda: print("archive")),
+        )
+    )
     return rows
 ```
 
@@ -124,6 +161,7 @@ import Purrimer
 
 Column {
     width: 328
+    height: 168
     ListItem {
         width: parent.width
         iconName: "bell"
@@ -135,6 +173,15 @@ Column {
         onClicked: console.log("open notifications")
     }
     ListItem { width: parent.width; iconName: "globe"; headline: "Language"; trailing: "English" }
+    ListItem {
+        width: parent.width
+        iconName: "mail"
+        headline: "Weekly digest"
+        trailing: "Mon"
+        swipeStart: ({ label: "Mark as read", icon: "check", tone: "accent" })
+        swipeEnd: ({ label: "Archive", icon: "archive", tone: "success" })
+        onSwiped: (side) => console.log(side === "start" ? "read" : "archive")
+    }
 }
 ```
 
@@ -148,6 +195,14 @@ Column {
   <StackPanel>
     <pm:ListItem IconName="bell" Headline="Notifications" Supporting="Mentions and replies" Trailing="On" ShowChevron="True" />
     <pm:ListItem IconName="globe" Headline="Language" Trailing="English" />
+    <pm:ListItem IconName="mail" Headline="Weekly digest" Trailing="Mon">
+      <pm:ListItem.SwipeStart>
+        <pm:ListItemSwipeAction Label="Mark as read" IconName="check" Tone="accent" />
+      </pm:ListItem.SwipeStart>
+      <pm:ListItem.SwipeEnd>
+        <pm:ListItemSwipeAction Label="Archive" IconName="archive" Tone="success" />
+      </pm:ListItem.SwipeEnd>
+    </pm:ListItem>
   </StackPanel>
 </UserControl>
 ```
@@ -171,6 +226,14 @@ export component Example inherits VerticalLayout {
         clicked => { debug("open notifications"); }
     }
     ListItem { icon: PurrimerIcons.globe-16; headline: "Language"; trailing: "English"; }
+    ListItem {
+        icon: PurrimerIcons.mail-16;
+        headline: "Weekly digest";
+        trailing: "Mon";
+        swipe-start: { label: "Mark as read", icon: PurrimerIcons.check-24, tone: "accent" };
+        swipe-end: { label: "Archive", icon: PurrimerIcons.archive-24, tone: "success" };
+        swiped(side) => { debug(side == "start" ? "read" : "archive"); }
+    }
 }
 ```
 
