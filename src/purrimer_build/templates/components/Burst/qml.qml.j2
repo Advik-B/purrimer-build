@@ -1,0 +1,98 @@
+// {{ note }}
+// {{ c.summary }}
+// Children go inside; burst() (or bumping fire) throws particles from their centre over the whole window.
+// Reduced motion shows nothing in sleepy and motes in playful. Fire it once per achievement.
+pragma ComponentBehavior: Bound
+import QtQuick
+import "PmMotion.js" as PmMotion
+
+Item {
+    id: root
+
+    default property alias content: holder.data
+    // Change it to burst.
+    property int fire: 0
+    // confetti, motes, ring or rain; empty uses the kind's (confetti playful, motes sleepy).
+    property string variant: ""
+    property int count: 0
+    property int spread: 0
+    property real originX: 0.5
+    property real originY: 0.5
+    property bool onMount: false
+    // A seed makes the burst repeat exactly; 0 picks a new one each time.
+    property int seed: 0
+    // Empty follows the scope.
+    property string kind: ""
+
+    property var particles: []
+    property real elapsed: 0
+    property real length: 0
+    property point origin: Qt.point(0, 0)
+
+    implicitWidth: holder.childrenRect.x + holder.childrenRect.width
+    implicitHeight: holder.childrenRect.y + holder.childrenRect.height
+
+    function burst() {
+        // With loops paused (screenshots) a burst would land on a random frame, so it shows nothing.
+        if (Purrimer.pauseLoops)
+            return
+        particles = PmMotion.burstParticles(Purrimer.effectiveKind(root, root.kind), variant, count, spread, seed)
+        if (particles.length === 0)
+            return
+        origin = variant === "rain" ? Qt.point(0, 0) : root.mapToItem(sky.parent, width * originX, height * originY)
+        length = PmMotion.burstLength(particles)
+        elapsed = 0
+        frames.start()
+    }
+
+    Component.onCompleted: if (onMount) burst()
+    onFireChanged: burst()
+
+    Item {
+        id: holder
+        width: root.width
+        height: root.height
+    }
+
+    FrameAnimation {
+        id: frames
+        onTriggered: {
+            root.elapsed += frameTime * 1000
+            if (root.elapsed >= root.length) {
+                stop()
+                root.particles = []
+            }
+            sky.requestPaint()
+        }
+    }
+
+    // Drawn over the whole window, so particles can fly past the wrapper's edges.
+    Canvas {
+        id: sky
+        parent: root.Window.window ? root.Window.window.contentItem : root
+        anchors.fill: parent
+        z: 1000
+        visible: root.particles.length > 0
+        onPaint: {
+            const ctx = getContext("2d")
+            ctx.reset()
+            for (const p of root.particles) {
+                const s = PmMotion.burstState(p, root.elapsed, width, height)
+                if (s.opacity <= 0)
+                    continue
+                ctx.save()
+                ctx.globalAlpha = s.opacity
+                // Rotate and scale about the particle's centre, as CSS does.
+                ctx.translate(root.origin.x + s.x + p.width / 2, root.origin.y + s.y + p.height / 2)
+                ctx.rotate(s.rotate * Math.PI / 180)
+                ctx.scale(s.scale, s.scale)
+                ctx.fillStyle = Purrimer[p.color.replace(/-([a-zA-Z])/g, (m, ch) => ch.toUpperCase())]
+                const r = p.shape === "circle" ? Math.min(p.width, p.height) / 2 : 2
+                ctx.beginPath()
+                ctx.roundedRect(-p.width / 2, -p.height / 2, p.width, p.height, r, r)
+                ctx.fill()
+                ctx.restore()
+            }
+        }
+    }
+}

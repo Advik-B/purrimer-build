@@ -1,0 +1,17 @@
+import { Burst, Card, MotionScope, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    in-out property <int> merged;
+    scope := MotionScope {
+        kind: "playful";
+        Burst {
+            fire: root.merged;
+            kind: scope.kind;
+            Card {
+                title: "Pull request merged";
+                Text { text: "All checks passed."; color: Purrimer.fg-color-default; }
+            }
+        }
+    }
+}

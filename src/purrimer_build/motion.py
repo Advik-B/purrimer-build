@@ -7,6 +7,7 @@ them with its own small evaluator. `sample()` here is the reference those evalua
 
 from __future__ import annotations
 
+import inspect
 import math
 import re
 import tomllib
@@ -601,6 +602,125 @@ def _css_transform(anim: Anim, vals: dict[str, str], used: set[str]) -> str:
     if "skew" in used:
         parts.append(f"skewX({v('skew', 'deg')})")
     return " ".join(parts) or "none"
+
+
+# Burst: the same particle lists as motion.ts, from the same seeded random source (mulberry32).
+
+BURST_COLORS = (
+    "bgColor-accent-emphasis",
+    "bgColor-done-emphasis",
+    "bgColor-info-emphasis",
+    "bgColor-success-emphasis",
+    "bgColor-attention-emphasis",
+    "bgColor-severe-emphasis",
+)
+BURST_ENTER = (0.22, 1.0, 0.36, 1.0)
+BURST_FALL = (0.5, 0.0, 0.9, 0.5)
+BURST_SPRING = (0.34, 1.56, 0.64, 1.0)
+
+
+def seeded(seed: int):
+    a = seed & 0xFFFFFFFF
+
+    def imul(x: int, y: int) -> int:
+        return (x * y) & 0xFFFFFFFF
+
+    def rand() -> float:
+        nonlocal a
+        a = (a + 0x6D2B79F5) & 0xFFFFFFFF
+        t = a
+        t = imul(t ^ (t >> 15), t | 1)
+        t = (t ^ ((t + imul(t ^ (t >> 7), t | 61)) & 0xFFFFFFFF)) & 0xFFFFFFFF
+        return ((t ^ (t >> 14)) & 0xFFFFFFFF) / 4294967296
+
+    return rand
+
+
+def burst_particles(
+    kind: str, variant: str | None = None, count: int | None = None, spread: float | None = None, seed: int = 1
+) -> list[dict]:
+    """The particles of one burst. Frames hold x and y in px from the origin; rain adds xf and yf, fractions of the
+    layer's width and height, since it falls across the whole layer."""
+    if kind == "still":
+        return []
+    playful = kind == "playful"
+    variant = variant or ("confetti" if playful else "motes")
+    rand = seeded(seed)
+    count = count or {"motes": 9, "ring": 10, "rain": 36}.get(variant, 26)
+    spread = spread or (120 if playful else 56)
+    out = []
+    for i in range(count):
+        shape = 0 if variant == "motes" else i % 3
+        size = 3 + rand() * 3 if variant == "motes" else 5 + rand() * 4
+        p = {
+            "shape": ("circle", "square", "bar")[shape],
+            "width": size * 1.8 if shape == 2 else size,
+            "height": size * 0.55 if shape == 2 else size,
+            "color": BURST_COLORS[i % len(BURST_COLORS)],
+            "delay": 0.0,
+        }
+
+        def frame(at, x, y, rotate, scale, opacity, xf=0.0, yf=0.0):
+            return {"at": at, "x": x, "y": y, "xf": xf, "yf": yf, "rotate": rotate, "scale": scale, "opacity": opacity}
+
+        if variant == "motes":
+            mx = (rand() - 0.5) * spread
+            my = -(30 + rand() * spread)
+            p["frames"] = [
+                frame(0, 0, 0, 0, 0.4, 0),
+                frame(0.3, mx * 0.4, my * 0.35, 0, 1, 0.9),
+                frame(1, mx, my, 0, 0.8, 0),
+            ]
+            p["duration"] = (900 if playful else 1800) + rand() * 900
+            p["delay"] = rand() * (120 if playful else 400)
+            p["easings"] = [BURST_ENTER, BURST_ENTER]
+        elif variant == "ring":
+            a = i / count * math.pi * 2
+            r = spread * (0.7 if playful else 0.55)
+            p["frames"] = [
+                frame(0, 0, 0, 0, 0.3, 0),
+                frame(0.45, math.cos(a) * r * 0.8, math.sin(a) * r * 0.8, 0, 1, 1),
+                frame(1, math.cos(a) * r, math.sin(a) * r, 0, 0.6, 0),
+            ]
+            p["duration"] = 700 if playful else 1200
+            e = BURST_SPRING if playful else BURST_ENTER
+            p["easings"] = [e, e]
+        elif variant == "rain":
+            sx = rand()
+            drift = (rand() - 0.5) * 80
+            rot = (rand() - 0.5) * (720 if playful else 180)
+            p["frames"] = [frame(0, 0, -20, 0, 1, 1, sx, 0), frame(1, drift, 40, rot, 1, 0.9, sx, 1)]
+            p["duration"] = (1400 if playful else 3200) + rand() * 1200
+            p["delay"] = rand() * (500 if playful else 1200)
+            p["easings"] = [BURST_FALL if playful else "linear"]
+        else:
+            ang = -math.pi / 2 + (rand() - 0.5) * math.pi * 1.1
+            v = spread * (0.6 + rand() * 0.6)
+            dx, dy = math.cos(ang) * v, math.sin(ang) * v
+            spin = (rand() - 0.5) * (900 if playful else 240)
+            p["frames"] = [
+                frame(0, 0, 0, 0, 0.6, 1),
+                frame(0.35, dx, dy, spin * 0.5, 1, 1),
+                frame(1, dx * 1.3, dy + spread * (1.1 if playful else 0.5), spin, 0.9, 0),
+            ]
+            p["duration"] = (1100 if playful else 1700) + rand() * 400
+            p["easings"] = [BURST_ENTER, BURST_FALL]
+        out.append(p)
+    return out
+
+
+def burst_python() -> str:
+    """The burst generator as Python source, for targets that run Python (Qt Widgets)."""
+    constants = "\n".join(
+        f"{name} = {value!r}"
+        for name, value in (
+            ("BURST_COLORS", BURST_COLORS),
+            ("BURST_ENTER", BURST_ENTER),
+            ("BURST_FALL", BURST_FALL),
+            ("BURST_SPRING", BURST_SPRING),
+        )
+    )
+    return constants + "\n\n\n" + inspect.getsource(seeded) + "\n\n" + inspect.getsource(burst_particles)
 
 
 SLINT_FIELDS = {ch: re.sub(r"([A-Z])", lambda m: "-" + m.group(1).lower(), ch) for ch in REST}

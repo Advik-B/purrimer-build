@@ -568,3 +568,30 @@ def play(widget: QWidget, name: str, kind: str | None = None, **options) -> Moti
 
 def _origin(entry: dict) -> tuple[float, float]:
     return (entry["origin"][0], entry["origin"][1])
+
+
+# Burst: celebration particles, the same lists as the web's for the same seed.
+
+{{ burst_python() }}
+
+def burst_state(particle: dict, elapsed: float, width: float, height: float) -> dict:
+    """One particle at `elapsed` ms after the burst: x and y (px from the origin), rotate, scale and opacity."""
+    t = (elapsed - particle["delay"]) / particle["duration"]
+    t = min(1.0, max(0.0, t))
+    frames = particle["frames"]
+    for i in range(len(frames) - 1):
+        a, b = frames[i], frames[i + 1]
+        if t <= b["at"] or i == len(frames) - 2:
+            curve = particle["easings"][min(i, len(particle["easings"]) - 1)]
+            local = 0.0 if b["at"] == a["at"] else (t - a["at"]) / (b["at"] - a["at"])
+            e = local if curve == "linear" else cubic_bezier(*curve, local)
+            out = {k: a[k] + (b[k] - a[k]) * e for k in ("x", "y", "xf", "yf", "rotate", "scale", "opacity")}
+            out["x"] += out.pop("xf") * width
+            out["y"] += out.pop("yf") * height
+            out["opacity"] = min(1.0, max(0.0, out["opacity"]))
+            return out
+    return {"x": 0.0, "y": 0.0, "rotate": 0.0, "scale": 1.0, "opacity": 0.0}
+
+
+def burst_length(particles: list[dict]) -> float:
+    return max((p["delay"] + p["duration"] for p in particles), default=0.0)

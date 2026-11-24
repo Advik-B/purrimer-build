@@ -1,0 +1,51 @@
+// {{ note }}
+// {{ c.summary }}
+import { createEffect } from "solid-js";
+import { dynamic, type JSX } from "@solidjs/web";
+import { burst, burstAt, effectiveKind, type BurstVariant, type MotionKind } from "../motion";
+
+export type BurstProps = {
+  // Change any value to burst.
+  fire?: unknown;
+  onMount?: boolean;
+  variant?: BurstVariant;
+  count?: number;
+  spread?: number;
+  originX?: number;
+  originY?: number;
+  seed?: number;
+  kind?: MotionKind;
+  as?: string;
+  class?: string;
+  style?: JSX.CSSProperties;
+  children?: JSX.Element;
+};
+
+export function Burst(props: BurstProps): JSX.Element {
+  const Tag = dynamic(() => props.as ?? "span");
+  let host: HTMLElement | undefined;
+  let layer: HTMLSpanElement | undefined;
+  let first = true;
+
+  createEffect(
+    () => props.fire,
+    () => {
+      if (first) {
+        first = false;
+        if (!props.onMount) return;
+      }
+      if (!host || !layer) return;
+      const opts = { variant: props.variant, count: props.count, spread: props.spread, seed: props.seed, kind: props.kind };
+      // Rain covers the viewport.
+      if (props.variant === "rain") void burst(null, opts);
+      else void burstAt(layer, host.clientWidth * (props.originX ?? 0.5), host.clientHeight * (props.originY ?? 0.5), effectiveKind(host, props.kind), opts);
+    },
+  );
+
+  return (
+    <Tag ref={host} class={["pm-burst", props.class]} style={props.style} data-motion={props.kind}>
+      {props.children}
+      <span ref={layer} class="pm-burst__layer" aria-hidden="true" />
+    </Tag>
+  );
+}

@@ -2047,7 +2047,7 @@ export function burstAt(layer: HTMLElement, x: number, y: number, kind: Effectiv
   const done: Promise<unknown>[] = [];
   for (const p of particles) {
     const el = document.createElement("span");
-    el.className = "pm-particle";
+    el.className = "pm-burst__particle";
     el.style.width = `${p.width}px`;
     el.style.height = `${p.height}px`;
     el.style.borderRadius = p.shape === "circle" ? "999px" : "2px";
@@ -2076,7 +2076,7 @@ export function burst(target: Element | { x: number; y: number } | null, opts: B
   const el = target instanceof Element ? target : null;
   const kind = effectiveKind(el, opts.kind);
   const layer = document.createElement("div");
-  layer.className = "pm-burst-layer pm-burst-layer-fixed";
+  layer.className = "pm-burst__layer pm-burst__layer--fixed";
   layer.setAttribute("aria-hidden", "true");
   document.body.appendChild(layer);
   let x = window.innerWidth / 2;

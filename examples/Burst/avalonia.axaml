@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <!-- Bump Fire (or call Throw()) to burst. -->
+  <pm:MotionScope Kind="playful">
+    <pm:Burst HorizontalAlignment="Stretch">
+      <pm:Card Title="Pull request merged">
+        <TextBlock Text="All checks passed." />
+      </pm:Card>
+    </pm:Burst>
+  </pm:MotionScope>
+</UserControl>

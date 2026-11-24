@@ -209,3 +209,23 @@ html.pm-vt::view-transition-group(*) {
   animation-iteration-count: 1;
   animation-play-state: paused;
 }
+
+/* Burst particles are placed by script (motion.burst, Burst); this keeps them out of layout and hit-testing. */
+.pm-burst__layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 10;
+}
+.pm-burst__layer--fixed {
+  position: fixed;
+  z-index: 1000;
+}
+.pm-burst__particle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: block;
+  will-change: transform, opacity;
+}
