@@ -18,3 +18,45 @@
 .pm-banner--{{ tone }} { border-color: {{ ("borderColor-" ~ tone ~ "-emphasis") | tok }}; background: {{ ("bgColor-" ~ tone ~ "-muted") | tok }}; }
 .pm-banner--{{ tone }} .pm-banner__icon { fill: {{ ("fgColor-" ~ tone) | tok }}; }
 {% endfor %}
+/* Inside a touch scope a dismissible banner swipes sideways: it follows the finger and fades over a panel with a close
+   mark on the uncovered side, which fills once the swipe would dismiss. */
+.pm-banner-swipe { position: relative; }
+[data-density="touch"] .pm-banner-swipe { touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.pm-banner-swipe > .pm-banner {
+  position: relative;
+  translate: var(--pm-banner-dx, 0px) 0;
+  opacity: var(--pm-banner-opacity, 1);
+  transition: translate var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), opacity {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+}
+.pm-banner-swipe--dragging > .pm-banner { transition: none; }
+.pm-banner-swipe--leaving > .pm-banner { transition: translate {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}, opacity {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}; }
+.pm-banner-swipe__mark {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  border-radius: {{ "borderRadius-large" | tok }};
+  background: {{ "bgColor-neutral-muted" | tok }};
+}
+.pm-banner-swipe__mark--start { justify-content: flex-start; }
+.pm-banner-swipe__mark--end { justify-content: flex-end; }
+.pm-banner-swipe__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  color: {{ "fgColor-muted" | tok }};
+  transition: color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
+}
+.pm-banner-swipe__icon svg { width: 16px; height: 16px; fill: currentColor; }
+.pm-banner-swipe__mark--armed .pm-banner-swipe__icon { color: {{ "fgColor-onEmphasis" | tok }}; background: {{ "bgColor-neutral-emphasis" | tok }}; scale: 1.15; }
+@supports (corner-shape: squircle) {
+  .pm-banner-swipe__mark { border-radius: calc({{ "borderRadius-large" | tok }} * 1.5); corner-shape: squircle; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pm-banner-swipe--leaving > .pm-banner { transition-duration: {{ "duration-reduced" | tok }}; transition-timing-function: {{ "easing-standard" | tok }}; }
+  .pm-banner-swipe__mark--armed .pm-banner-swipe__icon { scale: none; }
+}

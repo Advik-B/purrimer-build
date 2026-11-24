@@ -3,14 +3,31 @@
 import { Show } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Icon } from "./Icon";
+import { HoldMenu, type HoldMenuItem } from "./HoldMenu";
 
-export type FABProps = { icon?: string; label: string; extended?: boolean; onClick?: () => void };
+export type FABProps = {
+  icon?: string;
+  label: string;
+  extended?: boolean;
+  // Two to six options a press and hold opens above the FAB; a tap still runs onClick, or opens them without one.
+  actions?: HoldMenuItem[];
+  actionsLayout?: "stack" | "arc";
+  onClick?: () => void;
+  onAction?: (item: HoldMenuItem, index: number) => void;
+};
 
 export function FAB(props: FABProps): JSX.Element {
-  return (
+  const button = () => (
     <button type="button" class={["pm-fab", props.extended && "pm-fab--extended"]} aria-label={props.extended ? undefined : props.label} onClick={() => props.onClick?.()}>
       <Icon name={props.icon ?? "plus"} size={24} />
       <Show when={props.extended}><span>{props.label}</span></Show>
     </button>
+  );
+  return (
+    <Show when={props.actions?.length} fallback={button()}>
+      <HoldMenu items={props.actions ?? []} layout={props.actionsLayout} tapOpens={!props.onClick} ariaLabel={props.label} onSelect={props.onAction}>
+        {button()}
+      </HoldMenu>
+    </Show>
   );
 }

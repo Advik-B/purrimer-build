@@ -1,0 +1,221 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  import { getContext } from "svelte";
+
+  export type NavRoute = { name: string; params?: unknown };
+
+  export interface Navigator {
+    push(name: string, params?: unknown): Promise<void>;
+    pop(): Promise<void>;
+    replace(name: string, params?: unknown): Promise<void>;
+    popToRoot(): Promise<void>;
+    switchTab(index: number): Promise<void>;
+    readonly depth: number;
+    readonly tab: number;
+  }
+
+  export type NavTab = { screen: string; label: string; icon: string; badge?: number; params?: unknown };
+  export type ScreenProps = { nav: Navigator; params: unknown; active: boolean };
+
+  const KEY = Symbol("pm-navigator");
+
+  // The navigator of the screen this is called from.
+  export function useNavigator(): Navigator {
+    return getContext<Navigator>(KEY);
+  }
+
+  export const navigatorKey = KEY;
+</script>
+
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { setContext, tick } from "svelte";
+  import BottomNav from "./BottomNav.svelte";
+  import Icon from "./Icon.svelte";
+  import { fadeScreens, slideScreens, wireEdgeSwipe } from "../motion";
+
+  type Entry = { key: number; name: string; params: unknown; opener: HTMLElement | null };
+
+  let {
+    screen,
+    initial = "",
+    initialParams,
+    tabs = [],
+    history = false,
+  }: {
+    // Renders one screen: screen(name, nav, params, active). Each screen draws its own MobileScreen.
+    screen: Snippet<[string, Navigator, unknown, boolean]>;
+    initial?: string;
+    initialParams?: unknown;
+    tabs?: NavTab[];
+    history?: boolean;
+  } = $props();
+
+  let seq = 0;
+  // svelte-ignore state_referenced_locally
+  let stacks: Entry[][] = $state(
+    tabs.length
+      ? tabs.map((t) => [{ key: ++seq, name: t.screen, params: t.params, opener: null }])
+      : [[{ key: ++seq, name: initial, params: initialParams, opener: null }]],
+  );
+  let tab = $state(0);
+  // While a transition or a swipe runs, the screen under the top one is shown too.
+  let moving = $state(false);
+  let root: HTMLElement | undefined = $state();
+  let stage: HTMLElement | undefined = $state();
+  let edge: HTMLElement | undefined = $state();
+  let queue: Promise<void> = Promise.resolve();
+
+  const el = (key: number) => root?.querySelector<HTMLElement>(`[data-screen-key="${key}"]`) ?? null;
+  const top = () => stacks[tab][stacks[tab].length - 1];
+
+  function enqueue(task: () => Promise<void>): Promise<void> {
+    queue = queue.then(task, task);
+    return queue;
+  }
+
+  function focusTitle(screenEl: HTMLElement | null) {
+    const heading = screenEl?.querySelector<HTMLElement>("h1, h2");
+    if (!heading) return;
+    heading.tabIndex = -1;
+    heading.focus({ preventScroll: true });
+  }
+
+  async function doPush(name: string, params: unknown) {
+    const below = top();
+    const entry: Entry = { key: ++seq, name, params, opener: document.activeElement as HTMLElement | null };
+    moving = true;
+    stacks[tab] = [...stacks[tab], entry];
+    await tick();
+    const incoming = el(entry.key);
+    const outgoing = el(below.key);
+    if (root && incoming && outgoing) await slideScreens(root, "push", incoming, outgoing);
+    moving = false;
+    await tick();
+    focusTitle(el(entry.key));
+  }
+
+  async function doPop(from = 0) {
+    const stack = stacks[tab];
+    if (stack.length < 2) return;
+    const leaving = stack[stack.length - 1];
+    moving = true;
+    await tick();
+    const outgoing = el(leaving.key);
+    const incoming = el(stack[stack.length - 2].key);
+    if (root && incoming && outgoing) await slideScreens(root, "pop", incoming, outgoing, from);
+    stacks[tab] = stack.slice(0, -1);
+    moving = false;
+    await tick();
+    leaving.opener?.focus({ preventScroll: true });
+  }
+
+  const nav: Navigator = {
+    push: (name, params) =>
+      enqueue(async () => {
+        if (history) window.history.pushState({ pmNavigator: true }, "");
+        await doPush(name, params);
+      }),
+    pop: () => (history && stacks[tab].length > 1 ? (window.history.back(), queue) : enqueue(() => doPop())),
+    replace: (name, params) =>
+      enqueue(async () => {
+        const stack = stacks[tab];
+        stacks[tab] = [...stack.slice(0, -1), { key: ++seq, name, params, opener: stack[stack.length - 1].opener }];
+        await tick();
+        const t = el(top().key);
+        if (root && t) await fadeScreens(root, t);
+      }),
+    popToRoot: () =>
+      enqueue(async () => {
+        const stack = stacks[tab];
+        if (stack.length < 2) return;
+        stacks[tab] = [stack[0], stack[stack.length - 1]];
+        await doPop();
+      }),
+    switchTab: (index) =>
+      enqueue(async () => {
+        if (index === tab) {
+          if (stacks[tab].length > 1) {
+            stacks[tab] = [stacks[tab][0], top()];
+            await doPop();
+          } else {
+            el(top().key)?.querySelector(".pm-mobile-screen__body")?.scrollTo({ top: 0, behavior: "smooth" });
+          }
+          return;
+        }
+        tab = index;
+        await tick();
+        const t = el(top().key);
+        if (root && t) await fadeScreens(root, t);
+      }),
+    get depth() {
+      return stacks[tab].length;
+    },
+    get tab() {
+      return tab;
+    },
+  };
+  setContext(navigatorKey, nav);
+
+  $effect(() => {
+    if (!history) return;
+    const onPop = () => enqueue(() => doPop());
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  });
+
+  $effect(() => {
+    if (!stage || !edge) return;
+    return wireEdgeSwipe(edge, {
+      root: stage,
+      screens: () => {
+        const stack = stacks[tab];
+        if (stack.length < 2) return null;
+        const t = el(stack[stack.length - 1].key);
+        const b = el(stack[stack.length - 2].key);
+        return t && b ? { top: t, below: b } : null;
+      },
+      onCommit: (progress) => {
+        if (history) window.history.back();
+        else enqueue(() => doPop(progress));
+      },
+    });
+  });
+
+  function onkeydown(e: KeyboardEvent) {
+    if (e.altKey && e.key === "ArrowLeft" && stacks[tab].length > 1) {
+      e.preventDefault();
+      nav.pop();
+    }
+  }
+</script>
+
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div bind:this={root} class="pm-navigator" {onkeydown}>
+  <div bind:this={stage} class="pm-navigator__stage">
+    {#each stacks as stack, t (t)}
+      {#each stack as entry, i (entry.key)}
+        {@const isTop = t === tab && i === stack.length - 1}
+        {@const isUnder = t === tab && i === stack.length - 2}
+        <section
+          class={["pm-navigator__screen", isUnder && "pm-navigator__screen--under"]}
+          data-screen-key={entry.key}
+          hidden={!(isTop || (isUnder && moving))}
+          inert={!isTop}
+          aria-hidden={isTop ? undefined : "true"}
+        >
+          {@render screen(entry.name, nav, entry.params, isTop)}
+          <div class="pm-navigator__dim" aria-hidden="true"></div>
+        </section>
+      {/each}
+    {/each}
+    <div bind:this={edge} class="pm-navigator__edge" aria-hidden="true" hidden={stacks[tab].length < 2}></div>
+    <div class="pm-navigator__back-mark" aria-hidden="true"><Icon name="arrow-left" /></div>
+  </div>
+  {#if tabs.length}
+    <div class="pm-navigator__nav">
+      <BottomNav showLabels items={tabs.map((t) => ({ icon: t.icon, label: t.label, badge: t.badge }))} selected={tab} onselect={(i) => nav.switchTab(i)} />
+    </div>
+  {/if}
+</div>

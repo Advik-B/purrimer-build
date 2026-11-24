@@ -1,0 +1,169 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { IconButton } from "icon-button.slint";
+
+// One slide: a photo, or a coloured panel with a caption. Slint cannot repeat arbitrary children, so slides are data.
+export struct CarouselItem {
+    title: string,
+    image: image,
+    background: brush,
+}
+
+// Slides side by side that page under a finger or a dragged mouse, with momentum and snapping one slide per flick, and
+// a page marker that follows the drag one to one. changed(index) fires as the slide changes; go(index) moves there.
+export component Carousel inherits Rectangle {
+    in property <[CarouselItem]> items;
+    in-out property <int> index;
+    in property <bool> peek;
+    in property <bool> controls: true;
+    in property <length> slide-height: 200px;
+    callback changed(int);
+    property <length> slide-width: self.width - (self.peek ? 48px : 0px);
+    property <length> step: self.slide-width + 8px;
+    property <float> position: offset.value / Math.max(1, self.step / 1px);
+    property <length> grab-offset;
+    property <length> last-x;
+    property <duration> last-t;
+    property <float> velocity;
+    property <bool> dragging;
+
+    public function go(i: int) {
+        let target = Math.clamp(i, 0, Math.max(0, root.items.length - 1));
+        offset.to(target * root.step / 1px, 0);
+        root.settle-index(target);
+    }
+
+    function settle-index(i: int) {
+        if i != root.index {
+            root.index = i;
+            root.changed(i);
+        }
+    }
+
+    height: root.slide-height + (root.controls ? 52px : 0px);
+    accessible-role: groupbox;
+    forward-focus: keys;
+
+    offset := PmSpring { precision: 0.5; }
+
+    track := Rectangle {
+        y: 0;
+        height: root.slide-height;
+        clip: true;
+
+        for item[i] in root.items: Rectangle {
+            x: (root.peek ? 24px : 0px) + i * root.step - offset.value * 1px;
+            width: root.slide-width;
+            height: root.slide-height;
+            border-radius: {{ "borderRadius-large" | tok }};
+            clip: true;
+            background: item.background;
+            accessible-role: groupbox;
+            accessible-label: (i + 1) + " of " + root.items.length;
+            Image {
+                width: parent.width;
+                height: parent.height;
+                source: item.image;
+                image-fit: cover;
+            }
+            if item.title != "": Text {
+                x: 16px;
+                y: parent.height - self.height - 16px;
+                text: item.title;
+                color: {{ "fgColor-default" | tok }};
+                font-size: 16px;
+            }
+        }
+
+        TouchArea {
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down {
+                    offset.stop();
+                    root.grab-offset = offset.value * 1px;
+                    root.last-x = 0;
+                    root.last-t = animation-tick();
+                    root.velocity = 0;
+                    root.dragging = false;
+                } else if (event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel) && root.dragging {
+                    root.dragging = false;
+                    let start = Math.round(root.grab-offset / root.step);
+                    let projected = offset.value - root.velocity * 0.3 * 0.998 / 0.002 / 1000;
+                    let target = Math.clamp(Math.clamp(Math.round(projected * 1px / root.step), start - 1, start + 1), 0, Math.max(0, root.items.length - 1));
+                    offset.to(target * root.step / 1px, -root.velocity);
+                    root.settle-index(target);
+                }
+            }
+            moved => {
+                let dx = self.mouse-x - self.pressed-x;
+                if !root.dragging && Math.abs(dx) > PurrimerMotion.slop {
+                    root.dragging = true;
+                }
+                if root.dragging {
+                    let now = animation-tick();
+                    let dt = (now - root.last-t) / 1s;
+                    if dt > 0 {
+                        root.velocity = (dx - root.last-x) / 1px / dt;
+                    }
+                    root.last-x = dx;
+                    root.last-t = now;
+                    let limit = Math.max(0px, (root.items.length - 1) * root.step);
+                    let raw = root.grab-offset - dx;
+                    let next = raw < 0px ? PurrimerMotion.rubber-band(raw, root.width) : raw > limit ? limit + PurrimerMotion.rubber-band(raw - limit, root.width) : raw;
+                    offset.set(next / 1px);
+                    root.settle-index(Math.clamp(Math.round(next / root.step), 0, Math.max(0, root.items.length - 1)));
+                }
+            }
+        }
+    }
+
+    if root.controls && root.items.length > 1: HorizontalLayout {
+        y: root.slide-height + 4px;
+        height: 44px;
+        alignment: center;
+        spacing: 4px;
+        IconButton {
+            icon: PurrimerIcons.chevron-left-16;
+            label: "Previous";
+            variant: "invisible";
+            width: 44px;
+            height: 44px;
+            opacity: root.index > 0 ? 1 : 0;
+            enabled: root.index > 0;
+            clicked => { root.go(root.index - 1); }
+        }
+        HorizontalLayout {
+            spacing: 6px;
+            alignment: center;
+            for item[i] in root.items: Rectangle {
+                property <float> t: Math.max(0, 1 - Math.abs(root.position - i));
+                y: (parent.height - self.height) / 2;
+                width: 6px + 14px * self.t;
+                height: 6px;
+                border-radius: 3px;
+                background: {{ "fgColor-accent" | tok }}.mix({{ "borderColor-emphasis" | tok }}, self.t);
+            }
+        }
+        IconButton {
+            icon: PurrimerIcons.chevron-right-16;
+            label: "Next";
+            variant: "invisible";
+            width: 44px;
+            height: 44px;
+            opacity: root.index < root.items.length - 1 ? 1 : 0;
+            enabled: root.index < root.items.length - 1;
+            clicked => { root.go(root.index + 1); }
+        }
+    }
+
+    keys := FocusScope {
+        key-pressed(event) => {
+            if event.text == Key.LeftArrow { root.go(root.index - 1); return accept; }
+            if event.text == Key.RightArrow { root.go(root.index + 1); return accept; }
+            if event.text == Key.Home { root.go(0); return accept; }
+            if event.text == Key.End { root.go(root.items.length - 1); return accept; }
+            reject
+        }
+    }
+}

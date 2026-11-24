@@ -1,0 +1,224 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QEvent, QObject, QPointF, QRectF, Qt, QTimer, Signal
+from PySide6.QtGui import QPainter
+from PySide6.QtWidgets import QFrame, QScrollArea, QScroller, QScrollerProperties, QVBoxLayout, QWidget
+
+from ..icons import paint_icon
+from ..motion import Spring
+from ..theme import theme
+
+PULL_ARM = 64
+PULL_HOLD = 48
+
+
+class _Bar(QWidget):
+    """Holds the AppBar and draws its hairline and shadow once content scrolls under it."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scrolled = False
+        self.layout_ = QVBoxLayout(self)
+        self.layout_.setContentsMargins(0, 0, 0, 0)
+
+    def set_scrolled(self, scrolled: bool) -> None:
+        if scrolled != self.scrolled:
+            self.scrolled = scrolled
+            if scrolled:
+                theme.apply_shadow(self, {{ "shadow-resting-xsmall" | tok }})
+            else:
+                self.setGraphicsEffect(None)
+            self.update()
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), theme.color({{ "bgColor-default" | tok }}))
+        if self.scrolled:
+            painter.fillRect(0, self.height() - 1, self.width(), 1, theme.color({{ "borderColor-default" | tok }}))
+
+
+class _Pull(QWidget):
+    """The pull-to-refresh disc: an arrow that turns over once the pull is far enough, then a turning sync mark."""
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.armed = False
+        self.busy = False
+        self.angle = 0.0
+        self.setFixedSize(36, 36)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        theme.apply_shadow(self, {{ "shadow-floating-small" | tok }})
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color({{ "overlay-bgColor" | tok }}))
+        painter.drawEllipse(QRectF(self.rect()))
+        painter.translate(18, 18)
+        painter.rotate(self.angle if self.busy else 180 if self.armed else 0)
+        paint_icon(painter, QRectF(-8, -8, 16, 16), "sync" if self.busy else "arrow-down",
+                   theme.color({{ "fgColor-accent" | tok }}))
+
+
+class MobileScreen(QWidget):
+    """One phone screen. Add content to `body`; pass the AppBar, BottomNav, FAB and a KeyboardFooter in.
+
+    Only the body scrolls, and it scrolls under a finger or a dragged mouse with momentum and overscroll. Its scroll
+    elevates the AppBar, shrinks a large title over the first 48px and folds an extended FAB while scrolling down.
+    With `refreshable`, pulling down at the top emits `refresh_requested`; call `finish_refresh()` when it is done.
+    """
+
+    refresh_requested = Signal()
+
+    def __init__(self, app_bar: QWidget | None = None, bottom_nav: QWidget | None = None, fab: QWidget | None = None,
+                 footer: QWidget | None = None, surface: str = "default", refreshable: bool = False,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # Marks a touch scope: components inside switch to their touch design, such as Banner's swipe.
+        self.setProperty("pmTouchScope", True)
+        self.app_bar = app_bar
+        self.fab = fab
+        self._surface = surface
+        self._refreshable = refreshable
+        self._last = 0
+        self._busy = False
+        self._drag_origin: QPointF | None = None
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.setSpacing(0)
+        self._bar = _Bar()
+        if app_bar is not None:
+            self._bar.layout_.addWidget(app_bar)
+            outer.addWidget(self._bar)
+        self._scroll = QScrollArea()
+        self._scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._scroll.viewport().setAutoFillBackground(False)
+        content = QWidget()
+        content.setAutoFillBackground(False)
+        self.body = QVBoxLayout(content)
+        bottom = 16 if bottom_nav is not None or footer is not None else 96
+        self.body.setContentsMargins(0, 0, 0, bottom)
+        self.body.setSpacing(0)
+        self.body.setAlignment(Qt.AlignmentFlag.AlignTop)
+        self._scroll.setWidget(content)
+        outer.addWidget(self._scroll, 1)
+        if footer is not None:
+            outer.addWidget(footer)
+        if bottom_nav is not None:
+            outer.addWidget(bottom_nav)
+        self._nav = bottom_nav
+        # Kinetic scrolling for touch and for a mouse drag, with overshoot at the ends.
+        QScroller.grabGesture(self._scroll.viewport(), QScroller.ScrollerGestureType.LeftMouseButtonGesture)
+        scroller = QScroller.scroller(self._scroll.viewport())
+        props = scroller.scrollerProperties()
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.VerticalOvershootPolicy,
+                              QScrollerProperties.OvershootPolicy.OvershootWhenScrollable)
+        props.setScrollMetric(QScrollerProperties.ScrollMetric.HorizontalOvershootPolicy,
+                              QScrollerProperties.OvershootPolicy.OvershootAlwaysOff)
+        scroller.setScrollerProperties(props)
+        self._scroll.verticalScrollBar().valueChanged.connect(self._on_scroll)
+        self._pull = _Pull(self)
+        self._pull.hide()
+        self._offset = Spring(0.0, precision=0.5, parent=self)
+        self._offset.changed.connect(self._place_pull)
+        if refreshable:
+            self._scroll.viewport().installEventFilter(self)
+        if fab is not None:
+            fab.setParent(self)
+            fab.installEventFilter(self)
+            fab.raise_()
+        theme.changed.connect(self.update)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        token = {{ "bgColor-inset" | tok }} if self._surface == "inset" else {{ "bgColor-default" | tok }}
+        painter.fillRect(self.rect(), theme.color(token))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._place_fab()
+        self._place_pull(self._offset.value)
+
+    def _place_fab(self) -> None:
+        if self.fab is None:
+            return
+        bottom = self.height() - 16
+        if self._nav is not None:
+            bottom = self._nav.geometry().top() - 16
+        self.fab.move(self.width() - {{ px("mobile-gutter") | int }} - self.fab.width(), bottom - self.fab.height())
+        self.fab.raise_()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._place_fab()
+
+    def _on_scroll(self, value: int) -> None:
+        self._bar.set_scrolled(value > 0)
+        if self.app_bar is not None and hasattr(self.app_bar, "set_collapse"):
+            self.app_bar.set_collapse(value / 48)
+        if abs(value - self._last) > 4:
+            if self.fab is not None and hasattr(self.fab, "set_folded"):
+                self.fab.set_folded(value > self._last and value > 0)
+            self._last = value
+
+    def scroll_to_top(self) -> None:
+        QScroller.scroller(self._scroll.viewport()).scrollTo(QPointF(0, 0))
+
+    def finish_refresh(self) -> None:
+        """Ends a refresh started by refresh_requested: the disc stops turning and slides away."""
+        self._busy = False
+        self._pull.busy = False
+        self._offset.to(0.0)
+
+    def _place_pull(self, value: float) -> None:
+        top = self._scroll.geometry().top()
+        self._pull.setVisible(value > 1)
+        self._pull.move((self.width() - 36) // 2, top + round(value) - 44)
+        if self._pull.busy:
+            self._pull.angle = (self._pull.angle + 12) % 360
+        self._pull.update()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        if watched is self.fab and event.type() == QEvent.Type.Resize:
+            self._place_fab()
+            return False
+        if watched is not self._scroll.viewport() or self._busy:
+            return False
+        kind = event.type()
+        if kind == QEvent.Type.MouseButtonPress and self._scroll.verticalScrollBar().value() == 0:
+            self._drag_origin = event.position()
+        elif kind == QEvent.Type.MouseMove and self._drag_origin is not None:
+            dy = event.position().y() - self._drag_origin.y()
+            if dy > 0 and self._scroll.verticalScrollBar().value() == 0:
+                pulled = dy / 2
+                armed = pulled >= PULL_ARM
+                if armed != self._pull.armed:
+                    self._pull.armed = armed
+                self._offset.set(pulled)
+        elif kind == QEvent.Type.MouseButtonRelease and self._drag_origin is not None:
+            self._drag_origin = None
+            if self._offset.value >= PULL_ARM:
+                self._busy = True
+                self._pull.armed = False
+                self._pull.busy = True
+                self._offset.to(PULL_HOLD)
+                self._spin_tick()
+                self.refresh_requested.emit()
+            else:
+                self._pull.armed = False
+                self._offset.to(0.0)
+        return False
+
+    def _spin_tick(self) -> None:
+        if not self._pull.busy:
+            return
+        self._place_pull(self._offset.value)
+        QTimer.singleShot(16, self._spin_tick)

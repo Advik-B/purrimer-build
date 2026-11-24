@@ -1,0 +1,19 @@
+import { ActionSheet, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    // inline draws the sheet in place, for docs; in an app, put it last in an element that covers the screen.
+    ActionSheet {
+        inline: true;
+        title: "Photo.jpg";
+        items: [
+            { label: "Share", icon: PurrimerIcons.share-android-16 },
+            { label: "Copy link", icon: PurrimerIcons.link-16, description: "Anyone with the link can view" },
+            { label: "Move to", icon: PurrimerIcons.file-directory-16, submenu: true },
+            { label: "Favourite", icon: PurrimerIcons.star-16, checkable: true, checked: true },
+            { divider: true },
+            { label: "Delete", icon: PurrimerIcons.trash-16, variant: "danger" },
+        ];
+        selected(index) => { debug("chose", index); }
+    }
+}

@@ -2,11 +2,39 @@
 <!-- {{ c.summary }} -->
 <script lang="ts">
   import Icon from "./Icon.svelte";
+  import HoldMenu, { type HoldMenuItem } from "./HoldMenu.svelte";
 
-  let { icon = "plus", label, extended = false, onclick }: { icon?: string; label: string; extended?: boolean; onclick?: () => void } = $props();
+  let {
+    icon = "plus",
+    label,
+    extended = false,
+    actions = [],
+    actionsLayout = "stack",
+    onclick,
+    onaction,
+  }: {
+    icon?: string;
+    label: string;
+    extended?: boolean;
+    // Two to six options a press and hold opens above the FAB; a tap still runs onclick, or opens them without one.
+    actions?: HoldMenuItem[];
+    actionsLayout?: "stack" | "arc";
+    onclick?: () => void;
+    onaction?: (item: HoldMenuItem, index: number) => void;
+  } = $props();
 </script>
 
-<button type="button" class={["pm-fab", extended && "pm-fab--extended"]} aria-label={extended ? undefined : label} {onclick}>
-  <Icon name={icon} size={24} />
-  {#if extended}<span>{label}</span>{/if}
-</button>
+{#snippet button()}
+  <button type="button" class={["pm-fab", extended && "pm-fab--extended"]} aria-label={extended ? undefined : label} {onclick}>
+    <Icon name={icon} size={24} />
+    {#if extended}<span>{label}</span>{/if}
+  </button>
+{/snippet}
+
+{#if actions.length}
+  <HoldMenu items={actions} layout={actionsLayout} tapOpens={!onclick} ariaLabel={label} onselect={onaction}>
+    {@render button()}
+  </HoldMenu>
+{:else}
+  {@render button()}
+{/if}

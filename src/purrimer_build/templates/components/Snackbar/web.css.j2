@@ -15,12 +15,22 @@
   color: {{ "fgColor-onEmphasis" | tok }};
   box-shadow: {{ "shadow-floating-small" | tok }};
   font: 400 14px/20px var(--font-sans);
-  translate: -50% 0;
+  translate: calc(-50% + var(--pm-snackbar-dx, 0px)) 0;
+  opacity: var(--pm-snackbar-opacity, 1);
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: translate var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), opacity var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease);
   animation: pm-snackbar-in {{ "duration-sleepy-medium" | tok }} {{ "easing-sleepy-enter" | tok }};
 }
+/* Swiped sideways it follows the finger and fades; once dismissed it slides on out. */
+.pm-snackbar--dragging { transition: none; }
+.pm-snackbar--leaving { transition-duration: {{ "duration-base" | tok }}; transition-timing-function: {{ "easing-sleepy-exit" | tok }}; }
 .pm-snackbar__message { flex: 1; min-width: 0; }
 .pm-snackbar__action { height: 40px; padding: 0 12px; border: 0; border-radius: {{ "borderRadius-medium" | tok }}; background: transparent; color: inherit; font: 600 14px/20px var(--font-sans); text-decoration: underline; cursor: pointer; }
 .pm-snackbar__action:hover { background: rgb(from currentColor r g b / 0.12); }
 .pm-snackbar__action:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid currentColor; }
 @keyframes pm-snackbar-in { from { opacity: 0; translate: -50% 16px; } }
-@media (prefers-reduced-motion: reduce) { .pm-snackbar { animation-name: pm-fade-in; } }
+@media (prefers-reduced-motion: reduce) {
+  .pm-snackbar { animation-name: pm-fade-in; transition-duration: {{ "duration-reduced" | tok }}; transition-timing-function: {{ "easing-standard" | tok }}; }
+}

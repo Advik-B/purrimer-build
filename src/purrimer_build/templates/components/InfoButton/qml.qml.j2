@@ -1,0 +1,45 @@
+// {{ note }}
+// {{ c.summary }}
+import QtQuick
+
+// A tap opens a BottomSheet with the title, the text at 16px and a button that closes it.
+IconButton {
+    id: control
+    property string title
+    // "text" belongs to the button itself, so the explanation is message here.
+    property string message
+    property string closeLabel: "Got it"
+    property bool defaultOpen: false
+    // Items to show under the message, if a sentence is not enough.
+    property alias extra: sheet.content
+
+    iconName: "info"
+    variant: "invisible"
+    label: title !== "" ? "About " + title.toLowerCase() : "About this"
+    width: 44
+    height: 44
+    onClicked: sheet.open()
+    Component.onCompleted: if (defaultOpen) sheet.open()
+
+    BottomSheet {
+        id: sheet
+        title: control.title
+
+        Text {
+            visible: control.message !== ""
+            width: parent ? parent.width : 0
+            wrapMode: Text.Wrap
+            text: control.message
+            font.family: {{ "text-body-medium" | tok }}.family
+            font.pixelSize: 16
+            lineHeight: 24
+            lineHeightMode: Text.FixedHeight
+            color: {{ "fgColor-default" | tok }}
+        }
+
+        actions: Button {
+            text: control.closeLabel
+            onClicked: sheet.close()
+        }
+    }
+}

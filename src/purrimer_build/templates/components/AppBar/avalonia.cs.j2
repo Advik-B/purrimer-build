@@ -62,6 +62,18 @@ public class AppBar : ContentControl
         remove => RemoveHandler(BackRequestedEvent, value);
     }
 
+    // Shrinks a large title toward the bar's title size, from 0 (full) to 1; MobileScreen sets it as the body scrolls.
+    public static readonly StyledProperty<double> CollapseProperty =
+        AvaloniaProperty.Register<AppBar, double>(nameof(Collapse));
+
+    private TextBlock? _largeTitle;
+
+    public double Collapse
+    {
+        get => GetValue(CollapseProperty);
+        set => SetValue(CollapseProperty, value);
+    }
+
     protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
     {
         if (_back != null)
@@ -70,6 +82,24 @@ public class AppBar : ContentControl
         _back = e.NameScope.Find<Button>("PART_Back");
         if (_back != null)
             _back.Click += OnBackClick;
+        _largeTitle = e.NameScope.Find<TextBlock>("largeTitle");
+        ApplyCollapse();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == CollapseProperty)
+            ApplyCollapse();
+    }
+
+    private void ApplyCollapse()
+    {
+        if (_largeTitle == null)
+            return;
+        var c = Math.Clamp(Collapse, 0, 1);
+        _largeTitle.FontSize = 28 - 10 * c;
+        _largeTitle.Margin = new Thickness({{ px("mobile-gutter") | num }}, 0, {{ px("mobile-gutter") | num }}, 8 - 4 * c);
     }
 
     private void OnBackClick(object? sender, RoutedEventArgs e)

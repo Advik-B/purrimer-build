@@ -1,0 +1,66 @@
+// {{ note }}
+// A one-dimensional spring for the touch layer. Bind to `value`; call to(target, velocity) on release and set(v)
+// while a pointer drives the value directly.
+import QtQuick
+
+QtObject {
+    id: spring
+
+    property real value: 0
+    property real target: 0
+    property real velocity: 0
+    property real precision: 0.01
+    // Empty means Purrimer.motionKind.
+    property string kind: ""
+    readonly property bool moving: frames.running
+
+    signal settled()
+
+    function set(v) {
+        frames.stop()
+        target = v
+        velocity = 0
+        value = v
+    }
+
+    function to(t, v) {
+        target = t
+        if (v !== undefined)
+            velocity = v
+        if (Purrimer.pauseLoops) {
+            set(t)
+            settled()
+            return
+        }
+        frames.start()
+    }
+
+    function stop() {
+        frames.stop()
+    }
+
+    property FrameAnimation frames: FrameAnimation {
+        onTriggered: {
+            const params = Purrimer.springs[spring.kind || Purrimer.motionKind] || Purrimer.springs.sleepy
+            let dt = Math.min(frameTime, 0.064)
+            let x = spring.value
+            let v = spring.velocity
+            while (dt > 0) {
+                const h = Math.min(dt, 1 / 240)
+                const accel = -params[0] * (x - spring.target) - params[1] * v
+                v += accel * h
+                x += v * h
+                dt -= h
+            }
+            if (Math.abs(x - spring.target) < spring.precision && Math.abs(v) < spring.precision * 10) {
+                stop()
+                spring.velocity = 0
+                spring.value = spring.target
+                spring.settled()
+                return
+            }
+            spring.velocity = v
+            spring.value = x
+        }
+    }
+}

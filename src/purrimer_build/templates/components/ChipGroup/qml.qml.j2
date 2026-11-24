@@ -1,0 +1,149 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+Flickable {
+    id: root
+    // Options: [{ value, label, icon?, count?, disabled? }]
+    property var options: []
+    // A value, or an array of values when multiple. Single choice starts with the first option on.
+    property var value: multiple ? [] : (options.length ? options[0].value : null)
+    property bool multiple: false
+    property bool allowEmpty: false
+    property bool wrap: false
+    property string accessibleName: ""
+    signal changed(var value)
+
+    function isOn(v) {
+        return multiple ? (value || []).indexOf(v) !== -1 : value === v
+    }
+
+    function toggle(v) {
+        let next
+        if (multiple) {
+            next = (value || []).slice()
+            const i = next.indexOf(v)
+            if (i === -1)
+                next.push(v)
+            else
+                next.splice(i, 1)
+        } else if (value === v) {
+            if (!allowEmpty)
+                return
+            next = null
+        } else {
+            next = v
+        }
+        value = next
+        changed(next)
+    }
+
+    implicitWidth: wrap ? 320 : flow.childrenRect.width + 32
+    implicitHeight: flow.implicitHeight + 16
+    contentWidth: wrap ? width : flow.childrenRect.width + 32
+    contentHeight: implicitHeight
+    flickableDirection: Flickable.HorizontalFlick
+    interactive: !wrap && contentWidth > width
+    boundsBehavior: Flickable.DragAndOvershootBounds
+    clip: true
+    Accessible.role: Accessible.Grouping
+    Accessible.name: accessibleName
+
+    Flow {
+        id: flow
+        x: 16
+        y: 8
+        // Unwrapped, the flow is wide enough to keep every chip on one line.
+        width: root.wrap ? root.width - 32 : 100000
+        spacing: 8
+        flow: Flow.LeftToRight
+
+        Repeater {
+            model: root.options
+            Item {
+                id: chip
+                required property var modelData
+                readonly property bool on: root.isOn(modelData.value)
+                readonly property bool disabled: !!modelData.disabled
+                readonly property color ink: disabled ? {{ "fgColor-disabled" | tok }} : on ? {{ "fgColor-accent" | tok }} : {{ "fgColor-default" | tok }}
+                readonly property color muted: disabled ? {{ "fgColor-disabled" | tok }} : on ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }}
+                width: content.implicitWidth + 24
+                height: 36
+                activeFocusOnTab: !disabled
+                Accessible.role: Accessible.Button
+                Accessible.checkable: true
+                Accessible.checked: on
+                Accessible.name: modelData.label
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        root.toggle(modelData.value)
+                        event.accepted = true
+                    }
+                }
+
+                PmSpring { id: press; value: 1; target: 1; precision: 0.0005 }
+
+                Rectangle {
+                    anchors.fill: parent
+                    scale: press.value
+                    radius: {{ "borderRadius-medium" | tok }}
+                    color: chip.on ? {{ "bgColor-accent-muted" | tok }} : tap.pressed ? {{ "control-transparent-bgColor-selected" | tok }} : {{ "bgColor-default" | tok }}
+                    border.width: {{ "borderWidth-thin" | tok }}
+                    border.color: chip.disabled ? {{ "borderColor-default" | tok }} : chip.on ? {{ "borderColor-accent-emphasis" | tok }} : {{ "borderColor-emphasis" | tok }}
+                    Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+
+                    Row {
+                        id: content
+                        x: 12
+                        height: parent.height
+                        spacing: 6
+                        Icon {
+                            visible: chip.on || !!chip.modelData.icon
+                            name: chip.on ? "check" : (chip.modelData.icon || "")
+                            color: chip.muted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            text: chip.modelData.label
+                            font.family: {{ "text-body-medium" | tok }}.family
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            color: chip.ink
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                        Text {
+                            visible: chip.modelData.count !== undefined && chip.modelData.count !== null
+                            text: String(chip.modelData.count)
+                            font.family: {{ "text-body-medium" | tok }}.family
+                            font.pixelSize: 14
+                            font.features: { "tnum": 1 }
+                            color: chip.muted
+                            anchors.verticalCenter: parent.verticalCenter
+                        }
+                    }
+
+                    Rectangle {
+                        visible: chip.activeFocus
+                        anchors.fill: parent
+                        anchors.margins: -3
+                        radius: parent.radius + 3
+                        color: "transparent"
+                        border.width: {{ "borderWidth-thick" | tok }}
+                        border.color: {{ "focus-outlineColor" | tok }}
+                    }
+                }
+
+                HoverHandler { cursorShape: chip.disabled ? Qt.ForbiddenCursor : Qt.PointingHandCursor }
+                TapHandler {
+                    id: tap
+                    enabled: !chip.disabled
+                    margin: 4
+                    gesturePolicy: TapHandler.ReleaseWithinBounds
+                    onPressedChanged: press.to(pressed ? Purrimer.pressScale : 1)
+                    onTapped: root.toggle(chip.modelData.value)
+                }
+            }
+        }
+    }
+}

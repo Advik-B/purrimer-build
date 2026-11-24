@@ -1,32 +1,75 @@
 // {{ note }}
 // {{ c.summary }}
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onCleanup, onSettled } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Icon } from "./Icon";
+import { buzz, wireScrub } from "../motion";
 
-export type BottomNavItem = { icon: string; label: string; badge?: number };
-export type BottomNavProps = { items: BottomNavItem[]; selected?: number; showLabels?: boolean; onSelect?: (index: number) => void };
+// badge: a count, or true for a dot.
+export type BottomNavItem = { icon: string; label: string; activeIcon?: string; badge?: number | true };
+export type BottomNavProps = {
+  items: BottomNavItem[];
+  selected?: number;
+  showLabels?: boolean;
+  ariaLabel?: string;
+  // Fires on every press, the current tab included, so a screen can scroll to the top or pop to its root.
+  onSelect?: (index: number) => void;
+};
 
 export function BottomNav(props: BottomNavProps): JSX.Element {
-  const [selected, setSelected] = createSignal(() => props.selected ?? 0);
+  const [own, setOwn] = createSignal(props.selected ?? 0);
+  const [scrub, setScrub] = createSignal(-1);
+  const selected = () => props.selected ?? own();
+  const items = () => props.items.slice(0, 5);
+  const marked = () => (scrub() !== -1 ? scrub() : selected());
+  let nav: HTMLElement | undefined;
+  let unwire: (() => void) | undefined;
+
   const pick = (i: number) => {
-    setSelected(i);
+    if (i !== selected()) buzz();
+    setOwn(i);
     props.onSelect?.(i);
   };
+
+  onSettled(() => {
+    if (nav) unwire = wireScrub(nav, () => items().length, setScrub, pick);
+  });
+  onCleanup(() => unwire?.());
+
+  const badge = (b: number | true) => (
+    <span class={b === true ? "pm-bottomnav__badge pm-bottomnav__badge--dot" : "pm-bottomnav__badge"} aria-hidden="true">
+      {b === true ? "" : b > 99 ? "99+" : b}
+    </span>
+  );
+
   return (
-    <nav class="pm-bottomnav" aria-label="Main">
-      <For each={props.items}>
+    <nav
+      ref={nav}
+      class={scrub() !== -1 ? "pm-bottomnav pm-bottomnav--scrubbing" : "pm-bottomnav"}
+      aria-label={props.ariaLabel ?? "Main"}
+      data-density="touch"
+      style={`--pm-bottomnav-n: ${Math.max(1, items().length)}; --pm-bottomnav-i: ${Math.max(0, marked())}`}
+    >
+      <Show when={marked() >= 0}>
+        <span class="pm-bottomnav__bar" aria-hidden="true" />
+      </Show>
+      <For each={items()}>
         {(item, i) => (
           <button
             type="button"
-            class="pm-bottomnav__item"
+            class={i() === scrub() ? "pm-bottomnav__item pm-bottomnav__item--scrub" : "pm-bottomnav__item"}
             aria-current={i() === selected() ? "page" : undefined}
-            aria-label={props.showLabels ? undefined : item.label}
             onClick={() => pick(i())}
           >
-            <Icon name={item.icon} size={24} />
-            <Show when={props.showLabels}><span>{item.label}</span></Show>
-            <Show when={item.badge}>{(count) => <span class="pm-bottomnav__badge">{count() > 99 ? "99+" : count()}</span>}</Show>
+            <span class="pm-bottomnav__indicator">
+              <Icon name={i() === selected() && item.activeIcon ? item.activeIcon : item.icon} size={24} />
+              {/* A new count builds a new badge, which plays the bump. */}
+              {item.badge ? badge(item.badge) : null}
+            </span>
+            <span class={props.showLabels ? "pm-bottomnav__label" : "pm-sr-only"}>{item.label}</span>
+            <Show when={item.badge}>
+              <span class="pm-sr-only">{item.badge === true ? ", new" : `, ${item.badge} new`}</span>
+            </Show>
           </button>
         )}
       </For>

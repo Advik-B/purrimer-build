@@ -1,0 +1,45 @@
+name = "ActionSheet"
+group = "Mobile"
+order = 57
+summary = "A menu in a bottom sheet: 48px rows with icon tiles, submenus one level in, and Cancel within thumb reach."
+slint_exports = ["ActionSheet", "ActionSheetItem"]
+
+[props.open]
+type = "bool"
+default = false
+doc = "Whether the sheet is shown."
+
+[props.items]
+type = "list"
+default = []
+doc = "Rows: { label, description?, icon?, variant?: 'danger', disabled?, checked?, items? } or { divider } or { group }."
+
+[props.title]
+type = "string"
+default = ""
+doc = "Sheet title; a submenu shows its row's label instead."
+
+[props.description]
+type = "string"
+default = ""
+doc = "A line under the title."
+
+[props.cancelLabel]
+type = "string"
+default = "Cancel"
+doc = "The Cancel button's label; empty hides it."
+
+[props.backLabel]
+type = "string"
+default = "Back"
+doc = "The row that leaves a submenu."
+
+[props.closeOnSelect]
+type = "bool"
+default = true
+doc = "Closes the sheet after a row is chosen."
+
+[props.inline]
+type = "bool"
+default = false
+doc = "Draws the sheet in place, for docs and previews."

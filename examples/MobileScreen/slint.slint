@@ -1,0 +1,35 @@
+import { MobileScreen, ListItem, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    screen := MobileScreen {
+        title: "Inbox";
+        large: true;
+        actions: [{ icon: PurrimerIcons.search-24, label: "Search" }];
+        fab-icon: PurrimerIcons.pencil-24;
+        fab-label: "Compose";
+        fab-extended: true;
+        nav-selected: 2;
+        nav-items: [
+            { icon: PurrimerIcons.home-24, label: "Home" },
+            { icon: PurrimerIcons.search-24, label: "Search" },
+            { icon: PurrimerIcons.inbox-24, label: "Inbox", badge: 3 },
+            { icon: PurrimerIcons.person-24, label: "Profile" },
+        ];
+        refreshable: true;
+        // Pretend to fetch for a moment, then end the refresh.
+        refresh => { done.running = true; }
+
+        ListItem { icon: PurrimerIcons.person-16; headline: "Mira Okafor"; supporting: "Lunch on Friday?"; chevron: true; }
+        ListItem { icon: PurrimerIcons.person-16; headline: "Design review"; supporting: "Notes from today's crit"; chevron: true; }
+        ListItem { icon: PurrimerIcons.person-16; headline: "Jonas Weber"; supporting: "Sent you the photos"; chevron: true; }
+        ListItem { icon: PurrimerIcons.person-16; headline: "Book club"; supporting: "Next one is on the 12th"; chevron: true; }
+    }
+    done := Timer {
+        interval: 1200ms;
+        running: false;
+        triggered => {
+            self.running = false;
+            screen.finish-refresh();
+        }
+    }
+}

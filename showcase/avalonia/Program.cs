@@ -58,6 +58,8 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
         {
             var example = (Control)AvaloniaRuntimeXamlLoader.Load(File.ReadAllText(file), typeof(Card).Assembly);
             if (!bleed) example.VerticalAlignment = VerticalAlignment.Top;
+            // Shadows spill past the component, as on the web, so the example root must not clip them.
+            example.ClipToBounds = false;
             var frame = new Border
             {
                 Width = width,
@@ -102,6 +104,19 @@ foreach (var theme in manifest.GetProperty("themes").EnumerateArray().Select(t =
                 };
                 host.RenderTransformOrigin = origin;
                 host.RenderTransform = new ScaleTransform(scale, scale);
+            }
+            // Controls a component puts straight into the overlay layer (InfoButton's sheet, HoldMenu's layer) fill the unscaled window.
+            // Shrink them to the frame's size and scale them back up from the corner.
+            if (OverlayLayer.GetOverlayLayer(frame) is { } overlay)
+            {
+                foreach (var child in overlay.Children.OfType<Control>().Where(c => c is BottomSheet or HoldMenuLayer))
+                {
+                    child.Width = overlay.Bounds.Width / scale;
+                    child.Height = overlay.Bounds.Height / scale;
+                    child.RenderTransformOrigin = new RelativePoint(0, 0, RelativeUnit.Relative);
+                    child.RenderTransform = new ScaleTransform(scale, scale);
+                }
+                Dispatcher.UIThread.RunJobs();
             }
             AvaloniaHeadlessPlatform.ForceRenderTimerTick();
             var shot = window.CaptureRenderedFrame();

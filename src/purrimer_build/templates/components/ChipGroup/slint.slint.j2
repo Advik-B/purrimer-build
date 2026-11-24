@@ -1,0 +1,151 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { Icon } from "icon.slint";
+
+// One filter: optional icon path commands (PurrimerIcons.mention-16), an optional count, and whether it is on
+// (read when multiple is set).
+export struct ChipGroupOption {
+    value: string,
+    label: string,
+    icon: string,
+    count: string,
+    disabled: bool,
+    on: bool,
+}
+
+component Chip inherits Rectangle {
+    in property <ChipGroupOption> option;
+    in property <bool> on;
+    callback toggle();
+
+    property <brush> ink: option.disabled ? {{ "fgColor-disabled" | tok }} : on ? {{ "fgColor-accent" | tok }} : {{ "fgColor-default" | tok }};
+    property <brush> muted: option.disabled ? {{ "fgColor-disabled" | tok }} : on ? {{ "fgColor-accent" | tok }} : {{ "fgColor-muted" | tok }};
+
+    min-width: row.min-width;
+    preferred-width: row.preferred-width;
+    horizontal-stretch: 0;
+    height: 36px;
+    accessible-role: button;
+    accessible-label: option.label;
+    accessible-checkable: true;
+    accessible-checked: on;
+    accessible-enabled: !option.disabled;
+    accessible-action-default => { root.toggle(); }
+
+    press := PmSpring { value: 1; target: 1; precision: 0.0005; }
+
+    body := Rectangle {
+        width: parent.width;
+        height: parent.height;
+        transform-scale: press.value;
+        border-radius: {{ "borderRadius-medium" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: option.disabled ? {{ "borderColor-default" | tok }} : on ? {{ "borderColor-accent-emphasis" | tok }} : {{ "borderColor-emphasis" | tok }};
+        background: on ? {{ "bgColor-accent-muted" | tok }} : touch.pressed ? {{ "control-transparent-bgColor-selected" | tok }} : {{ "bgColor-default" | tok }};
+        animate background { duration: {{ "duration-fast" | tok }}; }
+
+        row := HorizontalLayout {
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 6px;
+            if on || option.icon != "": Icon {
+                path: on ? PurrimerIcons.check-16 : option.icon;
+                color: root.muted;
+                y: (parent.height - self.height) / 2;
+            }
+            Text {
+                text: option.label;
+                color: root.ink;
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            if option.count != "": Text {
+                text: option.count;
+                color: root.muted;
+                font-family: {{ "text-body-medium" | tok }}.font-family;
+                font-size: 14px;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    if focus.has-focus: Rectangle {
+        x: -3px;
+        y: -3px;
+        width: parent.width + 6px;
+        height: parent.height + 6px;
+        border-radius: {{ "borderRadius-medium" | tok }} + 3px;
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+
+    touch := TouchArea {
+        y: -4px;
+        height: parent.height + 8px;
+        enabled: !option.disabled;
+        mouse-cursor: option.disabled ? not-allowed : pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                press.to(PurrimerMotion.press-scale, 0);
+            } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                press.to(1, 0);
+            }
+        }
+        clicked => { root.toggle(); }
+    }
+
+    focus := FocusScope {
+        enabled: !option.disabled;
+        key-pressed(event) => {
+            if event.text == "\n" || event.text == " " {
+                root.toggle();
+                return accept;
+            }
+            reject
+        }
+    }
+}
+
+export component ChipGroup inherits Flickable {
+    in-out property <[ChipGroupOption]> options;
+    // The option that is on for single choice; -1 for none.
+    in-out property <int> current: 0;
+    in property <bool> multiple;
+    in property <bool> allow-empty;
+    callback changed(int, bool);
+
+    height: 52px;
+    content-width: Math.max(self.width, row.preferred-width);
+    accessible-role: groupbox;
+
+    row := HorizontalLayout {
+        padding-left: 16px;
+        padding-right: 16px;
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 8px;
+        alignment: start;
+        for option[i] in root.options: Chip {
+            option: option;
+            on: root.multiple ? option.on : i == root.current;
+            toggle => {
+                if root.multiple {
+                    root.options[i].on = !option.on;
+                    root.changed(i, root.options[i].on);
+                } else if i == root.current {
+                    if root.allow-empty {
+                        root.current = -1;
+                        root.changed(i, false);
+                    }
+                } else {
+                    root.current = i;
+                    root.changed(i, true);
+                }
+            }
+        }
+    }
+}

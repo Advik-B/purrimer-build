@@ -1,0 +1,438 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Metadata;
+
+namespace {{ ns }};
+
+// One filter in a ChipGroup.
+public class ChipGroupOption
+{
+    public string Value { get; set; } = "";
+    public string Label { get; set; } = "";
+    public string? IconName { get; set; }
+    public string? Count { get; set; }
+    public bool IsDisabled { get; set; }
+}
+
+// Filter chips in a row that scrolls sideways under the finger or the mouse, or wraps onto several lines.
+public class ChipGroup : Control
+{
+    private const double ChipHeight = 36;
+    private const double PadX = 12;
+    private const double Gap = 8;
+    private const double Gutter = 16;
+    private const double Radius = {{ px("borderRadius-medium") | num }};
+
+    public static readonly StyledProperty<string?> ValueProperty =
+        AvaloniaProperty.Register<ChipGroup, string?>(nameof(Value));
+
+    public static readonly StyledProperty<bool> MultipleProperty =
+        AvaloniaProperty.Register<ChipGroup, bool>(nameof(Multiple));
+
+    public static readonly StyledProperty<bool> AllowEmptyProperty =
+        AvaloniaProperty.Register<ChipGroup, bool>(nameof(AllowEmpty));
+
+    public static readonly StyledProperty<bool> WrapProperty =
+        AvaloniaProperty.Register<ChipGroup, bool>(nameof(Wrap));
+
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        TextElement.FontFamilyProperty.AddOwner<ChipGroup>();
+
+    public static readonly StyledProperty<IBrush?> FillProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(Fill));
+
+    public static readonly StyledProperty<IBrush?> PressedFillProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(PressedFill));
+
+    public static readonly StyledProperty<IBrush?> OnFillProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(OnFill));
+
+    public static readonly StyledProperty<IBrush?> StrokeProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(Stroke));
+
+    public static readonly StyledProperty<IBrush?> OnStrokeProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(OnStroke));
+
+    public static readonly StyledProperty<IBrush?> DisabledStrokeProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(DisabledStroke));
+
+    public static readonly StyledProperty<IBrush?> InkProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(Ink));
+
+    public static readonly StyledProperty<IBrush?> MutedInkProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(MutedInk));
+
+    public static readonly StyledProperty<IBrush?> OnInkProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(OnInk));
+
+    public static readonly StyledProperty<IBrush?> DisabledInkProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(DisabledInk));
+
+    public static readonly StyledProperty<IBrush?> FocusBrushProperty =
+        AvaloniaProperty.Register<ChipGroup, IBrush?>(nameof(FocusBrush));
+
+    public static readonly RoutedEvent<RoutedEventArgs> ValueChangedEvent =
+        RoutedEvent.Register<ChipGroup, RoutedEventArgs>(nameof(ValueChanged), RoutingStrategies.Bubble);
+
+    private readonly PurrimerSpring _scroll = new(0, 0.5);
+    private readonly PurrimerSpring _press = new(1, 0.0005);
+    private readonly PurrimerVelocityTracker _tracker = new();
+    private Point? _origin;
+    private double _originScroll;
+    private bool _dragging;
+    private int _pressed = -1;
+    // The chip the press spring belongs to; it keeps springing back after release.
+    private int _scaled = -1;
+    private int _focus;
+    private bool _keyboard;
+
+    static ChipGroup()
+    {
+        AffectsRender<ChipGroup>(ValueProperty, FillProperty, PressedFillProperty, OnFillProperty, StrokeProperty,
+            OnStrokeProperty, DisabledStrokeProperty, InkProperty, MutedInkProperty, OnInkProperty,
+            DisabledInkProperty, FocusBrushProperty, FontFamilyProperty);
+        AffectsMeasure<ChipGroup>(ValueProperty, WrapProperty, FontFamilyProperty);
+        FocusableProperty.OverrideDefaultValue<ChipGroup>(true);
+        ClipToBoundsProperty.OverrideDefaultValue<ChipGroup>(true);
+    }
+
+    public ChipGroup()
+    {
+        Options.CollectionChanged += (_, _) => InvalidateMeasure();
+        _scroll.Changed += _ => InvalidateVisual();
+        _press.Changed += _ => InvalidateVisual();
+    }
+
+    [Content]
+    public AvaloniaList<ChipGroupOption> Options { get; } = new();
+
+    // The value that is on, or comma-separated values when Multiple. Single choice starts with the first option on.
+    public string? Value
+    {
+        get => GetValue(ValueProperty);
+        set => SetValue(ValueProperty, value);
+    }
+
+    public bool Multiple
+    {
+        get => GetValue(MultipleProperty);
+        set => SetValue(MultipleProperty, value);
+    }
+
+    public bool AllowEmpty
+    {
+        get => GetValue(AllowEmptyProperty);
+        set => SetValue(AllowEmptyProperty, value);
+    }
+
+    public bool Wrap
+    {
+        get => GetValue(WrapProperty);
+        set => SetValue(WrapProperty, value);
+    }
+
+    public FontFamily FontFamily
+    {
+        get => GetValue(FontFamilyProperty);
+        set => SetValue(FontFamilyProperty, value);
+    }
+
+    public IBrush? Fill { get => GetValue(FillProperty); set => SetValue(FillProperty, value); }
+    public IBrush? PressedFill { get => GetValue(PressedFillProperty); set => SetValue(PressedFillProperty, value); }
+    public IBrush? OnFill { get => GetValue(OnFillProperty); set => SetValue(OnFillProperty, value); }
+    public IBrush? Stroke { get => GetValue(StrokeProperty); set => SetValue(StrokeProperty, value); }
+    public IBrush? OnStroke { get => GetValue(OnStrokeProperty); set => SetValue(OnStrokeProperty, value); }
+    public IBrush? DisabledStroke { get => GetValue(DisabledStrokeProperty); set => SetValue(DisabledStrokeProperty, value); }
+    public IBrush? Ink { get => GetValue(InkProperty); set => SetValue(InkProperty, value); }
+    public IBrush? MutedInk { get => GetValue(MutedInkProperty); set => SetValue(MutedInkProperty, value); }
+    public IBrush? OnInk { get => GetValue(OnInkProperty); set => SetValue(OnInkProperty, value); }
+    public IBrush? DisabledInk { get => GetValue(DisabledInkProperty); set => SetValue(DisabledInkProperty, value); }
+    public IBrush? FocusBrush { get => GetValue(FocusBrushProperty); set => SetValue(FocusBrushProperty, value); }
+
+    public event EventHandler<RoutedEventArgs>? ValueChanged
+    {
+        add => AddHandler(ValueChangedEvent, value);
+        remove => RemoveHandler(ValueChangedEvent, value);
+    }
+
+    private List<string> Values()
+    {
+        if (Value is null && !Multiple && Options.Count > 0)
+            return new List<string> { Options[0].Value };
+        return (Value ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+    }
+
+    public bool IsOn(string value) => Values().Contains(value);
+
+    private FormattedText Text(string text, FontWeight weight, IBrush? brush) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface(FontFamily, FontStyle.Normal, weight), 14, brush);
+
+    private double ChipWidth(ChipGroupOption option)
+    {
+        var width = 2 * PadX + Text(option.Label, FontWeight.SemiBold, null).WidthIncludingTrailingWhitespace;
+        if (!string.IsNullOrEmpty(option.IconName) || IsOn(option.Value))
+            width += 16 + 6;
+        if (!string.IsNullOrEmpty(option.Count))
+            width += 6 + Text(option.Count, FontWeight.Normal, null).WidthIncludingTrailingWhitespace;
+        return Math.Ceiling(width);
+    }
+
+    private List<Rect> Layout(double width)
+    {
+        var rects = new List<Rect>();
+        double x = Gutter, y = 8;
+        foreach (var option in Options)
+        {
+            var w = ChipWidth(option);
+            if (Wrap && x > Gutter && x + w > width - Gutter)
+            {
+                x = Gutter;
+                y += ChipHeight + Gap;
+            }
+            rects.Add(new Rect(x, y, w, ChipHeight));
+            x += w + Gap;
+        }
+        return rects;
+    }
+
+    private double ContentWidth() => Layout(Bounds.Width) is { Count: > 0 } r ? r[^1].Right + Gutter : 0;
+
+    private double MaxScroll() => Wrap ? 0 : Math.Max(0, ContentWidth() - Bounds.Width);
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        var width = double.IsInfinity(availableSize.Width) ? 320 : availableSize.Width;
+        var rects = Layout(width);
+        var content = rects.Count > 0 ? rects[^1].Right + Gutter : 0;
+        var height = rects.Count > 0 ? rects.Max(r => r.Bottom) + 8 : ChipHeight + 16;
+        return new Size(Wrap ? width : Math.Min(content, width), height);
+    }
+
+    private int Hit(Point p)
+    {
+        var shifted = p + new Vector(_scroll.Value, 0);
+        var rects = Layout(Bounds.Width);
+        for (var i = 0; i < rects.Count; i++)
+            if (rects[i].Inflate(new Thickness(0, 4)).Contains(shifted))
+                return i;
+        return -1;
+    }
+
+    private void Toggle(int index)
+    {
+        var option = Options[index];
+        if (option.IsDisabled)
+            return;
+        var values = Values();
+        if (Multiple)
+        {
+            if (!values.Remove(option.Value))
+                values.Add(option.Value);
+            Value = string.Join(",", values);
+        }
+        else if (values.Contains(option.Value))
+        {
+            if (!AllowEmpty)
+                return;
+            Value = "";
+        }
+        else
+        {
+            Value = option.Value;
+        }
+        RaiseEvent(new RoutedEventArgs(ValueChangedEvent));
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        var p = e.GetPosition(this);
+        _keyboard = false;
+        _scroll.Stop();
+        _origin = p;
+        _originScroll = _scroll.Value;
+        _dragging = false;
+        _tracker.Reset();
+        _tracker.Add(p);
+        _pressed = Hit(p);
+        if (_pressed >= 0 && !Options[_pressed].IsDisabled)
+        {
+            _scaled = _pressed;
+            _press.To(PurrimerMotion.PressScale);
+        }
+        else
+            _pressed = -1;
+        e.Pointer.Capture(this);
+        e.Handled = true;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var p = e.GetPosition(this);
+        _tracker.Add(p);
+        var dx = p.X - origin.X;
+        if (!_dragging && Math.Abs(dx) > PurrimerMotion.Slop && MaxScroll() > 0)
+        {
+            _dragging = true;
+            if (_pressed >= 0)
+            {
+                _press.To(1);
+                _pressed = -1;
+            }
+        }
+        if (!_dragging)
+            return;
+        var offset = _originScroll - dx;
+        var limit = MaxScroll();
+        if (offset < 0)
+            offset = PurrimerMotion.RubberBand(offset, Bounds.Width);
+        else if (offset > limit)
+            offset = limit + PurrimerMotion.RubberBand(offset - limit, Bounds.Width);
+        _scroll.Set(offset);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_origin is null)
+            return;
+        if (_dragging)
+        {
+            var velocity = -_tracker.Velocity().X;
+            var rest = Math.Clamp(_scroll.Value + PurrimerMotion.Project(velocity), 0, MaxScroll());
+            _scroll.To(rest, velocity);
+        }
+        else if (_pressed >= 0)
+        {
+            _press.To(1);
+            if (Hit(e.GetPosition(this)) == _pressed)
+            {
+                _focus = _pressed;
+                Toggle(_pressed);
+            }
+        }
+        _pressed = -1;
+        _origin = null;
+        _dragging = false;
+        e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+        var delta = e.Delta.X != 0 ? e.Delta.X : e.Delta.Y;
+        if (MaxScroll() <= 0 || delta == 0)
+            return;
+        _scroll.Set(Math.Clamp(_scroll.Value - delta * 48, 0, MaxScroll()));
+        e.Handled = true;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        var step = e.Key switch { Key.Left => -1, Key.Right => 1, _ => 0 };
+        if (step != 0)
+        {
+            _keyboard = true;
+            for (var i = _focus + step; i >= 0 && i < Options.Count; i += step)
+            {
+                if (Options[i].IsDisabled)
+                    continue;
+                _focus = i;
+                break;
+            }
+            ScrollIntoView(_focus);
+            InvalidateVisual();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Space or Key.Enter && _focus < Options.Count)
+        {
+            _keyboard = true;
+            Toggle(_focus);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _keyboard = e.NavigationMethod == NavigationMethod.Tab;
+        InvalidateVisual();
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        _keyboard = false;
+        InvalidateVisual();
+    }
+
+    private void ScrollIntoView(int index)
+    {
+        if (Wrap)
+            return;
+        var rect = Layout(Bounds.Width)[index];
+        var target = Math.Min(Math.Max(_scroll.Target, rect.Right + Gutter - Bounds.Width), rect.Left - Gutter);
+        _scroll.To(Math.Clamp(target, 0, MaxScroll()));
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var rects = Layout(Bounds.Width);
+        using var shift = context.PushTransform(Matrix.CreateTranslation(-_scroll.Value, 0));
+        for (var i = 0; i < Options.Count; i++)
+        {
+            var option = Options[i];
+            var rect = rects[i];
+            var on = IsOn(option.Value);
+            var ink = option.IsDisabled ? DisabledInk : on ? OnInk : Ink;
+            var muted = option.IsDisabled ? DisabledInk : on ? OnInk : MutedInk;
+            var stroke = option.IsDisabled ? DisabledStroke : on ? OnStroke : Stroke;
+            var fill = on ? OnFill : i == _pressed ? PressedFill : Fill;
+            var scale = i == _scaled ? _press.Value : 1;
+            var c = rect.Center;
+            using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(scale, scale) *
+                                         Matrix.CreateTranslation(c.X, c.Y)))
+            {
+                context.DrawRectangle(fill, new Pen(stroke, {{ px("borderWidth-thin") | num }}), rect.Deflate(0.5), Radius, Radius);
+                var x = rect.X + PadX;
+                var icon = on ? "check" : option.IconName;
+                if (!string.IsNullOrEmpty(icon) && this.TryFindResource(Icon.ResourceKey(icon, 16), out var found) &&
+                    found is Geometry geometry)
+                {
+                    using (context.PushTransform(Matrix.CreateTranslation(x, rect.Y + 10)))
+                        context.DrawGeometry(muted, null, geometry);
+                    x += 16 + 6;
+                }
+                var label = Text(option.Label, FontWeight.SemiBold, ink);
+                context.DrawText(label, new Point(x, rect.Y + (ChipHeight - label.Height) / 2));
+                if (!string.IsNullOrEmpty(option.Count))
+                {
+                    x += label.WidthIncludingTrailingWhitespace + 6;
+                    var count = Text(option.Count, FontWeight.Normal, muted);
+                    context.DrawText(count, new Point(x, rect.Y + (ChipHeight - count.Height) / 2));
+                }
+            }
+            if (IsFocused && _keyboard && i == _focus)
+                context.DrawRectangle(null, new Pen(FocusBrush, {{ px("borderWidth-thick") | num }}), rect.Inflate(3), Radius + 3, Radius + 3);
+        }
+    }
+}

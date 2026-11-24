@@ -1,0 +1,5 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:ImageViewer IsInline="True" Source="avares://Purrimer.Avalonia/Examples/ImageViewer/photo.jpg"
+                  Alt="Sunset over the lake" Caption="Lake Ilgen, an hour before dark" />
+</UserControl>

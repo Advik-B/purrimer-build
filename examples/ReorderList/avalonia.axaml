@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:ReorderList Margin="0,16,0,0" VerticalAlignment="Top">
+    <pm:ReorderItem Key="today" Headline="Today" Supporting="Tasks due today" IconName="calendar" />
+    <pm:ReorderItem Key="inbox" Headline="Inbox" IconName="inbox" />
+    <pm:ReorderItem Key="starred" Headline="Starred" IconName="star" />
+    <pm:ReorderItem Key="shared" Headline="Shared with me" Supporting="From 3 people" IconName="people" />
+  </pm:ReorderList>
+</UserControl>

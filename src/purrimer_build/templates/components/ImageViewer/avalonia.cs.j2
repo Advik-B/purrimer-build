@@ -1,0 +1,533 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Threading;
+
+namespace {{ ns }};
+
+// A round button on the dark stage; IsArmed fills it, for the close button past the dismiss point.
+public class ImageViewerButton : Button
+{
+    public static readonly StyledProperty<string> IconNameProperty =
+        AvaloniaProperty.Register<ImageViewerButton, string>(nameof(IconName), "x");
+
+    public static readonly StyledProperty<bool> IsArmedProperty =
+        AvaloniaProperty.Register<ImageViewerButton, bool>(nameof(IsArmed));
+
+    public string IconName { get => GetValue(IconNameProperty); set => SetValue(IconNameProperty, value); }
+    public bool IsArmed { get => GetValue(IsArmedProperty); set => SetValue(IsArmedProperty, value); }
+}
+
+// A photo on a dark stage. Pinch or double-tap to zoom (2.5x around the point, or back to fit), drag to look around
+// when zoomed, and drag down at fit to close: past 96px the close button fills, and release or a flick closes. Ctrl
+// and the wheel, or a trackpad pinch, zoom around the pointer; the wheel pans when zoomed. With the stage focused, Plus
+// and Minus zoom, 0 fits, the arrow keys pan and Escape closes.
+// Set IsInline to place it in a layout like any control; otherwise call Open(owner) to show it over the owner's window.
+public class ImageViewer : Control
+{
+    public static readonly StyledProperty<IImage?> SourceProperty =
+        AvaloniaProperty.Register<ImageViewer, IImage?>(nameof(Source));
+
+    public static readonly StyledProperty<string> AltProperty =
+        AvaloniaProperty.Register<ImageViewer, string>(nameof(Alt), "");
+
+    public static readonly StyledProperty<string> CaptionProperty =
+        AvaloniaProperty.Register<ImageViewer, string>(nameof(Caption), "");
+
+    public static readonly StyledProperty<bool> IsInlineProperty =
+        AvaloniaProperty.Register<ImageViewer, bool>(nameof(IsInline));
+
+    public static readonly StyledProperty<double> MaxScaleProperty =
+        AvaloniaProperty.Register<ImageViewer, double>(nameof(MaxScale), 4);
+
+    public static readonly StyledProperty<bool> IsClosableProperty =
+        AvaloniaProperty.Register<ImageViewer, bool>(nameof(IsClosable), true);
+
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontFamilyProperty.AddOwner<ImageViewer>();
+
+    public static readonly RoutedEvent<RoutedEventArgs> ClosedEvent =
+        RoutedEvent.Register<ImageViewer, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
+
+    private const double Dismiss = 96;
+    private const double Flick = 0.6;
+    private const double Bar = 24 + {{ px("touch-target-min") | num }} + 8;
+    private readonly PurrimerSpring _s = new(1, 0.001);
+    private readonly PurrimerSpring _x = new(0, 0.5);
+    private readonly PurrimerSpring _y = new(0, 0.5);
+    private readonly PurrimerSpring _fade = new(1, 0.002);
+    private readonly ImageViewerButton _close;
+    private readonly ImageViewerButton _zoomOut;
+    private readonly ImageViewerButton _zoomIn;
+    private readonly Dictionary<long, Point> _pointers = new();
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly DispatcherTimer _wheelSettle;
+    private double _dismissScale = 1;
+    private double _backdrop = 1;
+    private string? _mode;
+    private Point _origin;
+    private double _tx;
+    private double _ty;
+    private double _vy;
+    private double _lastY;
+    private long _lastT;
+    private bool _armed;
+    private (double S0, double Cx, double Cy, double D0)? _pinch;
+    private IInputElement? _before;
+    private bool _keyboardFocus;
+
+    static ImageViewer()
+    {
+        AffectsRender<ImageViewer>(SourceProperty, CaptionProperty);
+        FocusableProperty.OverrideDefaultValue<ImageViewer>(true);
+        ClipToBoundsProperty.OverrideDefaultValue<ImageViewer>(true);
+    }
+
+    public ImageViewer()
+    {
+        _close = Add("x", "Close", Close);
+        _zoomOut = Add("dash", "Zoom out", () => ZoomBy(1 / 1.5));
+        _zoomIn = Add("plus", "Zoom in", () => ZoomBy(1.5));
+        foreach (var spring in new[] { _s, _x, _y, _fade })
+            spring.Changed += _ => Changed();
+        _fade.Settled += Faded;
+        _wheelSettle = new DispatcherTimer(TimeSpan.FromMilliseconds(120), DispatcherPriority.Input, (_, _) => { _wheelSettle!.Stop(); Settle(); });
+        _wheelSettle.Stop();
+        AddHandler(PointerTouchPadGestureMagnifyEvent, OnMagnify);
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+        Sync();
+    }
+
+    public IImage? Source { get => GetValue(SourceProperty); set => SetValue(SourceProperty, value); }
+    public string Alt { get => GetValue(AltProperty); set => SetValue(AltProperty, value); }
+    public string Caption { get => GetValue(CaptionProperty); set => SetValue(CaptionProperty, value); }
+    public bool IsInline { get => GetValue(IsInlineProperty); set => SetValue(IsInlineProperty, value); }
+    public double MaxScale { get => GetValue(MaxScaleProperty); set => SetValue(MaxScaleProperty, value); }
+    // False leaves out the close button and the drag to close.
+    public bool IsClosable { get => GetValue(IsClosableProperty); set => SetValue(IsClosableProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    public double Scale => _s.Value;
+    // Words for translation; {name} in StageLabel is replaced with Alt.
+    public string StageLabel { get; set; } = "{name}. Plus and minus zoom, arrow keys move.";
+    public string CloseLabel { get => AutomationProperties.GetName(_close) ?? ""; set => AutomationProperties.SetName(_close, value); }
+    public string ZoomOutLabel { get => AutomationProperties.GetName(_zoomOut) ?? ""; set => AutomationProperties.SetName(_zoomOut, value); }
+    public string ZoomInLabel { get => AutomationProperties.GetName(_zoomIn) ?? ""; set => AutomationProperties.SetName(_zoomIn, value); }
+
+    public event EventHandler<RoutedEventArgs>? Closed
+    {
+        add => AddHandler(ClosedEvent, value);
+        remove => RemoveHandler(ClosedEvent, value);
+    }
+
+    private ImageViewerButton Add(string icon, string label, Action click)
+    {
+        var button = new ImageViewerButton { IconName = icon };
+        AutomationProperties.SetName(button, label);
+        global::Avalonia.Controls.ToolTip.SetTip(button, label);
+        button.Click += (_, _) => click();
+        VisualChildren.Add(button);
+        LogicalChildren.Add(button);
+        return button;
+    }
+
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    // Shows the viewer over the owner's window, fading the stage in, and moves focus to Close.
+    public void Open(Visual owner)
+    {
+        if (IsInline || OverlayLayer.GetOverlayLayer(owner) is not { } overlay)
+            return;
+        _before = TopLevel.GetTopLevel(owner)?.FocusManager?.GetFocusedElement();
+        if (Parent is null)
+        {
+            Width = overlay.Bounds.Width;
+            Height = overlay.Bounds.Height;
+            overlay.Children.Add(this);
+            overlay.PropertyChanged += (_, args) =>
+            {
+                if (args.Property == BoundsProperty && Parent == overlay)
+                {
+                    Width = overlay.Bounds.Width;
+                    Height = overlay.Bounds.Height;
+                }
+            };
+        }
+        Reset(false);
+        _fade.Set(0);
+        _fade.To(1);
+        Dispatcher.UIThread.Post(() => (IsClosable ? _close : (InputElement)this).Focus(NavigationMethod.Tab));
+    }
+
+    // Fades the viewer out and raises Closed; an inline viewer settles back to fit and stays.
+    public void Close()
+    {
+        if (!IsClosable)
+            return;
+        RaiseEvent(new RoutedEventArgs(ClosedEvent));
+        if (IsInline)
+        {
+            Reset(true);
+            return;
+        }
+        _fade.To(0);
+        if (PurrimerMotion.PauseLoops)
+            Faded();
+    }
+
+    private void Faded()
+    {
+        if (IsInline || _fade.Target > 0 || Parent is not Panel panel)
+            return;
+        panel.Children.Remove(this);
+        Reset(false);
+        _before?.Focus();
+    }
+
+    public void ZoomBy(double factor) => ZoomTo(Math.Clamp(_s.Target * factor, 1, MaxScale), new Point(), true);
+
+    private void Changed()
+    {
+        Sync();
+        InvalidateVisual();
+    }
+
+    private void Sync()
+    {
+        _zoomOut.IsEnabled = _s.Target > 1.01;
+        _zoomIn.IsEnabled = _s.Target < MaxScale - 0.01;
+        _close.IsVisible = IsClosable;
+        _close.IsArmed = _armed;
+        AutomationProperties.SetName(this, StageLabel.Replace("{name}", string.IsNullOrEmpty(Alt) ? "Image" : Alt));
+    }
+
+    private Rect Fit()
+    {
+        if (Source is null || Source.Size.Width <= 0 || Source.Size.Height <= 0)
+            return default;
+        var k = Math.Min(Bounds.Width / Source.Size.Width, Bounds.Height / Source.Size.Height);
+        var size = new Size(Source.Size.Width * k, Source.Size.Height * k);
+        return new Rect(new Point((Bounds.Width - size.Width) / 2, (Bounds.Height - size.Height) / 2), size);
+    }
+
+    private (double X, double Y) Limits(double s)
+    {
+        var fit = Fit();
+        return (Math.Max(0, (fit.Width * s - Bounds.Width) / 2), Math.Max(0, (fit.Height * s - Bounds.Height) / 2));
+    }
+
+    private Point FromCentre(Point p) => new(p.X - Bounds.Width / 2, p.Y - Bounds.Height / 2);
+
+    private static double Resist(double v, double lo, double hi) => v < lo ? lo - (lo - v) * 0.35 : v > hi ? hi + (v - hi) * 0.35 : v;
+
+    private void Apply(double s, double x, double y, bool animate)
+    {
+        if (animate)
+        {
+            _s.To(s);
+            _x.To(x);
+            _y.To(y);
+        }
+        else
+        {
+            _s.Set(s);
+            _x.Set(x);
+            _y.Set(y);
+        }
+        Sync();
+    }
+
+    private void Settle()
+    {
+        var s = Math.Clamp(_s.Value, 1, MaxScale);
+        if (s < 1.01)
+        {
+            Apply(1, 0, 0, true);
+            return;
+        }
+        var (bx, by) = Limits(s);
+        Apply(s, Math.Clamp(_x.Value, -bx, bx), Math.Clamp(_y.Value, -by, by), true);
+    }
+
+    private void Reset(bool animate)
+    {
+        _dismissScale = 1;
+        _backdrop = 1;
+        _armed = false;
+        Apply(1, 0, 0, animate);
+    }
+
+    // Zooms to s keeping the image point under p, measured from the stage centre, where it is.
+    private void ZoomTo(double s, Point p, bool animate)
+    {
+        var k = s / _s.Value;
+        Apply(s, p.X - (p.X - _x.Value) * k, p.Y - (p.Y - _y.Value) * k, false);
+        if (animate)
+            Settle();
+    }
+
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        foreach (var b in new[] { _close, _zoomOut, _zoomIn })
+            b.Measure(availableSize);
+        return new Size(double.IsInfinity(availableSize.Width) ? 390 : availableSize.Width, double.IsInfinity(availableSize.Height) ? 520 : availableSize.Height);
+    }
+
+    protected override Size ArrangeOverride(Size finalSize)
+    {
+        var b = {{ px("touch-target-min") | num }};
+        _close.Arrange(new Rect(finalSize.Width - 8 - b, 8, b, b));
+        _zoomIn.Arrange(new Rect(finalSize.Width - 8 - b, finalSize.Height - 8 - b, b, b));
+        _zoomOut.Arrange(new Rect(finalSize.Width - 8 - b - 4 - 48 - 4 - b, finalSize.Height - 8 - b, b, b));
+        return finalSize;
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        var p = e.GetPosition(this);
+        if (e.Pointer.Type == PointerType.Mouse && !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        Focus(NavigationMethod.Pointer);
+        if (e.ClickCount == 2 && _pointers.Count == 0)
+        {
+            if (_s.Value > 1.01)
+                Apply(1, 0, 0, true);
+            else
+                ZoomTo(Math.Min(2.5, MaxScale), FromCentre(p), true);
+            e.Handled = true;
+            return;
+        }
+        _pointers[e.Pointer.Id] = p;
+        e.Pointer.Capture(this);
+        foreach (var spring in new[] { _s, _x, _y })
+            spring.Stop();
+        Start();
+        e.Handled = true;
+    }
+
+    private void Start()
+    {
+        if (_pointers.Count >= 2)
+        {
+            var pts = _pointers.Values.Take(2).ToArray();
+            var m = FromCentre(new Point((pts[0].X + pts[1].X) / 2, (pts[0].Y + pts[1].Y) / 2));
+            var s0 = _s.Value;
+            _pinch = (s0, (m.X - _x.Value) / s0, (m.Y - _y.Value) / s0, Math.Max(1, Distance(pts[0], pts[1])));
+            _mode = "pinch";
+        }
+        else if (_pointers.Count == 1)
+        {
+            _pinch = null;
+            _mode = null;
+            _origin = _pointers.Values.First();
+            _tx = _x.Value;
+            _ty = _y.Value;
+            _lastY = _origin.Y;
+            _lastT = _clock.ElapsedMilliseconds;
+            _vy = 0;
+        }
+    }
+
+    private static double Distance(Point a, Point b) => Math.Sqrt((a.X - b.X) * (a.X - b.X) + (a.Y - b.Y) * (a.Y - b.Y));
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (!_pointers.ContainsKey(e.Pointer.Id))
+            return;
+        var p = e.GetPosition(this);
+        _pointers[e.Pointer.Id] = p;
+        if (_pinch is { } pinch && _pointers.Count >= 2)
+        {
+            var pts = _pointers.Values.Take(2).ToArray();
+            var m = FromCentre(new Point((pts[0].X + pts[1].X) / 2, (pts[0].Y + pts[1].Y) / 2));
+            var raw = pinch.S0 * Distance(pts[0], pts[1]) / pinch.D0;
+            var s = raw < 1 ? 1 - (1 - raw) * 0.4 : raw > MaxScale ? MaxScale + (raw - MaxScale) * 0.4 : raw;
+            Apply(s, m.X - pinch.Cx * s, m.Y - pinch.Cy * s, false);
+            return;
+        }
+        var dx = p.X - _origin.X;
+        var dy = p.Y - _origin.Y;
+        if (_mode is null)
+        {
+            if (Math.Abs(dx) < 10 && Math.Abs(dy) < 10)
+                return;
+            _mode = _s.Value > 1.01 ? "pan" : Math.Abs(dy) > Math.Abs(dx) && IsClosable ? "dismiss" : "none";
+        }
+        if (_mode == "pan")
+        {
+            var (bx, by) = Limits(_s.Value);
+            Apply(_s.Value, Resist(_tx + dx, -bx, bx), Resist(_ty + dy, -by, by), false);
+        }
+        else if (_mode == "dismiss")
+        {
+            var k = Math.Min(1, Math.Abs(dy) / (Dismiss * 3));
+            _dismissScale = 1 - k * 0.1;
+            _backdrop = 1 - k * 0.7;
+            _armed = Math.Abs(dy) >= Dismiss;
+            Apply(1, 0, dy, false);
+            var now = _clock.ElapsedMilliseconds;
+            if (now > _lastT)
+                _vy = (p.Y - _lastY) / (now - _lastT);
+            _lastY = p.Y;
+            _lastT = now;
+        }
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e) => Lift(e.Pointer, false);
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        Lift(e.Pointer, true);
+    }
+
+    private void Lift(IPointer pointer, bool cancelled)
+    {
+        if (!_pointers.Remove(pointer.Id))
+            return;
+        if (_pointers.Count > 0)
+        {
+            Start();
+            return;
+        }
+        pointer.Capture(null);
+        var mode = _mode;
+        _mode = null;
+        _pinch = null;
+        if (mode == "dismiss")
+        {
+            var dy = _y.Value;
+            var flick = Math.Abs(_vy) > Flick && (_vy > 0) == (dy > 0);
+            var armed = _armed;
+            _armed = false;
+            if (!cancelled && (armed || flick))
+            {
+                Close();
+                return;
+            }
+            _dismissScale = 1;
+            _backdrop = 1;
+            Apply(1, 0, 0, true);
+            return;
+        }
+        Settle();
+    }
+
+    private void OnMagnify(object? sender, PointerDeltaEventArgs e)
+    {
+        ZoomTo(Math.Clamp(_s.Value * (1 + e.Delta.X), 1, MaxScale), FromCentre(e.GetPosition(this)), false);
+        _wheelSettle.Stop();
+        _wheelSettle.Start();
+    }
+
+    protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
+    {
+        base.OnPointerWheelChanged(e);
+        var dx = e.Delta.X * 100;
+        var dy = e.Delta.Y * 100;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            ZoomTo(Math.Clamp(_s.Value * Math.Exp(dy * 0.01), 1, MaxScale), FromCentre(e.GetPosition(this)), false);
+            _wheelSettle.Stop();
+            _wheelSettle.Start();
+        }
+        else if (_s.Value > 1.01)
+        {
+            var (bx, by) = Limits(_s.Value);
+            Apply(_s.Value, Math.Clamp(_x.Value + dx, -bx, bx), Math.Clamp(_y.Value + dy, -by, by), false);
+        }
+        e.Handled = true;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (e.Handled)
+            return;
+        var text = e.KeySymbol;
+        if (e.Key == Key.Escape && IsClosable)
+            Close();
+        else if (text is "+" or "=" || e.Key is Key.Add or Key.OemPlus)
+            ZoomBy(1.5);
+        else if (text is "-" or "_" || e.Key is Key.Subtract or Key.OemMinus)
+            ZoomBy(1 / 1.5);
+        else if (text == "0" || e.Key is Key.D0 or Key.NumPad0)
+            Apply(1, 0, 0, true);
+        else if (_s.Value > 1.01 && e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+        {
+            var (bx, by) = Limits(_s.Value);
+            var dx = e.Key == Key.Left ? 48 : e.Key == Key.Right ? -48 : 0;
+            var dy = e.Key == Key.Up ? 48 : e.Key == Key.Down ? -48 : 0;
+            Apply(_s.Value, Math.Clamp(_x.Value + dx, -bx, bx), Math.Clamp(_y.Value + dy, -by, by), true);
+        }
+        else
+            return;
+        e.Handled = true;
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _keyboardFocus = e.NavigationMethod == NavigationMethod.Tab;
+        InvalidateVisual();
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var fade = IsInline ? 1 : _fade.Value;
+        var bounds = new Rect(Bounds.Size);
+        using (context.PushOpacity(fade * _backdrop))
+            context.FillRectangle(Brush("PmMediaStageBgColor")!, bounds);
+        var fit = Fit();
+        if (Source is not null && fit.Width > 0)
+        {
+            var c = bounds.Center;
+            var s = _s.Value * _dismissScale * (IsInline ? 1 : 0.96 + 0.04 * fade);
+            using (context.PushOpacity(fade))
+            using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(c.X + _x.Value, c.Y + _y.Value)))
+                context.DrawImage(Source, new Rect(Source.Size), fit);
+        }
+        if (IsFocused && _keyboardFocus)
+            context.DrawRectangle(null, new Pen(Brush("PmMediaStageFocusOutlineColor"), {{ px("borderWidth-thick") | num }}), bounds.Deflate(5));
+        using (context.PushOpacity(fade))
+        {
+            context.FillRectangle(Brush("PmMediaStageBarBgColor")!, new Rect(0, bounds.Height - Bar, bounds.Width, Bar));
+            var b = {{ px("touch-target-min") | num }};
+            var pct = Text($"{Math.Round(_s.Value * 100)}%", 48);
+            pct.TextAlignment = TextAlignment.Center;
+            context.DrawText(pct, new Point(bounds.Width - 8 - b - 4 - 48, bounds.Height - 8 - b / 2 - pct.Height / 2));
+            if (!string.IsNullOrEmpty(Caption))
+            {
+                var left = {{ px("mobile-gutter") | num }};
+                var caption = Text(Caption, Math.Max(1, bounds.Width - 8 - b - 4 - 48 - 4 - b - 8 - left));
+                context.DrawText(caption, new Point(left, bounds.Height - 8 - b / 2 - caption.Height / 2));
+            }
+        }
+    }
+
+    private FormattedText Text(string text, double width) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, new Typeface(FontFamily), 14, Brush("PmMediaStageFgColor"))
+        {
+            MaxTextWidth = width,
+            MaxLineCount = 1,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+}

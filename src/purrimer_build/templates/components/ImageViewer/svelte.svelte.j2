@@ -1,0 +1,124 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type ImageViewerLabels = Partial<Record<"image" | "stage" | "close" | "zoomIn" | "zoomOut", string>>;
+</script>
+
+<script lang="ts">
+  import { tick } from "svelte";
+  import Icon from "./Icon.svelte";
+  import { wireImageViewer, type Viewer } from "../motion";
+
+  let {
+    src,
+    alt,
+    caption = "",
+    open = false,
+    inline = false,
+    maxScale = 4,
+    labels = {},
+    onclose,
+  }: {
+    src: string;
+    alt: string;
+    caption?: string;
+    open?: boolean;
+    inline?: boolean;
+    maxScale?: number;
+    labels?: ImageViewerLabels;
+    onclose?: () => void;
+  } = $props();
+
+  let stage: HTMLElement | undefined = $state();
+  let img: HTMLImageElement | undefined = $state();
+  let backdrop: HTMLElement | undefined = $state();
+  let closeButton: HTMLButtonElement | undefined = $state();
+  let scale = $state(1);
+  let armed = $state(false);
+  // The effect below opens it on the first run when it starts open.
+  let phase: "closed" | "open" | "closing" = $state("closed");
+  let viewer: Viewer | null = null;
+  const shown = $derived(inline || open);
+  const name = $derived(alt || labels.image || "Image");
+
+  $effect(() => {
+    if (shown) phase = "open";
+    else if (phase === "open") {
+      phase = "closing";
+      const timer = setTimeout(() => (phase = "closed"), {{ ms("duration-sleepy-exit") }});
+      return () => clearTimeout(timer);
+    }
+  });
+
+  $effect(() => {
+    if (phase !== "open" || !stage || !img || !backdrop) return;
+    viewer = wireImageViewer({
+      stage,
+      img,
+      backdrop,
+      maxScale: () => maxScale,
+      canClose: () => !!onclose,
+      close: () => onclose?.(),
+      onScale: (s) => (scale = s),
+      onArmed: (a) => (armed = a),
+    });
+    return () => {
+      viewer?.destroy();
+      viewer = null;
+      scale = 1;
+    };
+  });
+
+  $effect(() => {
+    if (inline || !shown) return;
+    const before = document.activeElement as HTMLElement | null;
+    tick().then(() => closeButton?.focus());
+    return () => before?.focus?.();
+  });
+
+  function keydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && onclose) {
+      e.preventDefault();
+      onclose();
+      return;
+    }
+    viewer?.keydown(e);
+  }
+</script>
+
+{#if phase !== "closed"}
+  <div
+    class={["pm-imgview", inline && "pm-imgview--inline", phase === "closing" && "pm-imgview--closing"]}
+    role={inline ? "group" : "dialog"}
+    aria-modal={inline ? undefined : "true"}
+    aria-label={name}
+    data-density="touch"
+    tabindex="-1"
+    onkeydown={keydown}
+  >
+    <div bind:this={backdrop} class="pm-imgview__backdrop" aria-hidden="true"></div>
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <div bind:this={stage} class="pm-imgview__stage" tabindex="0" role="img" aria-label={(labels.stage ?? "{name}. Plus and minus zoom, arrow keys move.").replace("{name}", name)}>
+      <img bind:this={img} class="pm-imgview__img" {src} alt={alt} draggable="false" />
+    </div>
+    {#if onclose}
+      <div class="pm-imgview__top">
+        <button bind:this={closeButton} type="button" class={["pm-imgview__btn", armed && "pm-imgview__btn--armed"]} aria-label={labels.close ?? "Close"} onclick={() => onclose?.()}>
+          <Icon name="x" />
+        </button>
+      </div>
+    {/if}
+    <div class="pm-imgview__bottom">
+      {#if caption}<p class="pm-imgview__caption">{caption}</p>{:else}<span></span>{/if}
+      <span class="pm-imgview__zoom">
+        <button type="button" class="pm-imgview__btn" aria-label={labels.zoomOut ?? "Zoom out"} aria-disabled={scale <= 1.01 ? "true" : undefined} onclick={() => viewer?.zoomBy(1 / 1.5)}>
+          <Icon name="dash" />
+        </button>
+        <span class="pm-imgview__pct" aria-live="polite">{Math.round(scale * 100)}%</span>
+        <button type="button" class="pm-imgview__btn" aria-label={labels.zoomIn ?? "Zoom in"} aria-disabled={scale >= maxScale - 0.01 ? "true" : undefined} onclick={() => viewer?.zoomBy(1.5)}>
+          <Icon name="plus" />
+        </button>
+      </span>
+    </div>
+  </div>
+{/if}

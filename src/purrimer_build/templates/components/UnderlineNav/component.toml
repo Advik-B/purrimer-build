@@ -1,6 +1,6 @@
 name = "UnderlineNav"
 group = "Navigation"
-order = 62
+order = 82
 summary = "Page-level navigation between sibling views, with an underline on the current one."
 slint_exports = ["UnderlineNav", "UnderlineNavItem"]
 

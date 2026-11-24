@@ -1,0 +1,27 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:MobileScreen IsRefreshable="True">
+    <pm:MobileScreen.AppBar>
+      <pm:AppBar Title="Inbox" IsLarge="True">
+        <pm:IconButton IconName="search" Label="Search" Classes="invisible large" IconSize="24" />
+      </pm:AppBar>
+    </pm:MobileScreen.AppBar>
+    <pm:MobileScreen.Fab>
+      <pm:FAB IconName="pencil" Label="Compose" IsExtended="True" />
+    </pm:MobileScreen.Fab>
+    <pm:MobileScreen.BottomNav>
+      <pm:BottomNav SelectedIndex="2" ShowLabels="True">
+        <pm:BottomNavItem IconName="home" Label="Home" />
+        <pm:BottomNavItem IconName="search" Label="Search" />
+        <pm:BottomNavItem IconName="inbox" Label="Inbox" Badge="3" />
+        <pm:BottomNavItem IconName="person" Label="Profile" />
+      </pm:BottomNav>
+    </pm:MobileScreen.BottomNav>
+    <StackPanel>
+      <pm:ListItem IconName="person" Headline="Mira Okafor" Supporting="Lunch on Friday?" ShowChevron="True" />
+      <pm:ListItem IconName="person" Headline="Design review" Supporting="Notes from today's crit" ShowChevron="True" />
+      <pm:ListItem IconName="person" Headline="Jonas Weber" Supporting="Sent you the photos" ShowChevron="True" />
+      <pm:ListItem IconName="person" Headline="Book club" Supporting="Next one is on the 12th" ShowChevron="True" />
+    </StackPanel>
+  </pm:MobileScreen>
+</UserControl>

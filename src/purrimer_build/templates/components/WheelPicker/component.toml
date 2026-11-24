@@ -1,0 +1,11 @@
+name = "WheelPicker"
+group = "Mobile"
+order = 64
+summary = "Scroll-snap wheels for picking from an ordered set on a phone: one column for a list, several for a time or date."
+web_exports = ["type WheelColumn", "type WheelOption"]
+slint_exports = ["WheelPicker", "WheelColumn"]
+
+[props.columns]
+type = "list"
+default = []
+doc = "Columns: { options, value, label, width?, align? }. Options are strings or { value, label }."

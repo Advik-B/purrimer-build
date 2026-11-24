@@ -12,9 +12,18 @@ using Avalonia.Media;
 namespace {{ ns }};
 
 // An inline message in info, success, attention, danger or done tone.
+// Inside a touch scope (a MobileScreen, or any container with pm:PurrimerTouch.Scope set) a dismissible banner also swipes
+// sideways to dismiss: it follows the pointer and fades over a panel with a close mark, which fills past 30% of its
+// width. A release there, or a flick, slides it out and closes the gap before Dismissed is raised; an earlier release
+// springs back. A vertical drag is left to scrolling, and the close button stays for keyboards.
 [TemplatePart("PART_Dismiss", typeof(Button))]
+[TemplatePart("PART_Card", typeof(Border))]
+[TemplatePart("PART_Mark", typeof(Border))]
+[TemplatePart("PART_MarkDisc", typeof(Border))]
+[PseudoClasses(":armed")]
 public class Banner : ContentControl
 {
+    private const double Commit = 0.3;
     public static readonly StyledProperty<string?> TitleProperty =
         AvaloniaProperty.Register<Banner, string?>(nameof(Title));
 
@@ -34,7 +43,49 @@ public class Banner : ContentControl
         RoutedEvent.Register<Banner, RoutedEventArgs>(nameof(Dismissed), RoutingStrategies.Bubble);
 
     private Button? _dismiss;
+    private Border? _card;
+    private Border? _mark;
+    private Border? _disc;
     private string _iconName = "info";
+    private readonly PurrimerSpring _dx = new(0, 0.5);
+    private readonly PurrimerSpring _markScale = new(1, 0.001);
+    private readonly PurrimerSpring _collapse = new(1, 0.001);
+    private readonly TranslateTransform _shift = new();
+    private readonly ScaleTransform _discScale = new();
+    private readonly PurrimerVelocityTracker _tracker = new();
+    private Point? _origin;
+    private char _axis;
+    private bool _armed;
+    private bool _leaving;
+    private double _releasedAt;
+    private double _fullHeight;
+
+    public Banner()
+    {
+        _dx.Changed += OnSlid;
+        _dx.Settled += OnSlideSettled;
+        _markScale.Changed += v =>
+        {
+            _discScale.ScaleX = v;
+            _discScale.ScaleY = v;
+        };
+        // Springs report their resting value once when created, so the collapse acts only once the banner is leaving.
+        _collapse.Changed += v =>
+        {
+            if (_leaving)
+                MaxHeight = _fullHeight * v;
+        };
+        _collapse.Settled += () =>
+        {
+            if (!_leaving || _collapse.Value > 0)
+                return;
+            IsVisible = false;
+            RaiseEvent(new RoutedEventArgs(DismissedEvent, this));
+        };
+    }
+
+    // Inherited from a MobileScreen or any container with pm:PurrimerTouch.Scope set.
+    public static bool InTouchScope(Visual visual) => PurrimerTouch.GetScope(visual);
 
     public string? Title
     {
@@ -96,6 +147,138 @@ public class Banner : ContentControl
         _dismiss = e.NameScope.Find<Button>("PART_Dismiss");
         if (_dismiss != null)
             _dismiss.Click += OnDismissClick;
+        _card = e.NameScope.Find<Border>("PART_Card");
+        _mark = e.NameScope.Find<Border>("PART_Mark");
+        _disc = e.NameScope.Find<Border>("PART_MarkDisc");
+        if (_card != null)
+            _card.RenderTransform = _shift;
+        if (_disc != null)
+            _disc.RenderTransform = _discScale;
+    }
+
+    private bool Swipeable => IsDismissible && !_leaving && InTouchScope(this);
+
+    private void OnSlid(double v)
+    {
+        _shift.X = v;
+        if (_card == null)
+            return;
+        var width = Math.Max(1, Bounds.Width);
+        if (_leaving)
+        {
+            // Fades the rest of the way as it slides out.
+            var held = 1 - Math.Min(1, Math.Abs(_releasedAt) / width) * 0.6;
+            var left = Math.Max(1, width - Math.Abs(_releasedAt));
+            _card.Opacity = held * Math.Max(0, 1 - (Math.Abs(v) - Math.Abs(_releasedAt)) / left);
+        }
+        else
+        {
+            _card.Opacity = 1 - Math.Min(1, Math.Abs(v) / width) * 0.6;
+        }
+    }
+
+    private void OnSlideSettled()
+    {
+        if (_leaving)
+        {
+            _fullHeight = Bounds.Height;
+            _collapse.Set(1);
+            _collapse.To(0);
+            return;
+        }
+        if (_dx.Value == 0 && _mark != null)
+            _mark.IsVisible = false;
+    }
+
+    private void ShowMark(int side)
+    {
+        if (_mark == null || _disc == null)
+            return;
+        _mark.IsVisible = true;
+        _disc.HorizontalAlignment = side > 0 ? global::Avalonia.Layout.HorizontalAlignment.Left : global::Avalonia.Layout.HorizontalAlignment.Right;
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || !Swipeable)
+            return;
+        _origin = e.GetPosition(Parent as Visual ?? this);
+        _axis = '\0';
+        _tracker.Reset();
+        _tracker.Add(_origin.Value);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var p = e.GetPosition(Parent as Visual ?? this);
+        _tracker.Add(p);
+        var mx = p.X - origin.X;
+        var my = p.Y - origin.Y;
+        if (_axis == '\0')
+        {
+            if (Math.Abs(mx) < 10 && Math.Abs(my) < 10)
+                return;
+            _axis = Math.Abs(mx) > Math.Abs(my) ? 'x' : 'y';
+            if (_axis == 'x')
+                e.Pointer.Capture(this);
+        }
+        if (_axis != 'x')
+            return;
+        e.Handled = true;
+        if (mx != 0)
+            ShowMark(mx > 0 ? 1 : -1);
+        var armed = Math.Abs(mx) >= Bounds.Width * Commit;
+        if (armed != _armed)
+        {
+            _armed = armed;
+            PseudoClasses.Set(":armed", armed);
+            _markScale.To(armed && !PurrimerMotion.PauseLoops ? 1.15 : 1);
+        }
+        _dx.Set(mx);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_origin is null)
+            return;
+        _origin = null;
+        if (_axis != 'x')
+            return;
+        _axis = '\0';
+        e.Pointer.Capture(null);
+        e.Handled = true;
+        var dx = _dx.Value;
+        var v = _tracker.Velocity().X / 1000;
+        var flick = Math.Abs(v) > 0.6 && (v > 0) == (dx > 0) && Math.Abs(dx) > 20;
+        if (dx != 0 && (_armed || flick))
+        {
+            _releasedAt = dx;
+            _leaving = true;
+            _dx.To(Math.Sign(dx) * Bounds.Width, v * 1000);
+            return;
+        }
+        _armed = false;
+        PseudoClasses.Set(":armed", false);
+        _markScale.To(1);
+        _dx.To(0, v * 1000);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (_origin is null || _axis != 'x')
+            return;
+        _origin = null;
+        _axis = '\0';
+        _armed = false;
+        PseudoClasses.Set(":armed", false);
+        _markScale.To(1);
+        _dx.To(0);
     }
 
     private void OnDismissClick(object? sender, RoutedEventArgs e)

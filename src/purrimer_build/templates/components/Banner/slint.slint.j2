@@ -1,58 +1,188 @@
 // {{ note }}
 // {{ c.summary }}
-import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
 import { IconButton } from "icon-button.slint";
 
+// Inside a touch scope a dismissible banner also swipes sideways to dismiss: it follows the pointer and fades over a
+// panel with a close mark, which fills past 30% of its width. A release there, or a flick, slides it out and closes the
+// gap before dismissed() is called; an earlier release springs back. A vertical drag is left to scrolling, and the
+// close button stays for keyboards. Slint cannot look at a component's ancestors, so set touch-scope for a banner
+// inside a MobileScreen or another touch scope.
 export component Banner inherits Rectangle {
     // "info", "success", "attention", "danger" or "done"
     in property <string> tone: "info";
     in property <string> title;
     in property <string> text;
     in property <bool> dismissible;
+    in property <bool> touch-scope;
     callback dismissed();
+    property <bool> swipeable: root.dismissible && root.touch-scope && !root.leaving;
+    property <bool> leaving;
+    property <bool> gone;
+    property <bool> armed;
+    property <int> side;
+    property <string> axis;
+    property <length> origin-x;
+    property <length> origin-y;
+    property <length> last-x;
+    property <duration> last-t;
+    property <float> velocity;
+    property <length> released-at;
+    property <length> dx: slide.value * 1px;
+    property <float> collapse: 1;
+    animate collapse { duration: PurrimerMotion.pause-loops ? 0ms : {{ "duration-base" | tok }}; easing: ease-in-out; }
 
-    border-radius: {{ "borderRadius-large" | tok }};
-    background: tone == "success" ? {{ "bgColor-success-muted" | tok }} : tone == "attention" ? {{ "bgColor-attention-muted" | tok }} : tone == "danger" ? {{ "bgColor-danger-muted" | tok }} : tone == "done" ? {{ "bgColor-done-muted" | tok }} : {{ "bgColor-info-muted" | tok }};
-    border-width: {{ "borderWidth-thin" | tok }};
-    border-color: tone == "success" ? {{ "borderColor-success-emphasis" | tok }} : tone == "attention" ? {{ "borderColor-attention-emphasis" | tok }} : tone == "danger" ? {{ "borderColor-danger-emphasis" | tok }} : tone == "done" ? {{ "borderColor-done-emphasis" | tok }} : {{ "borderColor-info-emphasis" | tok }};
+    min-height: row.min-height * root.collapse;
+    preferred-height: row.preferred-height * root.collapse;
+    clip: root.collapse < 1;
     accessible-role: AccessibleRole.text;
     accessible-label: title + " " + text;
 
-    HorizontalLayout {
-        padding-left: 16px;
-        padding-right: root.dismissible ? 8px : 16px;
-        padding-top: 12px;
-        padding-bottom: 12px;
-        spacing: 12px;
-        alignment: stretch;
-        Icon {
-            y: 2px;
-            path: root.tone == "success" ? PurrimerIcons.check-circle-16 : root.tone == "attention" ? PurrimerIcons.alert-16 : root.tone == "danger" ? PurrimerIcons.stop-16 : root.tone == "done" ? PurrimerIcons.check-circle-fill-16 : PurrimerIcons.info-16;
-            color: root.tone == "success" ? {{ "fgColor-success" | tok }} : root.tone == "attention" ? {{ "fgColor-attention" | tok }} : root.tone == "danger" ? {{ "fgColor-danger" | tok }} : root.tone == "done" ? {{ "fgColor-done" | tok }} : {{ "fgColor-info" | tok }};
-        }
-        VerticalLayout {
-            horizontal-stretch: 1;
-            if root.title != "": Text {
-                text: root.title;
-                wrap: word-wrap;
-                color: {{ "fgColor-default" | tok }};
-                font-family: {{ "text-body-medium" | tok }}.font-family;
-                font-size: 14px;
-                font-weight: 600;
-            }
-            if root.text != "": Text {
-                text: root.text;
-                wrap: word-wrap;
-                color: {{ "fgColor-default" | tok }};
-                font-family: {{ "text-body-medium" | tok }}.font-family;
-                font-size: 14px;
+    slide := PmSpring {
+        precision: 0.5;
+        settled => {
+            if root.leaving {
+                root.collapse = 0;
+            } else if self.value == 0 {
+                root.side = 0;
             }
         }
-        if root.dismissible: VerticalLayout {
-            alignment: start;
-            IconButton { icon: PurrimerIcons.x-16; label: "Dismiss"; variant: "invisible"; size: "small"; clicked => { root.dismissed(); } }
+    }
+
+    // The gap closes, then the app hears about it.
+    Timer {
+        interval: PurrimerMotion.pause-loops ? 1ms : {{ "duration-base" | tok }};
+        running: root.leaving && root.collapse == 0 && !root.gone;
+        triggered => {
+            root.gone = true;
+            root.dismissed();
+        }
+    }
+
+    // The panel a swipe uncovers, with the close mark on that side.
+    if root.side != 0: Rectangle {
+        border-radius: {{ "borderRadius-large" | tok }};
+        background: {{ "bgColor-neutral-muted" | tok }};
+        Rectangle {
+            x: root.side > 0 ? 16px : parent.width - 16px - self.width;
+            y: (parent.height - self.height) / 2;
+            width: 32px;
+            height: 32px;
+            border-radius: 16px;
+            background: root.armed ? {{ "bgColor-neutral-emphasis" | tok }} : transparent;
+            animate background { duration: {{ "duration-fast" | tok }}; }
+            transform-scale: root.armed && !PurrimerMotion.pause-loops ? 1.15 : 1;
+            animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out-back; }
+            Icon {
+                path: PurrimerIcons.x-16;
+                color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-muted" | tok }};
+            }
+        }
+    }
+
+    card := Rectangle {
+        x: root.dx;
+        width: root.width;
+        height: row.preferred-height;
+        y: 0;
+        // Fades with the drag; once dismissed it fades the rest of the way as it slides out.
+        opacity: root.leaving
+            ? (1 - min(1, abs(root.released-at) / max(1px, root.width)) * 0.6) * max(0, 1 - (abs(root.dx) - abs(root.released-at)) / max(1px, root.width - abs(root.released-at)))
+            : 1 - min(1, abs(root.dx) / max(1px, root.width)) * 0.6;
+        border-radius: {{ "borderRadius-large" | tok }};
+        background: root.tone == "success" ? {{ "bgColor-success-muted" | tok }} : root.tone == "attention" ? {{ "bgColor-attention-muted" | tok }} : root.tone == "danger" ? {{ "bgColor-danger-muted" | tok }} : root.tone == "done" ? {{ "bgColor-done-muted" | tok }} : {{ "bgColor-info-muted" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: root.tone == "success" ? {{ "borderColor-success-emphasis" | tok }} : root.tone == "attention" ? {{ "borderColor-attention-emphasis" | tok }} : root.tone == "danger" ? {{ "borderColor-danger-emphasis" | tok }} : root.tone == "done" ? {{ "borderColor-done-emphasis" | tok }} : {{ "borderColor-info-emphasis" | tok }};
+
+        TouchArea {
+            enabled: root.swipeable || root.axis == "x";
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    root.origin-x = self.mouse-x + root.dx;
+                    root.origin-y = self.mouse-y;
+                    root.axis = "";
+                    root.velocity = 0;
+                    root.last-x = root.origin-x;
+                    root.last-t = animation-tick();
+                } else if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) || event.kind == PointerEventKind.cancel {
+                    if root.axis == "x" {
+                        let flick = abs(root.velocity) > 0.6 && (root.velocity > 0) == (root.dx > 0) && abs(root.dx) > 20px;
+                        if event.kind != PointerEventKind.cancel && root.dx != 0 && (root.armed || flick) {
+                            root.released-at = root.dx;
+                            root.leaving = true;
+                            slide.to((root.dx > 0 ? 1 : -1) * root.width / 1px, root.velocity * 1000);
+                        } else {
+                            root.armed = false;
+                            slide.to(0, root.velocity * 1000);
+                        }
+                    }
+                    root.axis = "";
+                }
+            }
+            moved => {
+                // Measured in the root's space, since the card itself moves with the pointer.
+                let x = self.mouse-x + root.dx;
+                let mx = x - root.origin-x;
+                let my = self.mouse-y - root.origin-y;
+                if root.axis == "" {
+                    if abs(mx) < 10px && abs(my) < 10px {
+                        return;
+                    }
+                    root.axis = abs(mx) > abs(my) ? "x" : "y";
+                }
+                if root.axis != "x" {
+                    return;
+                }
+                let now = animation-tick();
+                if now > root.last-t {
+                    root.velocity = (x - root.last-x) / 1px / ((now - root.last-t) / 1ms);
+                }
+                root.last-x = x;
+                root.last-t = now;
+                if mx != 0 {
+                    root.side = mx > 0 ? 1 : -1;
+                }
+                root.armed = abs(mx) >= root.width * 0.3;
+                slide.set(mx / 1px);
+            }
+        }
+
+        row := HorizontalLayout {
+            padding-left: 16px;
+            padding-right: root.dismissible ? 8px : 16px;
+            padding-top: 12px;
+            padding-bottom: 12px;
+            spacing: 12px;
+            alignment: stretch;
+            Icon {
+                y: 2px;
+                path: root.tone == "success" ? PurrimerIcons.check-circle-16 : root.tone == "attention" ? PurrimerIcons.alert-16 : root.tone == "danger" ? PurrimerIcons.stop-16 : root.tone == "done" ? PurrimerIcons.check-circle-fill-16 : PurrimerIcons.info-16;
+                color: root.tone == "success" ? {{ "fgColor-success" | tok }} : root.tone == "attention" ? {{ "fgColor-attention" | tok }} : root.tone == "danger" ? {{ "fgColor-danger" | tok }} : root.tone == "done" ? {{ "fgColor-done" | tok }} : {{ "fgColor-info" | tok }};
+            }
+            VerticalLayout {
+                horizontal-stretch: 1;
+                if root.title != "": Text {
+                    text: root.title;
+                    wrap: word-wrap;
+                    color: {{ "fgColor-default" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
+                if root.text != "": Text {
+                    text: root.text;
+                    wrap: word-wrap;
+                    color: {{ "fgColor-default" | tok }};
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                }
+            }
+            if root.dismissible: VerticalLayout {
+                alignment: start;
+                IconButton { icon: PurrimerIcons.x-16; label: "Dismiss"; variant: "invisible"; size: "small"; clicked => { root.dismissed(); } }
+            }
         }
     }
 }

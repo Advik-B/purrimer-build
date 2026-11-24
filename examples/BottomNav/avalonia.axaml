@@ -4,6 +4,7 @@
     <pm:BottomNavItem IconName="home" Label="Home" />
     <pm:BottomNavItem IconName="search" Label="Search" />
     <pm:BottomNavItem IconName="inbox" Label="Inbox" Badge="3" />
+    <pm:BottomNavItem IconName="bell" Label="Activity" IsDot="True" />
     <pm:BottomNavItem IconName="person" Label="Profile" />
   </pm:BottomNav>
 </UserControl>

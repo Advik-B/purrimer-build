@@ -1,0 +1,15 @@
+// {{ note }}
+// {{ c.summary }}
+import { PurrimerIcons } from "../icons.slint";
+import { IconButton } from "icon-button.slint";
+
+// A 44px info button. Slint cannot draw over the window from inside a row, so pair it with a BottomSheet placed last
+// in the window: clicked => { sheet.open = true; }, with the sheet's title matching this one and a "Got it" action.
+export component InfoButton inherits IconButton {
+    in property <string> title;
+    icon: PurrimerIcons.info-16;
+    variant: "invisible";
+    label: root.title == "" ? "About this" : "About " + root.title.to-lowercase();
+    width: 44px;
+    height: 44px;
+}

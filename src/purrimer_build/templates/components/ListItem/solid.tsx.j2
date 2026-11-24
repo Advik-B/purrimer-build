@@ -1,12 +1,54 @@
 // {{ note }}
 // {{ c.summary }}
-import { Show } from "solid-js";
+import { For, Show, createSignal, onCleanup, onSettled } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Icon } from "./Icon";
+import { wireSwipe } from "../motion";
 
-export type ListItemProps = { headline: string; supporting?: string; icon?: string; trailing?: string; chevron?: boolean; onClick?: () => void };
+export type SwipeAction = {
+  label: string;
+  icon: string;
+  tone?: "neutral" | "accent" | "success" | "attention" | "danger" | "done" | "info";
+  onSwipe: () => void;
+};
+
+export type ListItemProps = {
+  headline: string;
+  supporting?: string;
+  icon?: string;
+  trailing?: string;
+  chevron?: boolean;
+  // Revealed by dragging toward the end of the line.
+  swipeStart?: SwipeAction;
+  // Revealed by dragging toward the start of the line.
+  swipeEnd?: SwipeAction;
+  onClick?: () => void;
+};
 
 export function ListItem(props: ListItemProps): JSX.Element {
+  const [dx, setDx] = createSignal(0);
+  const [armed, setArmed] = createSignal(false);
+  const [dragging, setDragging] = createSignal(false);
+  let slide: HTMLDivElement | undefined;
+  let unwire: (() => void) | undefined;
+  const shown = () => (dx() > 0 ? props.swipeStart : dx() < 0 ? props.swipeEnd : undefined);
+
+  onSettled(() => {
+    if (!slide) return;
+    unwire = wireSwipe({
+      row: slide,
+      canStart: () => !!props.swipeStart,
+      canEnd: () => !!props.swipeEnd,
+      onMove: (v, a, d) => {
+        setDx(v);
+        setArmed(a);
+        setDragging(d);
+      },
+      onCommit: (side) => (side === "start" ? props.swipeStart : props.swipeEnd)?.onSwipe(),
+    });
+  });
+  onCleanup(() => unwire?.());
+
   const content = () => (
     <>
       <Show when={props.icon}>{(name) => <span class="pm-list-item__tile"><Icon name={name()} /></span>}</Show>
@@ -19,9 +61,32 @@ export function ListItem(props: ListItemProps): JSX.Element {
     </>
   );
   const cls = () => ["pm-list-item", props.supporting && "pm-list-item--two-line"];
-  return (
-    <Show when={props.onClick} fallback={<div class={cls()} role="listitem">{content()}</div>}>
+  const row = (role: "listitem" | undefined) => (
+    <Show when={props.onClick} fallback={<div class={cls()} role={role}>{content()}</div>}>
       <button type="button" class={cls()} onClick={() => props.onClick?.()}>{content()}</button>
+    </Show>
+  );
+
+  return (
+    <Show when={props.swipeStart || props.swipeEnd} fallback={row("listitem")}>
+      <div class="pm-list-item-swipe" role="listitem">
+        <Show when={shown()}>
+          {(action) => (
+            <div
+              class={`pm-list-item__swipe-bg${dx() < 0 ? " pm-list-item__swipe-bg--end" : ""} pm-list-item__swipe-bg--${action().tone ?? "neutral"}${armed() ? " pm-list-item__swipe-bg--armed" : ""}`}
+              aria-hidden="true"
+            >
+              <span class="pm-list-item__swipe-mark"><Icon name={action().icon} size={24} /><span>{action().label}</span></span>
+            </div>
+          )}
+        </Show>
+        <div ref={slide} class={dragging() ? "pm-list-item__slide pm-list-item__slide--dragging" : "pm-list-item__slide"} style={dx() ? `transform: translateX(${dx()}px)` : undefined}>
+          {row(undefined)}
+        </div>
+        <For each={[props.swipeStart, props.swipeEnd].filter((a): a is SwipeAction => !!a)}>
+          {(action) => <button type="button" class="pm-list-item__swipe-alt" onClick={() => action.onSwipe()}>{action.label}</button>}
+        </For>
+      </div>
     </Show>
   );
 }

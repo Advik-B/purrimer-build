@@ -1,7 +1,9 @@
 name = "ListItem"
 group = "Mobile"
 order = 53
-summary = "One row of a mobile list: icon tile, headline, supporting text and trailing text."
+summary = "One row of a mobile list: icon tile, headline, supporting text and trailing text, with optional swipe actions."
+web_exports = ["type SwipeAction"]
+slint_exports = ["ListItem", "ListItemSwipeAction"]
 
 [props.headline]
 type = "string"
@@ -27,3 +29,13 @@ doc = "Text at the end, such as a time."
 type = "bool"
 default = false
 doc = "Shows a chevron for rows that open a screen."
+
+[props.swipeStart]
+type = "object"
+default = {}
+doc = "{ label, icon, tone, onSwipe } revealed by dragging toward the end of the line; commits past 40% of the row."
+
+[props.swipeEnd]
+type = "object"
+default = {}
+doc = "{ label, icon, tone, onSwipe } revealed by dragging toward the start of the line."

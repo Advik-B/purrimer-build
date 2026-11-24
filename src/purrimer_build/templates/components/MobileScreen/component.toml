@@ -1,0 +1,15 @@
+name = "MobileScreen"
+group = "Mobile"
+order = 50
+summary = "One phone screen: AppBar on top, a scrolling body that drives the bar, an optional FAB and footer, BottomNav at the bottom."
+
+[props.surface]
+type = "enum"
+default = "default"
+doc = "inset paints the body bgColor-inset, for settings and forms."
+values = ["default", "inset"]
+
+[props.onRefresh]
+type = "callback"
+default = ""
+doc = "Turns on pull to refresh. Returns a promise (or calls done) when the refresh ends."

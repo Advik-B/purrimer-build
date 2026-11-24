@@ -1,7 +1,393 @@
 // {{ note }}
 // {{ c.summary }}
-import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
 
+// A named detent: the thumb snaps to it within 10px and its label sits under the track.
+export struct SliderMark {
+    value: float,
+    label: string,
+}
+
+// One thumb of the touch design: a 28px squircle in a 44px hit area that grows while held, with the value bubble
+// above it while it is held or moved from the keyboard.
+component TouchThumb inherits FocusScope {
+    in property <float> fraction;
+    in property <string> text;
+    in property <bool> held;
+    in property <bool> active: true;
+    in property <string> name;
+    in property <float> value;
+    in property <float> lowest;
+    in property <float> highest;
+    out property <bool> keyboard;
+    callback key(KeyEvent) -> EventResult;
+    callback step(int);
+
+    width: {{ "touch-target-min" | tok }};
+    height: {{ "touch-target-min" | tok }};
+    enabled: root.active;
+    accessible-role: slider;
+    accessible-label: root.name;
+    accessible-value: root.text;
+    accessible-value-minimum: root.lowest;
+    accessible-value-maximum: root.highest;
+    accessible-enabled: root.active;
+    accessible-action-increment => { root.step(1); }
+    accessible-action-decrement => { root.step(-1); }
+    focus-gained(reason) => {
+        root.keyboard = reason == FocusReason.tab-navigation;
+    }
+    focus-lost(reason) => {
+        root.keyboard = false;
+    }
+    key-pressed(event) => {
+        let result = root.key(event);
+        if result == EventResult.accept {
+            root.keyboard = true;
+        }
+        result
+    }
+
+    knob := Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: 28px;
+        height: 28px;
+        transform-scale: root.held && !PurrimerMotion.pause-loops ? 1.2 : 1;
+        animate transform-scale { duration: {{ "duration-base" | tok }}; easing: ease-out-back; }
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: root.active ? {{ "controlKnob-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: {{ "control-borderColor-rest" | tok }};
+        drop-shadow-offset-y: root.active ? {{ "shadow-resting-medium" | tok }}.offset-y : 0px;
+        drop-shadow-blur: root.active ? {{ "shadow-resting-medium" | tok }}.blur : 0px;
+        drop-shadow-color: root.active ? {{ "shadow-resting-medium" | tok }}.color : transparent;
+    }
+    if root.keyboard && root.has-focus && !root.held: Rectangle {
+        x: knob.x - 4px;
+        y: knob.y - 4px;
+        width: knob.width + 8px;
+        height: knob.height + 8px;
+        border-radius: {{ "borderRadius-medium" | tok }} + 4px;
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+
+    property <bool> bubble: root.held || (root.keyboard && root.has-focus);
+    Rectangle {
+        width: label.preferred-width + 20px;
+        height: 28px;
+        x: (parent.width - self.width) / 2;
+        y: -4px - self.height + (root.bubble ? 0px : 6px);
+        animate y { duration: {{ "duration-base" | tok }}; easing: ease-out-back; }
+        opacity: root.bubble ? 1 : 0;
+        animate opacity { duration: {{ "duration-fast" | tok }}; }
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: {{ "bgColor-emphasis" | tok }};
+        drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
+        drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
+        drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
+        label := Text {
+            text: root.text;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: {{ "fgColor-onEmphasis" | tok }};
+            font-family: {{ "text-stat-small" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+        }
+    }
+}
+
+// The touch design: a 6px rail with detent dots, one or two thumbs, and mark labels under the track. Pressing a thumb
+// drags at once; pressing the track drags once the pointer moves sideways, and a tap jumps there. A vertical move is
+// left to scrolling. With step 0 it snaps to the marks alone, of which the first eight count.
+component TouchSliderBar inherits Rectangle {
+    in-out property <float> value;
+    in-out property <float> low;
+    in-out property <float> high;
+    in property <float> minimum;
+    in property <float> maximum;
+    in property <float> step;
+    in property <float> page-step;
+    in property <bool> range;
+    in property <[SliderMark]> marks;
+    in property <string> suffix;
+    in property <string> label;
+    in property <bool> active: true;
+    callback changed();
+    callback released();
+
+    property <length> gutter: 14px;
+    property <length> span: max(1px, root.width - 2 * root.gutter);
+    property <bool> labelled: {% for k in range(8) %}(root.marks.length > {{ k }} && root.marks[{{ k }}].label != ""){{ " || " if not loop.last }}{% endfor %};
+    property <float> snap-step: root.marks.length > 0 && root.step <= 0 ? 0 : (root.step > 0 ? root.step : 1);
+    property <int> step-detents: root.marks.length == 0 && root.snap-step > 0 && (root.maximum - root.minimum) / root.snap-step <= 20 ? floor((root.maximum - root.minimum) / root.snap-step + 0.000001) + 1 : 0;
+    property <float> fill-from: root.range ? s0.value : 0;
+    property <float> fill-to: root.range ? s1.value : s0.value;
+    property <int> pressed: -1;
+    property <int> grab: -1;
+    property <bool> live;
+    property <length> start-x;
+    property <length> start-y;
+
+    height: {{ "touch-target-min" | tok }} + (root.labelled ? 16px : 0px);
+
+    pure function fraction-of(v: float) -> float {
+        return root.maximum > root.minimum ? (clamp(v, root.minimum, root.maximum) - root.minimum) / (root.maximum - root.minimum) : 0;
+    }
+    pure function value-of(i: int) -> float {
+        return !root.range ? root.value : i == 0 ? root.low : root.high;
+    }
+    pure function lowest(i: int) -> float {
+        return root.range && i == 1 ? root.low : root.minimum;
+    }
+    pure function highest(i: int) -> float {
+        return root.range && i == 0 ? root.high : root.maximum;
+    }
+    pure function nearest-mark(v: float) -> float {
+        let best = root.marks.length > 0 ? root.marks[0].value : v;
+{% for k in range(1, 8) %}
+        let best{{ k }} = root.marks.length > {{ k }} && abs(root.marks[{{ k }}].value - v) < abs(best{{ k - 1 if k > 1 else "" }} - v) ? root.marks[{{ k }}].value : best{{ k - 1 if k > 1 else "" }};
+{% endfor %}
+        return best7;
+    }
+    pure function snap(v: float) -> float {
+        let c = clamp(v, root.minimum, root.maximum);
+        return root.snap-step > 0 ? min(root.maximum, root.minimum + round((c - root.minimum) / root.snap-step) * root.snap-step) : root.nearest-mark(c);
+    }
+    pure function format(v: float) -> string {
+{% for k in range(8) %}
+        if root.marks.length > {{ k }} && root.marks[{{ k }}].value == v && root.marks[{{ k }}].label != "" {
+            return root.marks[{{ k }}].label;
+        }
+{% endfor %}
+        return round(v * 1000) / 1000 + root.suffix;
+    }
+    // The next mark up or down from v, for the keyboard with step 0.
+    pure function next-mark(v: float, up: bool) -> float {
+        let here = root.nearest-mark(v);
+        let next = here;
+{% for k in range(8) %}
+{% set prev = "next" if k == 0 else "n" ~ (k - 1) %}
+        let n{{ k }} = root.marks.length > {{ k }} && (up ? root.marks[{{ k }}].value > here && ({{ prev }} == here || root.marks[{{ k }}].value < {{ prev }}) : root.marks[{{ k }}].value < here && ({{ prev }} == here || root.marks[{{ k }}].value > {{ prev }})) ? root.marks[{{ k }}].value : {{ prev }};
+{% endfor %}
+        return n7;
+    }
+    pure function value-at(x: length) -> float {
+        return root.minimum + clamp((x - root.gutter) / root.span, 0, 1) * (root.maximum - root.minimum);
+    }
+    function set-at(i: int, v: float) {
+        if root.value-of(i) == v {
+            return;
+        }
+        if !root.range {
+            root.value = v;
+        } else if i == 0 {
+            root.low = v;
+        } else {
+            root.high = v;
+        }
+        root.changed();
+    }
+    function settle(i: int) {
+        if i == 0 {
+            s0.to(root.fraction-of(root.value-of(0)), 0);
+        } else {
+            s1.to(root.fraction-of(root.value-of(1)), 0);
+        }
+    }
+    function follow(i: int, f: float) {
+        if i == 0 {
+            s0.set(f);
+        } else {
+            s1.set(f);
+        }
+    }
+    function key(i: int, event: KeyEvent) -> EventResult {
+        let v = root.value-of(i);
+        let up = event.text == Key.RightArrow || event.text == Key.UpArrow;
+        let down = event.text == Key.LeftArrow || event.text == Key.DownArrow;
+        let known = up || down || event.text == Key.PageUp || event.text == Key.PageDown || event.text == Key.Home || event.text == Key.End;
+        if !known {
+            return reject;
+        }
+        let target = up || down ? (root.snap-step > 0 ? v + (up ? root.snap-step : -root.snap-step) : root.next-mark(v, up))
+            : event.text == Key.PageUp ? v + root.page-step
+            : event.text == Key.PageDown ? v - root.page-step
+            : event.text == Key.Home ? root.lowest(i)
+            : root.highest(i);
+        let next = clamp(root.snap(target), root.lowest(i), root.highest(i));
+        if next != v {
+            root.set-at(i, next);
+            root.settle(i);
+            root.released();
+        }
+        accept
+    }
+
+    s0 := PmSpring { precision: 0.0005; }
+    s1 := PmSpring { precision: 0.0005; }
+    init => {
+        s0.set(root.fraction-of(root.value-of(0)));
+        s1.set(root.fraction-of(root.value-of(1)));
+    }
+    changed value => { if root.grab != 0 { root.settle(0); } }
+    changed low => { if root.grab != 0 { root.settle(0); } }
+    changed high => { if root.grab != 1 { root.settle(1); } }
+
+    rail := Rectangle {
+        x: root.gutter;
+        y: {{ "touch-target-min" | tok }} / 2 - 3px;
+        width: root.span;
+        height: 6px;
+        border-radius: 3px;
+        background: {{ "controlTrack-bgColor-rest" | tok }};
+        Rectangle {
+            x: root.fill-from * parent.width;
+            width: (root.fill-to - root.fill-from) * parent.width;
+            border-radius: 3px;
+            background: root.active ? {{ "bgColor-accent-emphasis" | tok }} : {{ "borderColor-emphasis" | tok }};
+        }
+        for mark in root.marks: Rectangle {
+            property <float> f: root.fraction-of(mark.value);
+            x: self.f * parent.width - 2px;
+            y: 1px;
+            width: 4px;
+            height: 4px;
+            border-radius: 1px;
+            background: self.f >= root.fill-from - 0.0001 && self.f <= root.fill-to + 0.0001 ? {{ "fgColor-onEmphasis" | tok }} : {{ "borderColor-emphasis" | tok }};
+        }
+        for i in root.step-detents: Rectangle {
+            property <float> f: root.fraction-of(root.minimum + i * root.snap-step);
+            x: self.f * parent.width - 2px;
+            y: 1px;
+            width: 4px;
+            height: 4px;
+            border-radius: 1px;
+            background: self.f >= root.fill-from - 0.0001 && self.f <= root.fill-to + 0.0001 ? {{ "fgColor-onEmphasis" | tok }} : {{ "borderColor-emphasis" | tok }};
+        }
+    }
+
+    for mark in root.marks: Text {
+        property <bool> on: root.range ? (mark.value == root.low || mark.value == root.high) : mark.value == root.value;
+        visible: mark.label != "";
+        x: root.gutter + root.fraction-of(mark.value) * root.span - self.preferred-width / 2;
+        y: {{ "touch-target-min" | tok }} - 4px;
+        height: 20px;
+        text: mark.label;
+        vertical-alignment: center;
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 14px;
+        font-weight: self.on ? 600 : 400;
+        color: self.on ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }};
+    }
+
+    TouchArea {
+        height: {{ "touch-target-min" | tok }};
+        y: 0;
+        enabled: root.active;
+        mouse-cursor: pointer;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                let x0 = root.gutter + s0.value * root.span;
+                let x1 = root.gutter + s1.value * root.span;
+                let d0 = abs(self.mouse-x - x0);
+                let d1 = root.range ? abs(self.mouse-x - x1) : 100000px;
+                let half = {{ "touch-target-min" | tok }} / 2;
+                let on-thumb = d0 <= half || d1 <= half;
+                root.grab = !root.range ? 0 : (x0 == x1 ? (self.mouse-x < x0 ? 0 : 1) : (d0 <= d1 ? 0 : 1));
+                root.live = on-thumb;
+                root.start-x = self.mouse-x;
+                root.start-y = self.mouse-y;
+                if root.grab == 0 {
+                    t0.focus();
+                } else {
+                    t1.focus();
+                }
+                if on-thumb {
+                    root.pressed = root.grab;
+                }
+            } else if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) || event.kind == PointerEventKind.cancel {
+                if root.grab < 0 {
+                    return;
+                }
+                let i = root.grab;
+                if !root.live && event.kind != PointerEventKind.cancel {
+                    root.set-at(i, clamp(root.snap(root.value-at(self.mouse-x)), root.lowest(i), root.highest(i)));
+                }
+                root.grab = -1;
+                root.live = false;
+                root.pressed = -1;
+                root.settle(i);
+                root.released();
+            }
+        }
+        moved => {
+            if root.grab < 0 {
+                return;
+            }
+            if !root.live {
+                let mx = abs(self.mouse-x - root.start-x);
+                let my = abs(self.mouse-y - root.start-y);
+                if mx < 10px && my < 10px {
+                    return;
+                }
+                if my > mx {
+                    root.grab = -1;
+                    return;
+                }
+                root.live = true;
+                root.pressed = root.grab;
+            }
+            let i = root.grab;
+            let raw = root.value-at(self.mouse-x);
+            let v = clamp(root.snap(raw), root.lowest(i), root.highest(i));
+            let free = clamp(raw, root.lowest(i), root.highest(i));
+            let near = root.marks.length > 0 ? root.nearest-mark(free) : free;
+            let pulled = root.marks.length > 0 && abs(root.fraction-of(near) - root.fraction-of(free)) * root.span <= 10px ? near : free;
+            let shown = root.snap-step <= 0 || pulled == root.minimum || pulled == root.maximum ? v : pulled;
+            root.follow(i, root.fraction-of(shown));
+            root.set-at(i, v);
+        }
+    }
+
+    t0 := TouchThumb {
+        x: root.gutter + s0.value * root.span - self.width / 2;
+        y: 0;
+        fraction: s0.value;
+        value: root.value-of(0);
+        text: root.format(root.value-of(0));
+        held: root.pressed == 0;
+        active: root.active;
+        name: root.range ? "Minimum " + root.label : root.label;
+        lowest: root.lowest(0);
+        highest: root.highest(0);
+        key(event) => { return root.key(0, event); }
+        step(d) => { root.set-at(0, clamp(root.snap(root.value-of(0) + d * max(root.snap-step, 1)), root.lowest(0), root.highest(0))); root.settle(0); }
+    }
+    t1 := TouchThumb {
+        visible: root.range;
+        enabled: root.range && root.active;
+        x: root.gutter + s1.value * root.span - self.width / 2;
+        y: 0;
+        fraction: s1.value;
+        value: root.value-of(1);
+        text: root.format(root.value-of(1));
+        held: root.pressed == 1;
+        active: root.active;
+        name: "Maximum " + root.label;
+        lowest: root.lowest(1);
+        highest: root.highest(1);
+        key(event) => { return root.key(1, event); }
+        step(d) => { root.set-at(1, clamp(root.snap(root.value-of(1) + d * max(root.snap-step, 1)), root.lowest(1), root.highest(1))); root.settle(1); }
+    }
+}
+
+// Inside a touch scope, or whenever range or marks is set, the slider uses its touch design: a 28px thumb that grows
+// while held, a value bubble, detents, mark labels and, with range, a second thumb for low and high (range-changed).
+// The touch design is always horizontal. Slint cannot look at a component's ancestors, so set touch-scope for a slider
+// inside a MobileScreen or another touch scope.
 export component Slider inherits VerticalLayout {
     in property <string> label;
     in-out property <float> value: {{ c.spec.props.value.default }};
@@ -18,8 +404,17 @@ export component Slider inherits VerticalLayout {
     in property <bool> show-value;
     in property <string> suffix;
     in property <bool> enabled: true;
+    // Two thumbs for low and high, which cannot pass each other.
+    in property <bool> range;
+    in-out property <float> low: {{ c.spec.props.min.default }};
+    in-out property <float> high: {{ c.spec.props.max.default }};
+    // Named detents. With marks, a step of 0 snaps to the marks alone.
+    in property <[SliderMark]> marks;
+    in property <bool> touch-scope;
     callback changed(float);
     callback released(float);
+    callback range-changed(float, float);
+    property <bool> touch: root.range || root.marks.length > 0 || root.touch-scope;
 
     property <bool> vertical: root.orientation == "vertical";
     property <bool> before: root.tick-position == "both" || root.tick-position == (root.vertical ? "left" : "above");
@@ -29,8 +424,17 @@ export component Slider inherits VerticalLayout {
     property <float> fraction: root.maximum > root.minimum ? (clamp(root.value, root.minimum, root.maximum) - root.minimum) / (root.maximum - root.minimum) : 0;
     property <float> every: root.tick-interval > 0 ? root.tick-interval : root.page-step;
     property <int> tick-count: root.tick-position == "none" || root.every <= 0 || root.maximum <= root.minimum ? 0 : floor((root.maximum - root.minimum) / root.every + 0.000001) + 1;
-    property <bool> dragging: touch.pressed;
-    property <bool> active: root.enabled && (touch.has-hover || touch.pressed);
+    property <string> low-text: root.format(root.range ? root.low : root.value);
+    property <string> high-text: root.format(root.high);
+
+    pure function format(v: float) -> string {
+{% for k in range(8) %}
+        if root.marks.length > {{ k }} && root.marks[{{ k }}].value == v && root.marks[{{ k }}].label != "" {
+            return root.marks[{{ k }}].label;
+        }
+{% endfor %}
+        return round(v * 1000) / 1000 + root.suffix;
+    }
 
     function set(raw: float) {
         if (!root.enabled) { return; }
@@ -41,15 +445,11 @@ export component Slider inherits VerticalLayout {
             root.changed(next);
         }
     }
-    function from-pointer(x: length, y: length) -> float {
-        let f = root.vertical ? 1 - (y - 8px) / (bar.height - 16px) : (x - 8px) / (bar.width - 16px);
-        return root.minimum + clamp(f, 0, 1) * (root.maximum - root.minimum);
-    }
 
     spacing: 4px;
     alignment: start;
 
-    if root.label != "" || root.show-value: HorizontalLayout {
+    if !root.touch && (root.label != "" || root.show-value): HorizontalLayout {
         Text {
             text: root.label;
             horizontal-stretch: 1;
@@ -66,7 +466,54 @@ export component Slider inherits VerticalLayout {
         }
     }
 
-    bar := Rectangle {
+    if root.touch && (root.label != "" || root.show-value): HorizontalLayout {
+        height: 24px;
+        Text {
+            text: root.label;
+            horizontal-stretch: 1;
+            vertical-alignment: center;
+            color: root.enabled ? {{ "fgColor-default" | tok }} : {{ "fgColor-disabled" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        if root.show-value: Text {
+            text: root.range ? root.low-text + " to " + root.high-text : root.low-text;
+            vertical-alignment: center;
+            color: {{ "fgColor-muted" | tok }};
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+        }
+    }
+
+    if root.touch: TouchSliderBar {
+        value <=> root.value;
+        low <=> root.low;
+        high <=> root.high;
+        minimum: root.minimum;
+        maximum: root.maximum;
+        step: root.step;
+        page-step: root.page-step;
+        range: root.range;
+        marks: root.marks;
+        suffix: root.suffix;
+        label: root.label;
+        active: root.enabled;
+        preferred-width: root.length > 0 ? root.length : 240px;
+        min-width: root.length > 0 ? root.length : 120px;
+        max-width: root.length > 0 ? root.length : 100000px;
+        changed => {
+            if root.range {
+                root.range-changed(root.low, root.high);
+            } else {
+                root.changed(root.value);
+            }
+        }
+        released => { root.released(root.range ? root.high : root.value); }
+    }
+
+    if !root.touch: bar := Rectangle {
+        property <bool> active: root.enabled && (touch.has-hover || touch.pressed);
         height: root.vertical ? (root.length > 0 ? root.length : 160px) : 28px;
         preferred-width: root.vertical ? 28px : (root.length > 0 ? root.length : 240px);
         min-width: root.vertical ? 28px : (root.length > 0 ? root.length : 120px);
@@ -125,10 +572,10 @@ export component Slider inherits VerticalLayout {
             border-radius: {{ "borderRadius-small" | tok }};
             background: root.enabled ? {{ "controlKnob-bgColor-rest" | tok }} : {{ "bgColor-disabled" | tok }};
             border-width: {{ "borderWidth-thin" | tok }};
-            border-color: !root.enabled ? {{ "borderColor-default" | tok }} : root.active ? {{ "borderColor-accent-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
-            drop-shadow-offset-y: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.offset-y : {{ "shadow-resting-small" | tok }}.offset-y) : 0px;
-            drop-shadow-blur: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.blur : {{ "shadow-resting-small" | tok }}.blur) : 0px;
-            drop-shadow-color: root.enabled ? (root.active ? {{ "shadow-resting-medium" | tok }}.color : {{ "shadow-resting-small" | tok }}.color) : transparent;
+            border-color: !root.enabled ? {{ "borderColor-default" | tok }} : bar.active ? {{ "borderColor-accent-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
+            drop-shadow-offset-y: root.enabled ? (bar.active ? {{ "shadow-resting-medium" | tok }}.offset-y : {{ "shadow-resting-small" | tok }}.offset-y) : 0px;
+            drop-shadow-blur: root.enabled ? (bar.active ? {{ "shadow-resting-medium" | tok }}.blur : {{ "shadow-resting-small" | tok }}.blur) : 0px;
+            drop-shadow-color: root.enabled ? (bar.active ? {{ "shadow-resting-medium" | tok }}.color : {{ "shadow-resting-small" | tok }}.color) : transparent;
             animate border-color { duration: {{ "duration-fast" | tok }}; }
         }
         if focus.has-focus && root.enabled: Rectangle {
@@ -141,13 +588,18 @@ export component Slider inherits VerticalLayout {
             border-color: {{ "focus-outlineColor" | tok }};
         }
 
+        function from-pointer(x: length, y: length) -> float {
+            let f = root.vertical ? 1 - (y - 8px) / (bar.height - 16px) : (x - 8px) / (bar.width - 16px);
+            return root.minimum + clamp(f, 0, 1) * (root.maximum - root.minimum);
+        }
+
         touch := TouchArea {
             enabled: root.enabled;
             mouse-cursor: pointer;
             pointer-event(event) => {
                 if (event.kind == PointerEventKind.down && event.button == PointerEventButton.left) {
                     focus.focus();
-                    root.set(root.from-pointer(self.mouse-x, self.mouse-y));
+                    root.set(bar.from-pointer(self.mouse-x, self.mouse-y));
                 }
                 if (event.kind == PointerEventKind.up && event.button == PointerEventButton.left) {
                     root.released(root.value);
@@ -155,7 +607,7 @@ export component Slider inherits VerticalLayout {
             }
             moved => {
                 if (self.pressed) {
-                    root.set(root.from-pointer(self.mouse-x, self.mouse-y));
+                    root.set(bar.from-pointer(self.mouse-x, self.mouse-y));
                 }
             }
         }

@@ -1,6 +1,6 @@
 name = "FAB"
 group = "Mobile"
-order = 55
+order = 54
 summary = "The floating action button: one squircle for the main thing people create."
 
 [props.icon]
@@ -17,3 +17,14 @@ doc = "Accessible name; shown when extended."
 type = "bool"
 default = false
 doc = "Shows the label beside the icon."
+
+[props.actions]
+type = "list"
+default = []
+doc = "Two to six { icon, label, onSelect } that a press and hold opens above the FAB (see HoldMenu); a tap still runs onClick, or opens them without one."
+
+[props.actionsLayout]
+type = "enum"
+default = "stack"
+doc = "stack of labelled options, or arc for two to four whose icons read without labels."
+values = ["stack", "arc"]

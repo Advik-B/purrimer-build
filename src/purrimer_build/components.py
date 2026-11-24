@@ -97,6 +97,7 @@ class Component:
             elif layer.startswith("avalonia"):
                 found |= {m for m in re.findall(r"pm:(\w+)", text) if m in names}
                 found |= {m for m in re.findall(r"\b(\w+)\.\w+Event\b", text) if m in names}
+                found |= {m for m in re.findall(r"class \w+ : (\w+)", text) if m in names}
         found.discard(self.name)
         return found
 

@@ -1,0 +1,131 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+// Wheels for picking from an ordered set: one column for a list, several for a time or date. Each wheel rolls under a
+// finger or a dragged mouse with momentum and settles on a row; the mouse wheel, a tap on a row and the arrow keys turn
+// it too. changed(column, value) fires as a value changes.
+Item {
+    id: root
+    // Columns: [{ label, options, value?, width?, align? }]. Options are strings or { value, label }.
+    property var columns: []
+    signal changed(int column, string value)
+
+    implicitWidth: 320
+    implicitHeight: 220
+
+    Rectangle {
+        y: 88
+        width: parent.width
+        height: 44
+        radius: {{ "borderRadius-medium" | tok }}
+        color: {{ "bgColor-neutral-muted" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: {{ "borderColor-default" | tok }}
+    }
+
+    Row {
+        id: row
+        anchors.fill: parent
+        spacing: 4
+
+        Repeater {
+            id: repeater
+            model: root.columns
+
+            ListView {
+                id: spinner
+                required property var modelData
+                required property int index
+                readonly property var options: modelData.options
+                readonly property real share: {
+                    let fixed = 0
+                    let free = 0
+                    for (const c of root.columns) {
+                        if (c.width) fixed += c.width
+                        else free += 1
+                    }
+                    return free ? (row.width - fixed - 4 * (root.columns.length - 1)) / free : 0
+                }
+                function valueAt(i) {
+                    const o = options[i]
+                    return typeof o === "string" ? o : o.value
+                }
+                function labelAt(i) {
+                    const o = options[i]
+                    return typeof o === "string" ? o : o.label
+                }
+                width: modelData.width || share
+                height: row.height
+                model: options.length
+                clip: true
+                snapMode: ListView.SnapToItem
+                highlightRangeMode: ListView.StrictlyEnforceRange
+                preferredHighlightBegin: 88
+                preferredHighlightEnd: 132
+                highlightMoveDuration: Purrimer.pauseLoops ? 0 : {{ "duration-slow" | tok }}
+                boundsBehavior: Flickable.DragAndOvershootBounds
+                activeFocusOnTab: true
+                keyNavigationEnabled: true
+                Accessible.role: Accessible.SpinBox
+                Accessible.name: modelData.label
+                Accessible.description: currentIndex >= 0 ? labelAt(currentIndex) : ""
+                Component.onCompleted: {
+                    for (let i = 0; i < options.length; i++) {
+                        if (valueAt(i) === modelData.value) {
+                            positionViewAtIndex(i, ListView.Center)
+                            currentIndex = i
+                        }
+                    }
+                }
+                onCurrentIndexChanged: if (currentIndex >= 0) root.changed(index, valueAt(currentIndex))
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown) {
+                        currentIndex = Math.max(0, Math.min(count - 1, currentIndex + (event.key === Qt.Key_PageUp ? -5 : 5)))
+                        event.accepted = true
+                    } else if (event.key === Qt.Key_Home || event.key === Qt.Key_End) {
+                        currentIndex = event.key === Qt.Key_Home ? 0 : count - 1
+                        event.accepted = true
+                    }
+                }
+
+                delegate: Text {
+                    id: rowText
+                    required property int index
+                    readonly property bool on: ListView.isCurrentItem
+                    readonly property real distance: Math.abs(y - spinner.contentY + 22 - spinner.height / 2) / (spinner.height / 2)
+                    width: spinner.width
+                    height: 44
+                    leftPadding: 8
+                    rightPadding: 8
+                    text: spinner.labelAt(index)
+                    horizontalAlignment: spinner.modelData.align === "start" ? Text.AlignLeft : spinner.modelData.align === "end" ? Text.AlignRight : Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 20
+                    font.weight: on ? Font.DemiBold : Font.Normal
+                    font.features: { "tnum": 1 }
+                    color: on ? {{ "fgColor-default" | tok }} : {{ "fgColor-muted" | tok }}
+                    opacity: Math.max(0, Math.min(1, 1.6 - 1.6 * distance))
+                    TapHandler { onTapped: spinner.currentIndex = rowText.index }
+                }
+
+                WheelHandler {
+                    onWheel: (event) => {
+                        spinner.currentIndex = Math.max(0, Math.min(spinner.count - 1, spinner.currentIndex + (event.angleDelta.y > 0 ? -1 : 1)))
+                    }
+                }
+
+                Rectangle {
+                    visible: spinner.activeFocus
+                    anchors.fill: parent
+                    color: "transparent"
+                    radius: {{ "borderRadius-medium" | tok }}
+                    border.width: {{ "borderWidth-thick" | tok }}
+                    border.color: {{ "focus-outlineColor" | tok }}
+                }
+            }
+        }
+    }
+}

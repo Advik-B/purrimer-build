@@ -1,0 +1,30 @@
+name = "Carousel"
+group = "Mobile"
+order = 63
+summary = "Slides side by side on scroll snap, with a page marker that follows the scroll one to one."
+slint_exports = ["Carousel", "CarouselItem"]
+
+[props.index]
+type = "int"
+default = 0
+doc = "The current slide; a new value scrolls there."
+
+[props.peek]
+type = "bool"
+default = false
+doc = "Leaves the edge of the next slide showing."
+
+[props.controls]
+type = "bool"
+default = true
+doc = "Shows the previous and next buttons and the page marker."
+
+[props.height]
+type = "length"
+default = "200px"
+doc = "Slide height."
+
+[props.ariaLabel]
+type = "string"
+default = ""
+doc = "Names the carousel region. Required."

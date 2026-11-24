@@ -1,0 +1,9 @@
+name = "KeyboardFooter"
+group = "Mobile"
+order = 61
+summary = "A footer for a screen's primary action that sits at the bottom of a MobileScreen and rides above the on-screen keyboard."
+
+[props.children]
+type = "slot"
+default = ""
+doc = "One or two full-width Buttons, the primary one last."

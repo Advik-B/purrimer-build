@@ -1,0 +1,22 @@
+name = "ReorderList"
+group = "Mobile"
+order = 65
+summary = "A list people put in their own order by holding a row, or pressing its handle, and dragging it to a new place."
+web_exports = ["type ReorderItem"]
+slint_exports = ["ReorderList", "ReorderItem"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Rows: { key, headline, supporting?, icon? }."
+
+[props.variant]
+type = "enum"
+default = "inset"
+doc = "inset draws a card for settings; plain runs edge to edge."
+values = ["inset", "plain"]
+
+[props.disabled]
+type = "bool"
+default = false
+doc = "Locks the order."

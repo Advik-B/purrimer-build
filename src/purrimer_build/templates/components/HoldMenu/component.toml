@@ -1,0 +1,49 @@
+name = "HoldMenu"
+group = "Mobile"
+order = 66
+summary = "Press and hold a button to open more options around it, slide onto one and release to choose it."
+web_exports = ["type HoldMenuItem"]
+slint_exports = ["HoldMenu", "HoldMenuItem"]
+
+[props.items]
+type = "list"
+default = []
+doc = "Two to six options: { label, icon, variant?: danger, disabled? }. Item 0 sits nearest the trigger."
+
+[props.layout]
+type = "enum"
+default = "stack"
+doc = "stack is a column of labelled options; arc fans two to four icon-only options around a corner button."
+values = ["stack", "arc"]
+
+[props.direction]
+type = "enum"
+default = "up"
+doc = "Which side of the trigger the options open on."
+values = ["up", "down"]
+
+[props.align]
+type = "enum"
+default = "end"
+doc = "Lines the options up with the trigger's end or start edge."
+values = ["end", "start"]
+
+[props.tapOpens]
+type = "bool"
+default = false
+doc = "A tap opens the menu too, for a trigger with no action of its own."
+
+[props.holdDelay]
+type = "number"
+default = 400
+doc = "Milliseconds before a press opens the menu."
+
+[props.hint]
+type = "string"
+default = "Slide to choose"
+doc = "The arc's prompt before an option is under the finger."
+
+[props.defaultOpen]
+type = "bool"
+default = false
+doc = "Opens the menu for tapping when it first shows."

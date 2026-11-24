@@ -1,0 +1,10 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:pm="clr-namespace:{{ ns }}">
+  <ControlTheme x:Key="{x:Type pm:Carousel}" TargetType="pm:Carousel">
+    <Setter Property="DotBrush" Value="{{ "borderColor-emphasis" | tok }}" />
+    <Setter Property="CurrentDotBrush" Value="{{ "fgColor-accent" | tok }}" />
+  </ControlTheme>
+</ResourceDictionary>

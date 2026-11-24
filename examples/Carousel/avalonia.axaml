@@ -1,0 +1,17 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:Carousel IsPeeking="True" SlideHeight="220" VerticalAlignment="Top" AutomationProperties.Name="Highlights">
+    <Border Background="{DynamicResource PmBgColorAccentMuted}" Padding="16">
+      <TextBlock Text="Morning walk" FontSize="16" VerticalAlignment="Bottom" />
+    </Border>
+    <Border Background="{DynamicResource PmBgColorSuccessMuted}" Padding="16">
+      <TextBlock Text="Market haul" FontSize="16" VerticalAlignment="Bottom" />
+    </Border>
+    <Border Background="{DynamicResource PmBgColorAttentionMuted}" Padding="16">
+      <TextBlock Text="Rainy afternoon" FontSize="16" VerticalAlignment="Bottom" />
+    </Border>
+    <Border Background="{DynamicResource PmBgColorDoneMuted}" Padding="16">
+      <TextBlock Text="Late train" FontSize="16" VerticalAlignment="Bottom" />
+    </Border>
+  </pm:Carousel>
+</UserControl>

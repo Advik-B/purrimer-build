@@ -14,10 +14,11 @@
   box-shadow: {{ "shadow-floating-small" | tok }};
   font: 600 16px/24px var(--font-sans);
   cursor: pointer;
-  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale {{ "duration-fast" | tok }} {{ "easing-standard" | tok }};
+  transition: background-color {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}, scale var(--pm-release-dur, 400ms) var(--pm-release-ease, ease);
 }
 .pm-fab svg { width: 24px; height: 24px; fill: currentColor; flex: none; }
 .pm-fab:not(.pm-fab--extended) { width: {{ "mobile-fab-size" | tok }}; padding: 0; }
 .pm-fab:hover { background: {{ "button-primary-bgColor-hover" | tok }}; }
-.pm-fab:active { background: {{ "button-primary-bgColor-active" | tok }}; scale: 0.96; }
+/* Compresses while pressed and springs back on release. */
+.pm-fab:active { background: {{ "button-primary-bgColor-active" | tok }}; scale: var(--pm-press-scale, 0.96); transition-duration: {{ "duration-fast" | tok }}; }
 .pm-fab:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; }

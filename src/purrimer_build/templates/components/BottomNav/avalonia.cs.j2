@@ -1,37 +1,394 @@
 // {{ note }}
 // {{ c.summary }}
 using System;
+using System.Collections.Generic;
+using System.Collections.Specialized;
+using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Collections;
 using Avalonia.Controls;
-using Avalonia.Controls.Metadata;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Metadata;
 
 namespace {{ ns }};
 
-// One destination in a BottomNav.
-public class BottomNavItem
+// One destination in a BottomNav. Changing Badge or IsDot bumps the badge.
+public class BottomNavItem : INotifyPropertyChanged
 {
+    private int _badge;
+    private bool _isDot;
+
     public string IconName { get; set; } = "";
+    public string? ActiveIconName { get; set; }
     public string Label { get; set; } = "";
-    public int Badge { get; set; }
-    public bool HasBadge => Badge > 0;
-    public string BadgeText => Badge > 99 ? "99+" : Badge.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    public int Badge
+    {
+        get => _badge;
+        set
+        {
+            if (_badge == value)
+                return;
+            _badge = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Badge)));
+        }
+    }
+
+    // A dot instead of a count.
+    public bool IsDot
+    {
+        get => _isDot;
+        set
+        {
+            if (_isDot == value)
+                return;
+            _isDot = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDot)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 }
 
-// The bottom navigation bar of a mobile screen. Items are BottomNavItem values; SelectedIndex is the current one.
-public class BottomNav : ListBox
+public class BottomNavActivatedEventArgs : RoutedEventArgs
 {
+    public BottomNavActivatedEventArgs(RoutedEvent routedEvent, int index) : base(routedEvent) => Index = index;
+
+    public int Index { get; }
+}
+
+// The bottom navigation bar: three to five destinations, the current one marked by a short bar on the top edge that
+// slides from tab to tab. Press anywhere on the bar and slide to scrub: the bar follows the pointer, the tab under it
+// lifts, and that tab opens on release. Left and Right move between tabs, Enter or Space opens one. Activated fires on
+// every press, the current tab included, so a screen can scroll to the top or pop to its root.
+public class BottomNav : Control
+{
+    public static readonly StyledProperty<int> SelectedIndexProperty =
+        AvaloniaProperty.Register<BottomNav, int>(nameof(SelectedIndex), defaultBindingMode: global::Avalonia.Data.BindingMode.TwoWay);
+
     public static readonly StyledProperty<bool> ShowLabelsProperty =
         AvaloniaProperty.Register<BottomNav, bool>(nameof(ShowLabels), true);
 
-    public bool ShowLabels
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        global::Avalonia.Controls.Documents.TextElement.FontFamilyProperty.AddOwner<BottomNav>();
+
+    public static readonly RoutedEvent<BottomNavActivatedEventArgs> ActivatedEvent =
+        RoutedEvent.Register<BottomNav, BottomNavActivatedEventArgs>(nameof(Activated), RoutingStrategies.Bubble);
+
+    private const double Height56 = {{ px("mobile-bottomNav-height") | num }};
+    private readonly PurrimerSpring _marker = new(0, 0.002);
+    private readonly List<PurrimerSpring> _dips = new();
+    private readonly List<PurrimerSpring> _lifts = new();
+    private readonly List<PurrimerSpring> _bumps = new();
+    private readonly List<BottomNavItem> _watched = new();
+    private int _pressed = -1;
+    private int _scrub = -1;
+    private Point? _origin;
+    private int _focus;
+    private bool _keyboard;
+
+    static BottomNav()
     {
-        get => GetValue(ShowLabelsProperty);
-        set => SetValue(ShowLabelsProperty, value);
+        AffectsRender<BottomNav>(ShowLabelsProperty);
+        FocusableProperty.OverrideDefaultValue<BottomNav>(true);
+        CursorProperty.OverrideDefaultValue<BottomNav>(new Cursor(StandardCursorType.Hand));
     }
 
-    protected override Type StyleKeyOverride => typeof(BottomNav);
+    public BottomNav()
+    {
+        Items.CollectionChanged += OnItemsChanged;
+        _marker.Changed += _ => InvalidateVisual();
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+        AutomationProperties.SetName(this, "Main");
+    }
+
+    [Content]
+    public AvaloniaList<BottomNavItem> Items { get; } = new();
+
+    // Replaces the items, for code that builds them from data.
+    public IEnumerable<BottomNavItem> ItemsSource
+    {
+        get => Items;
+        set
+        {
+            Items.Clear();
+            Items.AddRange(value);
+        }
+    }
+
+    public int SelectedIndex { get => GetValue(SelectedIndexProperty); set => SetValue(SelectedIndexProperty, value); }
+    public bool ShowLabels { get => GetValue(ShowLabelsProperty); set => SetValue(ShowLabelsProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    private int Count => Math.Min(Items.Count, 5);
+
+    public event EventHandler<BottomNavActivatedEventArgs>? Activated
+    {
+        add => AddHandler(ActivatedEvent, value);
+        remove => RemoveHandler(ActivatedEvent, value);
+    }
+
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    private PurrimerSpring Spring(double value, string? kind = null)
+    {
+        var spring = new PurrimerSpring(value, 0.001) { Kind = kind };
+        spring.Changed += _ => InvalidateVisual();
+        return spring;
+    }
+
+    private void OnItemsChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        foreach (var item in _watched)
+            item.PropertyChanged -= OnItemChanged;
+        _watched.Clear();
+        _dips.Clear();
+        _lifts.Clear();
+        _bumps.Clear();
+        foreach (var item in Items)
+        {
+            item.PropertyChanged += OnItemChanged;
+            _watched.Add(item);
+            _dips.Add(Spring(1));
+            _lifts.Add(Spring(0));
+            _bumps.Add(Spring(1, "playful"));
+        }
+        Describe();
+        InvalidateVisual();
+    }
+
+    private void OnItemChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        var i = Items.IndexOf((BottomNavItem)sender!);
+        if (i >= 0 && i < _bumps.Count && (Items[i].Badge > 0 || Items[i].IsDot))
+        {
+            _bumps[i].Set(0.4);
+            _bumps[i].To(1);
+        }
+        Describe();
+        InvalidateVisual();
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == SelectedIndexProperty)
+        {
+            _focus = SelectedIndex;
+            if (IsLoaded)
+                _marker.To(SelectedIndex);
+            else
+                _marker.Set(SelectedIndex);
+            Describe();
+            InvalidateVisual();
+        }
+    }
+
+    private void Describe()
+    {
+        if (SelectedIndex < 0 || SelectedIndex >= Items.Count)
+            return;
+        var item = Items[SelectedIndex];
+        AutomationProperties.SetHelpText(this, item.Label + (item.IsDot ? ", new" : item.Badge > 0 ? $", {item.Badge} new" : ""));
+    }
+
+    protected override Size MeasureOverride(Size availableSize) =>
+        new(double.IsInfinity(availableSize.Width) ? 72 * Math.Max(1, Count) : availableSize.Width, Height56);
+
+    private double Cell => Bounds.Width / Math.Max(1, Count);
+    private int IndexAt(double x) => Math.Clamp((int)Math.Floor(x / Cell), 0, Math.Max(0, Count - 1));
+
+    private void Pick(int index)
+    {
+        SelectedIndex = index;
+        RaiseEvent(new BottomNavActivatedEventArgs(ActivatedEvent, index));
+    }
+
+    private void SetPressed(int index)
+    {
+        if (index == _pressed)
+            return;
+        if (_pressed >= 0 && _pressed < _dips.Count)
+            _dips[_pressed].To(1);
+        if (index >= 0 && index < _dips.Count && !PurrimerMotion.PauseLoops)
+            _dips[index].To(0.9);
+        _pressed = index;
+        InvalidateVisual();
+    }
+
+    private void SetScrub(int index)
+    {
+        if (index == _scrub)
+            return;
+        for (var i = 0; i < _lifts.Count; i++)
+            _lifts[i].To(i == index && !PurrimerMotion.PauseLoops ? -2 : 0);
+        _scrub = index;
+        _marker.To(index >= 0 ? index : SelectedIndex);
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (Count == 0 || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _keyboard = false;
+        _origin = e.GetPosition(this);
+        e.Pointer.Capture(this);
+        SetPressed(IndexAt(_origin.Value.X));
+        e.Handled = true;
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var x = e.GetPosition(this).X;
+        if (_scrub < 0 && Math.Abs(x - origin.X) < 10)
+            return;
+        SetPressed(-1);
+        SetScrub(IndexAt(x));
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_origin is null)
+            return;
+        var index = _scrub >= 0 ? _scrub : _pressed;
+        _origin = null;
+        e.Pointer.Capture(null);
+        SetPressed(-1);
+        SetScrub(-1);
+        if (index >= 0)
+            Pick(index);
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (_origin is null)
+            return;
+        _origin = null;
+        SetPressed(-1);
+        SetScrub(-1);
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (Count == 0)
+            return;
+        if (e.Key is Key.Left or Key.Right)
+        {
+            _keyboard = true;
+            _focus = Math.Clamp(_focus + (e.Key == Key.Left ? -1 : 1), 0, Count - 1);
+            InvalidateVisual();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Space)
+        {
+            Pick(_focus);
+            e.Handled = true;
+        }
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _keyboard = e.NavigationMethod == NavigationMethod.Tab;
+        InvalidateVisual();
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var bounds = new Rect(Bounds.Size);
+        context.FillRectangle(Brush("PmBgColorDefault")!, bounds);
+        context.FillRectangle(Brush("PmBorderColorDefault")!, new Rect(0, 0, bounds.Width, {{ px("borderWidth-thin") | num }}));
+        if (Count == 0)
+            return;
+        var cell = Cell;
+        var content = 32 + (ShowLabels ? 4 + 16 : 0);
+        var top = (bounds.Height - content) / 2;
+        var radius = {{ px("borderRadius-medium") | num }} * 1.4;
+        for (var i = 0; i < Count; i++)
+        {
+            var item = Items[i];
+            var current = i == SelectedIndex;
+            var lit = i == _scrub || (current && (_scrub < 0 || _scrub == i));
+            var ink = Brush(lit ? "PmFgColorAccent" : "PmFgColorMuted");
+            var cx = cell * i + cell / 2;
+            var indicator = new Rect(cx - 28, top + (i < _lifts.Count ? _lifts[i].Value : 0), 56, 32);
+            var scale = i < _dips.Count ? _dips[i].Value : 1;
+            var c = indicator.Center;
+            using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
+            {
+                if (i == _pressed)
+                    context.DrawRectangle(Brush("PmControlTransparentBgColorHover"), null, indicator, radius, radius);
+                var name = current && !string.IsNullOrEmpty(item.ActiveIconName) ? item.ActiveIconName : item.IconName;
+                if (this.TryFindResource(global::{{ ns }}.Icon.ResourceKey(name, 24), out var found) && found is Geometry geometry)
+                    using (context.PushTransform(Matrix.CreateTranslation(cx - 12, c.Y - 12)))
+                        context.DrawGeometry(ink, null, geometry);
+                if (item.Badge > 0 || item.IsDot)
+                    PaintBadge(context, item, new Point(cx + 6, indicator.Top - 2), i < _bumps.Count ? _bumps[i].Value : 1);
+            }
+            if (_keyboard && IsFocused && i == _focus)
+                context.DrawRectangle(null, new Pen(Brush("PmFocusOutlineColor"), {{ px("borderWidth-thick") | num }}), indicator.Inflate(2), radius + 2, radius + 2);
+            if (ShowLabels)
+            {
+                var text = new FormattedText(item.Label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    new Typeface(FontFamily, FontStyle.Normal, lit ? FontWeight.SemiBold : FontWeight.Medium), 12, ink)
+                {
+                    MaxTextWidth = Math.Max(1, cell - 8),
+                    MaxLineCount = 1,
+                    Trimming = TextTrimming.CharacterEllipsis,
+                    TextAlignment = TextAlignment.Center,
+                };
+                context.DrawText(text, new Point(cell * i + 4, top + 32 + 4 + (16 - text.Height) / 2));
+            }
+        }
+        var marked = _scrub >= 0 ? _scrub : SelectedIndex;
+        if (marked >= 0)
+        {
+            var small = {{ px("borderRadius-small") | num }};
+            var x = cell * (_marker.Value + 0.5) - 16;
+            using (context.PushClip(bounds))
+                context.DrawRectangle(Brush("PmBgColorAccentEmphasis"), null, new Rect(x, -small, 32, {{ px("borderWidth-thick") | num }} + small), small, small);
+        }
+    }
+
+    private void PaintBadge(DrawingContext context, BottomNavItem item, Point at, double scale)
+    {
+        var ring = {{ px("borderWidth-thick") | num }};
+        Rect rect;
+        FormattedText? text = null;
+        if (item.IsDot)
+            rect = new Rect(at.X, at.Y + 4, 12, 12);
+        else
+        {
+            text = new FormattedText(item.Badge > 99 ? "99+" : item.Badge.ToString(CultureInfo.InvariantCulture), CultureInfo.CurrentUICulture,
+                FlowDirection.LeftToRight, new Typeface(FontFamily, FontStyle.Normal, FontWeight.SemiBold), 12, Brush("PmFgColorOnEmphasis"));
+            rect = new Rect(at.X, at.Y, Math.Max(20, text.Width + 10 + 2 * ring), 20);
+        }
+        var c = rect.Center;
+        using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(c.X, c.Y)))
+        using (context.PushOpacity(Math.Clamp((scale - 0.4) / 0.6, 0, 1)))
+        {
+            var r = rect.Height / 2;
+            context.DrawRectangle(Brush("PmBgColorDangerEmphasis"), new Pen(Brush("PmBgColorDefault"), ring), rect.Deflate(ring / 2), r, r);
+            if (text != null)
+                context.DrawText(text, new Point(c.X - text.Width / 2, c.Y - text.Height / 2));
+        }
+    }
 }

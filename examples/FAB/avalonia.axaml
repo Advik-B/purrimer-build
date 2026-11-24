@@ -1,7 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:pm="using:Purrimer.Avalonia">
   <StackPanel Orientation="Horizontal" Spacing="16">
-    <pm:FAB Label="New note" />
+    <pm:FAB Label="New note">
+      <pm:FAB.Actions>
+        <pm:HoldMenuItem Label="Take photo" IconName="device-camera" />
+        <pm:HoldMenuItem Label="Checklist" IconName="checklist" />
+      </pm:FAB.Actions>
+    </pm:FAB>
     <pm:FAB IconName="pencil" Label="Compose" IsExtended="True" />
   </StackPanel>
 </UserControl>

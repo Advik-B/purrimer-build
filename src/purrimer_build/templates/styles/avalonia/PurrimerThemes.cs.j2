@@ -2,8 +2,11 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Diagnostics;
+using Avalonia;
 using Avalonia.Animation.Easings;
 using Avalonia.Styling;
+using Avalonia.Threading;
 
 namespace {{ ns }};
 
@@ -21,11 +24,162 @@ public static class PurrimerThemes
     public static IReadOnlyList<ThemeVariant> All { get; } = new[] { {% for t in themes %}{{ labels[t] }}{{ ", " if not loop.last }}{% endfor %} };
 }
 
+// Marks a touch scope: components inside switch to their touch design (Banner's swipe, Slider's touch thumb).
+// MobileScreen sets it; set pm:PurrimerTouch.Scope="True" on any other container. It is inherited down the tree.
+public sealed class PurrimerTouch : AvaloniaObject
+{
+    public static readonly AttachedProperty<bool> ScopeProperty =
+        AvaloniaProperty.RegisterAttached<PurrimerTouch, AvaloniaObject, bool>("Scope", inherits: true);
+
+    private PurrimerTouch()
+    {
+    }
+
+    public static bool GetScope(AvaloniaObject element) => element.GetValue(ScopeProperty);
+
+    public static void SetScope(AvaloniaObject element, bool value) => element.SetValue(ScopeProperty, value);
+}
+
 // Motion switches shared by every control.
 public static class PurrimerMotion
 {
     // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
     public static bool PauseLoops { get; set; }
+
+    // The default motion kind ("sleepy" or "playful") for springs and touch feedback.
+    public static string Kind { get; set; } = "sleepy";
+
+    public const double PressScale = 0.96;
+    public const int LongPressMs = 450;
+    public const double Slop = 8;
+
+    // Stiffness and damping per motion kind. Sleepy is critically damped; playful overshoots by about a tenth.
+    public static (double Stiffness, double Damping) SpringFor(string? kind) =>
+        (kind ?? Kind) == "playful" ? (380, 23.4) : (180, 26.8);
+
+    // Resistance past an edge: the further the drag, the less the content moves.
+    public static double RubberBand(double overshoot, double dimension, double constant = 0.55)
+    {
+        if (dimension <= 0)
+            return 0;
+        var d = Math.Abs(overshoot);
+        return Math.Sign(overshoot) * (1 - 1 / (d * constant / dimension + 1)) * dimension;
+    }
+
+    // Where a flick would come to rest, given its velocity in px/s.
+    public static double Project(double velocity, double deceleration = 0.998) =>
+        velocity / 1000 * deceleration / (1 - deceleration);
+}
+
+// A one-dimensional spring for the touch layer. Changed fires with every value, including the final one.
+public sealed class PurrimerSpring
+{
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private readonly double _precision;
+
+    public PurrimerSpring(double value = 0, double precision = 0.01)
+    {
+        Value = value;
+        Target = value;
+        _precision = precision;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(8), DispatcherPriority.Render, (_, _) => Step());
+    }
+
+    public double Value { get; private set; }
+    public double Target { get; private set; }
+    public double Velocity { get; private set; }
+    // Null means PurrimerMotion.Kind.
+    public string? Kind { get; set; }
+    public bool Moving => _timer.IsEnabled;
+
+    public event Action<double>? Changed;
+    public event Action? Settled;
+
+    public void Set(double value)
+    {
+        _timer.Stop();
+        Value = value;
+        Target = value;
+        Velocity = 0;
+        Changed?.Invoke(value);
+    }
+
+    public void To(double target, double? velocity = null)
+    {
+        Target = target;
+        if (velocity is { } v)
+            Velocity = v;
+        if (PurrimerMotion.PauseLoops)
+        {
+            Set(target);
+            Settled?.Invoke();
+            return;
+        }
+        if (!_timer.IsEnabled)
+        {
+            _clock.Restart();
+            _timer.Start();
+        }
+    }
+
+    public void Stop() => _timer.Stop();
+
+    private void Step()
+    {
+        var dt = Math.Min(_clock.Elapsed.TotalSeconds, 0.064);
+        _clock.Restart();
+        var (stiffness, damping) = PurrimerMotion.SpringFor(Kind);
+        var x = Value;
+        var v = Velocity;
+        while (dt > 0)
+        {
+            var h = Math.Min(dt, 1.0 / 240);
+            var accel = -stiffness * (x - Target) - damping * v;
+            v += accel * h;
+            x += v * h;
+            dt -= h;
+        }
+        if (Math.Abs(x - Target) < _precision && Math.Abs(v) < _precision * 10)
+        {
+            _timer.Stop();
+            Value = Target;
+            Velocity = 0;
+            Changed?.Invoke(Value);
+            Settled?.Invoke();
+            return;
+        }
+        Value = x;
+        Velocity = v;
+        Changed?.Invoke(x);
+    }
+}
+
+// Pointer velocity over the last 100ms, in px/s.
+public sealed class PurrimerVelocityTracker
+{
+    private readonly Stopwatch _clock = Stopwatch.StartNew();
+    private readonly List<(double T, Point P)> _samples = new();
+
+    public void Add(Point p)
+    {
+        var t = _clock.Elapsed.TotalMilliseconds;
+        _samples.Add((t, p));
+        while (_samples.Count > 2 && t - _samples[0].T > 100)
+            _samples.RemoveAt(0);
+    }
+
+    public void Reset() => _samples.Clear();
+
+    public Vector Velocity()
+    {
+        if (_samples.Count < 2)
+            return default;
+        var (t0, p0) = _samples[0];
+        var (t1, p1) = _samples[^1];
+        var dt = (t1 - t0) / 1000;
+        return dt > 0 ? (p1 - p0) / dt : default;
+    }
 }
 
 // Piecewise linear easing, the same curve as CSS linear(). Points are "progress,value" pairs.

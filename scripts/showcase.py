@@ -33,6 +33,8 @@ SHOWCASE = ROOT / "showcase"
 DIST = SHOWCASE / "dist"
 OUT = SHOWCASE / "out"
 WEB = SHOWCASE / "web"
+# Pictures an example keeps beside its files, copied with it.
+ASSET_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
 SCREENSHOTS = ROOT / "docs" / "screenshots"
 DOCS = ROOT / "docs" / "components"
 README = ROOT / "README.md"
@@ -142,6 +144,9 @@ def stage_web(examples: list[Example]) -> None:
         for target in WEB_TARGETS:
             if e.has(target):
                 shutil.copyfile(e.file(target), dest / FILES[target][0])
+        for asset in e.folder.iterdir():
+            if asset.suffix.lower() in ASSET_SUFFIXES:
+                shutil.copyfile(asset, dest / asset.name)
 
 
 def run_web(examples: list[Example], targets: list[str], themes: list[str]) -> bool:

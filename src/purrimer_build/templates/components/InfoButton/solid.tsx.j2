@@ -1,0 +1,42 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { BottomSheet } from "./BottomSheet";
+import { Button } from "./Button";
+import { IconButton } from "./IconButton";
+
+export type InfoButtonProps = {
+  title?: string;
+  message?: string;
+  closeLabel?: string;
+  icon?: string;
+  defaultOpen?: boolean;
+  ariaLabel?: string;
+  children?: JSX.Element;
+};
+
+export function InfoButton(props: InfoButtonProps): JSX.Element {
+  const [open, setOpen] = createSignal(!!props.defaultOpen);
+  return (
+    <>
+      <IconButton
+        class="pm-info-button"
+        variant="invisible"
+        icon={props.icon ?? "info"}
+        label={props.ariaLabel || `About ${props.title ? props.title.toLowerCase() : "this"}`}
+        aria-haspopup="dialog"
+        onClick={() => setOpen(true)}
+      />
+      <BottomSheet
+        open={open()}
+        title={props.title}
+        onClose={() => setOpen(false)}
+        actions={<Button block label={props.closeLabel ?? "Got it"} onClick={() => setOpen(false)} />}
+      >
+        <Show when={props.message}><p class="pm-info-button__text">{props.message}</p></Show>
+        {props.children}
+      </BottomSheet>
+    </>
+  );
+}

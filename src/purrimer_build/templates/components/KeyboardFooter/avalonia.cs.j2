@@ -1,0 +1,41 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Platform;
+using Avalonia.Interactivity;
+
+namespace {{ ns }};
+
+// A footer for a screen's primary action: set it as MobileScreen.Footer with one or two full-width Buttons in a
+// StackPanel, the primary one last. While the on-screen keyboard is up it gains the height the keyboard covers, so its
+// buttons ride above the keyboard.
+public class KeyboardFooter : ContentControl
+{
+    private IInputPane? _pane;
+
+    protected override void OnLoaded(RoutedEventArgs e)
+    {
+        base.OnLoaded(e);
+        _pane = TopLevel.GetTopLevel(this)?.InputPane;
+        if (_pane != null)
+            _pane.StateChanged += OnPaneChanged;
+    }
+
+    protected override void OnUnloaded(RoutedEventArgs e)
+    {
+        base.OnUnloaded(e);
+        if (_pane != null)
+            _pane.StateChanged -= OnPaneChanged;
+        _pane = null;
+    }
+
+    private void OnPaneChanged(object? sender, InputPaneStateEventArgs e)
+    {
+        var cover = e.NewState == InputPaneState.Open && TopLevel.GetTopLevel(this) is { } top
+            ? Math.Max(0, top.Bounds.Height - e.EndRect.Top)
+            : 0;
+        Padding = new Thickness({{ px("mobile-gutter") | num }}, 12, {{ px("mobile-gutter") | num }}, 12 + cover);
+    }
+}

@@ -3,12 +3,26 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 
-Rectangle {
+// Inside a touch scope (an ancestor with pmTouchScope: true, such as MobileScreen) a dismissible banner also swipes
+// sideways to dismiss: it follows the pointer and fades over a panel with a close mark, which fills past 30% of its
+// width. A release there, or a flick, slides it out and closes the gap before dismissed() is emitted; an earlier
+// release springs back. A vertical drag is left to scrolling, and the close button stays for keyboards.
+Item {
     id: root
     property string tone: "info"
     property string title
     property string text
     property bool dismissible: false
+    // Found from the ancestors when the banner is placed; set it to force the touch design on or off.
+    property bool touchScope: false
+    readonly property bool swipeable: dismissible && touchScope && !leaving
+    property real collapse: 1
+    property bool armed: false
+    property int side: 0
+    property bool leaving: false
+    property var samples: []
+    property real releasedAt: 0
+    readonly property real dx: slide.value
     signal dismissed()
 
     readonly property var tones: ({
@@ -20,35 +34,135 @@ Rectangle {
     })
     readonly property var spec: tones[tone] || tones["info"]
 
+    Component.onCompleted: touchScope = Purrimer.inTouchScope(root)
+    onParentChanged: touchScope = Purrimer.inTouchScope(root)
+
     implicitWidth: 360
-    implicitHeight: Math.max(row.implicitHeight, 20) + 24
-    radius: {{ "borderRadius-large" | tok }}
-    color: spec[1]
-    border.width: {{ "borderWidth-thin" | tok }}
-    border.color: spec[2]
+    implicitHeight: (Math.max(row.implicitHeight, 20) + 24) * collapse
+    clip: collapse < 1
     Accessible.role: Accessible.AlertMessage
     Accessible.name: title + " " + text
 
-    Row {
-        id: row
-        x: 16
-        y: 12
-        width: parent.width - 32
-        spacing: 12
-        Icon { name: root.spec[0]; color: root.spec[3]; y: 2 }
-        Column {
-            width: row.width - 28 - (close.visible ? close.width + 12 : 0)
-            Text { visible: root.title !== ""; width: parent.width; text: root.title; wrapMode: Text.Wrap; font.family: {{ "text-body-medium" | tok }}.family; font.pixelSize: 14; font.weight: Font.DemiBold; color: {{ "fgColor-default" | tok }} }
-            Text { visible: root.text !== ""; width: parent.width; text: root.text; wrapMode: Text.Wrap; font: {{ "text-body-medium" | tok }}; color: {{ "fgColor-default" | tok }} }
+    PmSpring {
+        id: slide
+        precision: 0.5
+        onSettled: {
+            if (root.leaving)
+                shrink.start()
+            else if (value === 0)
+                root.side = 0
         }
-        IconButton {
-            id: close
-            visible: root.dismissible
-            iconName: "x"
-            label: "Dismiss"
-            variant: "invisible"
-            size: "small"
-            onClicked: root.dismissed()
+    }
+    NumberAnimation {
+        id: shrink
+        target: root
+        property: "collapse"
+        to: 0
+        duration: Purrimer.pauseLoops ? 0 : {{ "duration-base" | tok }}
+        easing.type: Easing.InOutQuad
+        onFinished: {
+            root.visible = false
+            root.dismissed()
+        }
+    }
+
+    // The panel the card uncovers, with the close mark on that side.
+    Rectangle {
+        anchors.fill: parent
+        visible: root.side !== 0
+        radius: {{ "borderRadius-large" | tok }}
+        color: {{ "bgColor-neutral-muted" | tok }}
+        Rectangle {
+            x: root.side > 0 ? 16 : parent.width - 16 - width
+            anchors.verticalCenter: parent.verticalCenter
+            width: 32
+            height: 32
+            radius: 16
+            color: root.armed ? {{ "bgColor-neutral-emphasis" | tok }} : "transparent"
+            scale: root.armed && !Purrimer.pauseLoops ? 1.15 : 1
+            Behavior on scale { SpringAnimation { spring: 5; damping: 0.35; epsilon: 0.001 } }
+            Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
+            Icon {
+                anchors.centerIn: parent
+                name: "x"
+                color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-muted" | tok }}
+            }
+        }
+    }
+
+    Rectangle {
+        id: card
+        x: root.dx
+        width: parent.width
+        height: Math.max(row.implicitHeight, 20) + 24
+        // Fades with the drag; once dismissed it fades the rest of the way as it slides out.
+        readonly property real held: 1 - Math.min(1, Math.abs(root.releasedAt) / Math.max(1, root.width)) * 0.6
+        opacity: root.leaving
+            ? held * Math.max(0, 1 - (Math.abs(root.dx) - Math.abs(root.releasedAt)) / Math.max(1, root.width - Math.abs(root.releasedAt)))
+            : 1 - Math.min(1, Math.abs(root.dx) / Math.max(1, root.width)) * 0.6
+        radius: {{ "borderRadius-large" | tok }}
+        color: root.spec[1]
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: root.spec[2]
+
+        Row {
+            id: row
+            x: 16
+            y: 12
+            width: parent.width - 32
+            spacing: 12
+            Icon { name: root.spec[0]; color: root.spec[3]; y: 2 }
+            Column {
+                width: row.width - 28 - (close.visible ? close.width + 12 : 0)
+                Text { visible: root.title !== ""; width: parent.width; text: root.title; wrapMode: Text.Wrap; font.family: {{ "text-body-medium" | tok }}.family; font.pixelSize: 14; font.weight: Font.DemiBold; color: {{ "fgColor-default" | tok }} }
+                Text { visible: root.text !== ""; width: parent.width; text: root.text; wrapMode: Text.Wrap; font: {{ "text-body-medium" | tok }}; color: {{ "fgColor-default" | tok }} }
+            }
+            IconButton {
+                id: close
+                visible: root.dismissible
+                iconName: "x"
+                label: "Dismiss"
+                variant: "invisible"
+                size: "small"
+                onClicked: root.dismissed()
+            }
+        }
+    }
+
+    DragHandler {
+        target: null
+        yAxis.enabled: false
+        enabled: root.swipeable
+        onTranslationChanged: {
+            if (!active)
+                return
+            const x = translation.x
+            if (x !== 0)
+                root.side = x > 0 ? 1 : -1
+            root.armed = Math.abs(x) >= root.width * 0.3
+            slide.set(x)
+            const now = Date.now()
+            root.samples = root.samples.filter(p => now - p.t <= 100).concat([{ t: now, x: x }])
+        }
+        onActiveChanged: {
+            if (active) {
+                root.samples = []
+                return
+            }
+            const dx = slide.value
+            const a = root.samples[0]
+            const b = root.samples[root.samples.length - 1]
+            // Moves that arrive in a burst say nothing about speed, so a flick needs samples at least 20ms apart.
+            const v = a && b && b.t - a.t >= 20 ? (b.x - a.x) / (b.t - a.t) : 0
+            const flick = Math.abs(v) > 0.6 && (v > 0) === (dx > 0) && Math.abs(dx) > 20
+            if (dx !== 0 && (root.armed || flick)) {
+                root.releasedAt = dx
+                root.leaving = true
+                slide.to((dx > 0 ? 1 : -1) * root.width, v * 1000)
+            } else {
+                root.armed = false
+                slide.to(0, v * 1000)
+            }
         }
     }
 }

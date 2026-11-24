@@ -1,0 +1,35 @@
+.pm-carousel { display: flex; flex-direction: column; gap: 4px; }
+.pm-carousel__track {
+  display: flex;
+  gap: 8px;
+  height: var(--pm-carousel-h, 200px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  outline: none;
+}
+.pm-carousel__track::-webkit-scrollbar { display: none; }
+.pm-carousel__track:focus-visible { outline: {{ "borderWidth-thick" | tok }} solid {{ "focus-outlineColor" | tok }}; outline-offset: 2px; border-radius: {{ "borderRadius-large" | tok }}; }
+.pm-carousel__track--dragging { scroll-snap-type: none; cursor: grabbing; user-select: none; }
+.pm-carousel--peek .pm-carousel__track { padding: 0 24px; scroll-padding: 0 24px; }
+.pm-carousel__slide {
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow: hidden;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  border-radius: {{ "borderRadius-large" | tok }};
+}
+.pm-carousel__slide > img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.pm-carousel__controls { display: flex; align-items: center; justify-content: center; gap: 4px; }
+.pm-carousel__nav.pm-icon-button { width: 44px; height: 44px; transition: opacity {{ "duration-fast" | tok }} {{ "easing-standard" | tok }}; }
+.pm-carousel__nav--hidden.pm-icon-button { opacity: 0; pointer-events: none; }
+.pm-carousel__dots { display: flex; align-items: center; gap: 6px; }
+.pm-carousel__dot {
+  width: calc(6px + 14px * var(--pm-dot, 0));
+  height: 6px;
+  border-radius: {{ "borderRadius-full" | tok }};
+  background: color-mix(in srgb, {{ "fgColor-accent" | tok }} calc(var(--pm-dot, 0) * 100%), {{ "borderColor-emphasis" | tok }});
+}

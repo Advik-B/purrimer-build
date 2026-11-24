@@ -3,5 +3,5 @@
   "compilerOptions": {
     "paths": { "$lib/purrimer": ["./stage/purrimer/svelte/index.ts"] }
   },
-  "include": ["stage/purrimer/svelte/**/*.ts", "stage/purrimer/svelte/**/*.svelte", "stage/examples/*/svelte.svelte"]
+  "include": ["stage/purrimer/svelte/**/*.ts", "stage/purrimer/svelte/**/*.svelte", "stage/examples/*/svelte.svelte", "src/env.d.ts"]
 }

@@ -1,0 +1,62 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type WheelOption = string | { value: string; label: string };
+  export type WheelColumn = {
+    options: WheelOption[];
+    value?: string;
+    label: string;
+    // A CSS width such as "64px"; columns share the space by default.
+    width?: string;
+    align?: "start" | "center" | "end";
+  };
+</script>
+
+<script lang="ts">
+  import { wireWheel } from "../motion";
+
+  let { columns, onchange }: { columns: WheelColumn[]; onchange?: (column: number, value: string) => void } = $props();
+
+  const valueOf = (o: WheelOption) => (typeof o === "string" ? o : o.value);
+  const labelOf = (o: WheelOption) => (typeof o === "string" ? o : o.label);
+  let chosen: number[] = $state([]);
+
+  function wheel(node: HTMLElement, c: number) {
+    const col = () => columns[c];
+    const wired = wireWheel(node, (i) => {
+      chosen[c] = i;
+      const value = valueOf(col().options[i]);
+      if (value !== col().value) onchange?.(c, value);
+    });
+    const start = Math.max(0, col().options.findIndex((o) => valueOf(o) === col().value));
+    wired.go(start, false);
+    chosen[c] = start;
+    $effect(() => {
+      const wanted = col().options.findIndex((o) => valueOf(o) === col().value);
+      if (wanted >= 0 && wanted !== chosen[c]) wired.go(wanted);
+    });
+    return { destroy: wired.dispose };
+  }
+</script>
+
+<div class="pm-wheel">
+  <div class="pm-wheel__band" aria-hidden="true"></div>
+  {#each columns as column, c (c)}
+    <div
+      class="pm-wheel__column"
+      style:flex={column.width ? `0 0 ${column.width}` : undefined}
+      role="spinbutton"
+      tabindex="0"
+      aria-label={column.label}
+      aria-valuenow={chosen[c] ?? 0}
+      aria-valuemin={0}
+      aria-valuemax={column.options.length - 1}
+      aria-valuetext={labelOf(column.options[chosen[c] ?? 0] ?? "")}
+      use:wheel={c}
+    >
+      {#each column.options as option (valueOf(option))}
+        <div class={["pm-wheel__item", column.align && column.align !== "center" && `pm-wheel__item--${column.align}`]}>{labelOf(option)}</div>
+      {/each}
+    </div>
+  {/each}
+</div>

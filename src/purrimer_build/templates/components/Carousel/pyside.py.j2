@@ -1,0 +1,211 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QRegion
+from PySide6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QWidget
+
+from ..motion import SLOP, Spring, VelocityTracker, project, rubber_band
+from ..theme import theme
+from .icon_button import IconButton
+
+GAP = 8
+PEEK = 24
+CONTROLS = 48
+RADIUS = {{ px("borderRadius-large") | num }}
+
+
+class Carousel(QWidget):
+    """Slides side by side that page under a finger or a dragged mouse, with momentum and snapping, and a page
+    marker under them that follows the drag one to one. Add slides with add_slide(); `changed(index)` fires as the
+    slide changes and set_index() moves there. With `peek`, the edges of the neighbouring slides show.
+    """
+
+    changed = Signal(int)
+
+    def __init__(self, accessible_name: str, peek: bool = False, controls: bool = True, slide_height: int = 200,
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._peek = peek
+        self._controls = controls
+        self._height = slide_height
+        self._slides: list[QWidget] = []
+        self._index = 0
+        self._offset = Spring(0.0, precision=0.5, parent=self)
+        self._offset.changed.connect(lambda _v: self._layout())
+        self._tracker = VelocityTracker()
+        self._origin: QPointF | None = None
+        self._origin_offset = 0.0
+        self._dragging = False
+        self.setAccessibleName(accessible_name)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(slide_height + (CONTROLS + 4 if controls else 0))
+        self._prev = IconButton("chevron-left", "Previous", variant="invisible", parent=self)
+        self._next = IconButton("chevron-right", "Next", variant="invisible", parent=self)
+        for button in (self._prev, self._next):
+            button.setFixedSize(44, 44)
+            button.setVisible(controls)
+        self._prev.clicked.connect(lambda: self.set_index(self._index - 1))
+        self._next.clicked.connect(lambda: self.set_index(self._index + 1))
+        theme.changed.connect(self.update)
+
+    def add_slide(self, slide: QWidget) -> None:
+        slide.setParent(self)
+        slide.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        slide.show()
+        self._slides.append(slide)
+        self._layout()
+
+    def index(self) -> int:
+        return self._index
+
+    def _slide_width(self) -> float:
+        return self.width() - (2 * PEEK if self._peek else 0)
+
+    def _step(self) -> float:
+        return self._slide_width() + GAP
+
+    def _max_offset(self) -> float:
+        return max(0.0, (len(self._slides) - 1) * self._step())
+
+    def set_index(self, index: int, animate: bool = True) -> None:
+        index = max(0, min(index, len(self._slides) - 1))
+        if animate:
+            self._offset.to(index * self._step())
+        else:
+            self._offset.set(index * self._step())
+        self._settle_index(index)
+
+    def _settle_index(self, index: int) -> None:
+        if index != self._index:
+            self._index = index
+            self.changed.emit(index)
+        self._update_buttons()
+
+    def _update_buttons(self) -> None:
+        last = len(self._slides) - 1
+        for button, other, hidden in ((self._prev, self._next, self._index <= 0),
+                                      (self._next, self._prev, self._index >= last)):
+            button.setVisible(self._controls and len(self._slides) > 1)
+            # A hidden button keeps its space so the marker stays put; focus moves to the other one.
+            effect = button.graphicsEffect()
+            if not isinstance(effect, QGraphicsOpacityEffect):
+                effect = QGraphicsOpacityEffect(button)
+                button.setGraphicsEffect(effect)
+            effect.setOpacity(0.0 if hidden else 1.0)
+            if hidden and button.hasFocus():
+                other.setFocus()
+            button.setEnabled(not hidden)
+
+    def sizeHint(self) -> QSize:
+        return QSize(360, self.height())
+
+    def resizeEvent(self, event) -> None:
+        self._offset.set(self._index * self._step())
+        self._layout()
+
+    def _position(self) -> float:
+        return self._offset.value / max(1.0, self._step())
+
+    def _layout(self) -> None:
+        width = round(self._slide_width())
+        x0 = PEEK if self._peek else 0
+        path = QPainterPath()
+        for i, slide in enumerate(self._slides):
+            x = round(x0 + i * self._step() - self._offset.value)
+            slide.setGeometry(x, 0, width, self._height)
+            path.clear()
+            path.addRoundedRect(QRectF(0, 0, width, self._height), RADIUS, RADIUS)
+            slide.setMask(QRegion(path.toFillPolygon().toPolygon()))
+        if self._controls:
+            dots_width = self._dots_width()
+            y = self._height + 4 + (CONTROLS - 44) // 2
+            center = self.width() / 2
+            self._prev.move(round(center - dots_width / 2 - 4 - 44), y)
+            self._next.move(round(center + dots_width / 2 + 4), y)
+            index = round(self._position())
+            if not self._dragging and not self._offset.moving:
+                self._settle_index(max(0, min(index, len(self._slides) - 1)))
+            elif index != self._index and 0 <= index < len(self._slides):
+                self._settle_index(index)
+        self.update()
+
+    def _dots_width(self) -> float:
+        n = len(self._slides)
+        return n * 6 + 14 + max(0, n - 1) * 6
+
+    def paintEvent(self, event) -> None:
+        if not self._controls or len(self._slides) < 2:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        x = self.width() / 2 - self._dots_width() / 2
+        y = self._height + 4 + CONTROLS / 2 - 3
+        pos = self._position()
+        rest = QColor(theme.color({{ "borderColor-emphasis" | tok }}))
+        accent = QColor(theme.color({{ "fgColor-accent" | tok }}))
+        for i in range(len(self._slides)):
+            t = max(0.0, 1.0 - abs(pos - i))
+            w = 6 + 14 * t
+            color = QColor.fromRgbF(rest.redF() + (accent.redF() - rest.redF()) * t,
+                                    rest.greenF() + (accent.greenF() - rest.greenF()) * t,
+                                    rest.blueF() + (accent.blueF() - rest.blueF()) * t,
+                                    rest.alphaF() + (accent.alphaF() - rest.alphaF()) * t)
+            painter.setBrush(color)
+            painter.drawRoundedRect(QRectF(x, y, w, 6), 3, 3)
+            x += w + 6
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or event.position().y() > self._height:
+            return
+        self._offset.stop()
+        self._origin = event.position()
+        self._origin_offset = self._offset.value
+        self._dragging = False
+        self._tracker.reset()
+        self._tracker.add(event.position())
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._tracker.add(event.position())
+        dx = event.position().x() - self._origin.x()
+        if not self._dragging and abs(dx) > SLOP:
+            self._dragging = True
+        if self._dragging:
+            offset = self._origin_offset - dx
+            limit = self._max_offset()
+            if offset < 0:
+                offset = rubber_band(offset, self.width())
+            elif offset > limit:
+                offset = limit + rubber_band(offset - limit, self.width())
+            self._offset.set(offset)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._origin = None
+        if not self._dragging:
+            return
+        self._dragging = False
+        velocity = -self._tracker.velocity().x()
+        start = round(self._origin_offset / max(1.0, self._step()))
+        target = round((self._offset.value + project(velocity) * 0.3) / max(1.0, self._step()))
+        # One flick moves one slide, as scroll snapping does.
+        target = max(start - 1, min(start + 1, target))
+        target = max(0, min(target, len(self._slides) - 1))
+        self._offset.to(target * self._step(), velocity)
+        self._settle_index(target)
+
+    def keyPressEvent(self, event) -> None:
+        moves = {Qt.Key.Key_Left: self._index - 1, Qt.Key.Key_Right: self._index + 1, Qt.Key.Key_Home: 0,
+                 Qt.Key.Key_End: len(self._slides) - 1}
+        if event.key() in moves:
+            self.set_index(moves[event.key()])
+        else:
+            super().keyPressEvent(event)

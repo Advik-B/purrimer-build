@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <!-- IsInline draws the sheet in place, for docs; in an app, put it last in a panel that covers the screen. -->
+  <pm:AlertSheet IsInline="True" IconName="critical" Title="Delete 3 photos?"
+                 Message="They stay in Recently deleted for 30 days, then they are gone for good.">
+    <pm:AlertSheet.Buttons>
+      <pm:AlertSheetButton Label="Cancel" />
+      <pm:AlertSheetButton Label="Delete" Variant="danger" />
+    </pm:AlertSheet.Buttons>
+  </pm:AlertSheet>
+</UserControl>

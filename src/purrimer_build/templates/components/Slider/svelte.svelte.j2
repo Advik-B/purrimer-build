@@ -1,6 +1,18 @@
 <!-- {{ note }} -->
 <!-- {{ c.summary }} -->
 <script lang="ts">
+  import {
+    inTouchScope,
+    sliderDetents,
+    sliderFraction,
+    sliderKey,
+    sliderLimits,
+    sliderMarks,
+    wireTouchSlider,
+    type SliderMark,
+    type SliderModel,
+  } from "../motion";
+
   let {
     label = "",
     ariaLabel = "",
@@ -17,12 +29,15 @@
     suffix = "",
     valueText,
     disabled = false,
+    range = false,
+    marks: markList = [],
     onchange,
     onrelease,
   }: {
     label?: string;
     ariaLabel?: string;
-    value?: number;
+    // With range, the [low, high] pair.
+    value?: number | [number, number];
     min?: number;
     max?: number;
     step?: number;
@@ -35,18 +50,23 @@
     suffix?: string;
     valueText?: (value: number) => string;
     disabled?: boolean;
-    onchange?: (value: number) => void;
-    onrelease?: (value: number) => void;
+    // Two thumbs; value becomes [low, high]. Always the touch design.
+    range?: boolean;
+    // Named detents the thumb snaps to. Always the touch design.
+    marks?: (number | SliderMark)[];
+    onchange?: (value: number | [number, number]) => void;
+    onrelease?: (value: number | [number, number]) => void;
   } = $props();
 
   const uid = $props.id();
   let dragging = $state(false);
-  let track: HTMLDivElement;
-  let thumb: HTMLDivElement;
+  let track: HTMLDivElement | undefined = $state();
+  let thumb: HTMLDivElement | undefined = $state();
   const vertical = $derived(orientation === "vertical");
   const page = $derived(pageStep ?? Math.max(step, Math.round((max - min) / 10)));
-  const pct = $derived(max > min ? ((Math.min(Math.max(value, min), max) - min) / (max - min)) * 100 : 0);
-  const text = $derived(valueText ? valueText(value) : `${value}${suffix}`);
+  const single = $derived(typeof value === "number" ? value : value[0]);
+  const pct = $derived(max > min ? ((Math.min(Math.max(single, min), max) - min) / (max - min)) * 100 : 0);
+  const text = $derived(valueText ? valueText(single) : `${single}${suffix}`);
   const marks = $derived.by(() => {
     const every = tickInterval > 0 ? tickInterval : page;
     if (tickPosition === "none" || every <= 0 || max <= min) return [];
@@ -57,17 +77,78 @@
   const before = $derived(tickPosition === "both" || tickPosition === (vertical ? "left" : "above"));
   const after = $derived(tickPosition === "both" || tickPosition === (vertical ? "right" : "below"));
 
+  // Touch design: inside a touch scope, or whenever range or marks is set. Always horizontal.
+  let root: HTMLDivElement | undefined = $state();
+  let scoped = $state(false);
+  $effect(() => {
+    if (root) scoped = inTouchScope(root);
+  });
+  const touch = $derived(range || markList.length > 0 || scoped);
+  const model: SliderModel = $derived.by(() => {
+    const ms = sliderMarks(markList, min, max);
+    return { min, max, step: ms.length && step === 0 ? 0 : step || 1, marks: ms, range };
+  });
+  const values = $derived(range ? (Array.isArray(value) ? value : [min, max]) : [single]);
+  const detents = $derived(sliderDetents(model));
+  let pressed = $state(-1);
+  let drags: (number | null)[] = $state([null, null]);
+  let control: HTMLDivElement | undefined = $state();
+  let lane: HTMLDivElement | undefined = $state();
+  const fracs = $derived(values.map((v, i) => drags[i] ?? sliderFraction(model, v)));
+  const fillFrom = $derived(range ? fracs[0] : 0);
+  const fillTo = $derived(range ? fracs[1] : fracs[0]);
+
+  function format(v: number): string {
+    if (valueText) return valueText(v);
+    const mark = model.marks.find((m) => m.value === v && m.label);
+    return mark ? mark.label! : `${v}${suffix}`;
+  }
+
+  function setAt(i: number, v: number) {
+    if (values[i] === v) return;
+    const next = values.slice();
+    next[i] = v;
+    value = range ? [next[0], next[1]] : next[0];
+    onchange?.(value);
+  }
+
+  $effect(() => {
+    if (!touch || !control || !lane) return;
+    return wireTouchSlider({
+      control,
+      track: lane,
+      model: () => model,
+      values: () => values,
+      disabled: () => disabled,
+      onPress: (i) => (pressed = i),
+      onDrag: (i, f) => (drags[i] = f),
+      onValue: setAt,
+      onRelease: () => onrelease?.(value),
+    });
+  });
+
+  function thumbKey(i: number, e: KeyboardEvent) {
+    if (disabled) return;
+    const next = sliderKey(model, values, i, e.key, page);
+    if (next === null) return;
+    e.preventDefault();
+    if (next !== values[i]) {
+      setAt(i, next);
+      onrelease?.(value);
+    }
+  }
+
   function set(v: number) {
     const snapped = Math.round((v - min) / step) * step + min;
     const next = Math.min(Math.max(Number(snapped.toFixed(10)), min), max);
-    if (next !== value) {
+    if (next !== single) {
       value = next;
       onchange?.(next);
     }
   }
 
   function fromPointer(e: PointerEvent): number {
-    const r = track.getBoundingClientRect();
+    const r = track!.getBoundingClientRect();
     const f = vertical ? 1 - (e.clientY - r.top) / r.height : (e.clientX - r.left) / r.width;
     return min + Math.min(Math.max(f, 0), 1) * (max - min);
   }
@@ -78,16 +159,16 @@
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     dragging = true;
     set(fromPointer(e));
-    thumb.focus();
+    thumb?.focus();
   }
 
   function onkeydown(e: KeyboardEvent) {
     if (disabled) return;
     const next =
-      e.key === "ArrowUp" || e.key === "ArrowRight" ? value + step
-      : e.key === "ArrowDown" || e.key === "ArrowLeft" ? value - step
-      : e.key === "PageUp" ? value + page
-      : e.key === "PageDown" ? value - page
+      e.key === "ArrowUp" || e.key === "ArrowRight" ? single + step
+      : e.key === "ArrowDown" || e.key === "ArrowLeft" ? single - step
+      : e.key === "PageUp" ? single + page
+      : e.key === "PageDown" ? single - page
       : e.key === "Home" ? min
       : e.key === "End" ? max
       : null;
@@ -103,7 +184,62 @@
   </div>
 {/snippet}
 
-<div class={["pm-slider", vertical && "pm-slider--vertical", dragging && "pm-slider--dragging", disabled && "pm-slider--disabled"]}>
+{#if touch}
+  <div bind:this={root} class={["pm-slider", "pm-slider--touch", disabled && "pm-slider--disabled"]}>
+    {#if label || showValue}
+      <div class="pm-slider__head">
+        {#if label}<span class="pm-slider__label" id="pm-slider-{uid}-label">{label}</span>{:else}<span></span>{/if}
+        {#if showValue}<span class="pm-slider__value" aria-hidden="true">{range ? `${format(values[0])} to ${format(values[1])}` : format(values[0])}</span>{/if}
+      </div>
+    {/if}
+    <div class="pm-slider__control" bind:this={control} style:width={length ? `${length}px` : undefined}>
+      <div class="pm-slider__lane" bind:this={lane}>
+        <span class="pm-slider__rail" aria-hidden="true">
+          {#each detents as d (d)}
+            {@const f = sliderFraction(model, d)}
+            <span class={["pm-slider__detent", f >= fillFrom - 1e-4 && f <= fillTo + 1e-4 && "pm-slider__detent--on"]} style="left: {f * 100}%"></span>
+          {/each}
+          <span
+            class={["pm-slider__bar", (drags[0] !== null || drags[1] !== null) && "pm-slider__bar--dragging"]}
+            style="left: {fillFrom * 100}%; width: {(fillTo - fillFrom) * 100}%"
+          ></span>
+        </span>
+        {#each values as v, i (i)}
+          {@const [lo, hi] = sliderLimits(model, values, i)}
+          <span
+            data-thumb={i}
+            class={["pm-slider__hit", pressed === i && "pm-slider__hit--pressed", drags[i] !== null && "pm-slider__hit--dragging"]}
+            style="left: {fracs[i] * 100}%"
+            role="slider"
+            tabindex={disabled ? -1 : 0}
+            aria-valuemin={lo}
+            aria-valuemax={hi}
+            aria-valuenow={v}
+            aria-valuetext={format(v)}
+            aria-orientation="horizontal"
+            aria-disabled={disabled ? "true" : undefined}
+            aria-labelledby={label && !range ? `pm-slider-${uid}-label` : undefined}
+            aria-label={range ? `${i === 0 ? "Minimum" : "Maximum"} ${label || ariaLabel}`.trim() : label ? undefined : ariaLabel || undefined}
+            onkeydown={(e) => thumbKey(i, e)}
+          >
+            <span class="pm-slider__knob" aria-hidden="true"></span>
+            <span class="pm-slider__bubble" aria-hidden="true">{format(v)}</span>
+          </span>
+        {/each}
+      </div>
+      {#if model.marks.some((m) => m.label)}
+        <div class="pm-slider__marks" aria-hidden="true">
+          {#each model.marks as m (m.value)}
+            {#if m.label}
+              <span class={["pm-slider__mark", values.includes(m.value) && "pm-slider__mark--on"]} style="left: {sliderFraction(model, m.value) * 100}%">{m.label}</span>
+            {/if}
+          {/each}
+        </div>
+      {/if}
+    </div>
+  </div>
+{:else}
+<div bind:this={root} class={["pm-slider", vertical && "pm-slider--vertical", dragging && "pm-slider--dragging", disabled && "pm-slider--disabled"]}>
   {#if label || showValue}
     <div class="pm-slider__head">
       {#if label}<span class="pm-slider__label" id="pm-slider-{uid}-label">{label}</span>{/if}
@@ -120,7 +256,7 @@
     onpointerup={() => {
       if (!dragging) return;
       dragging = false;
-      onrelease?.(value);
+      onrelease?.(single);
     }}
   >
     {#if before}{@render ticks("before")}{/if}
@@ -133,7 +269,7 @@
         tabindex={disabled ? -1 : 0}
         aria-valuemin={min}
         aria-valuemax={max}
-        aria-valuenow={value}
+        aria-valuenow={single}
         aria-valuetext={valueText || suffix ? text : undefined}
         aria-orientation={orientation}
         aria-disabled={disabled ? "true" : undefined}
@@ -146,3 +282,4 @@
     {#if after}{@render ticks("after")}{/if}
   </div>
 </div>
+{/if}

@@ -42,12 +42,38 @@ class AppBar(QWidget):
             button.clicked.connect(lambda checked=False, i=index: self.actionClicked.emit(i))
             row.addWidget(button)
         outer.addWidget(bar)
+        self._big: QLabel | None = None
+        self._collapse = 0.0
         if large:
-            big = QLabel(title)
-            big.setStyleSheet(theme.text_css({{ "text-mobile-largeTitle" | tok }}))
-            big.setContentsMargins({{ px("mobile-gutter") | int }}, 0, {{ px("mobile-gutter") | int }}, 8)
-            outer.addWidget(big)
-        theme.changed.connect(self.update)
+            self._big = QLabel(title)
+            outer.addWidget(self._big)
+            self._style_big()
+        theme.changed.connect(self._restyle)
+
+    def set_elevated(self, elevated: bool) -> None:
+        """Draws the hairline under the bar; MobileScreen sets it once content scrolls under."""
+        if elevated != self._elevated:
+            self._elevated = elevated
+            self.update()
+
+    def set_collapse(self, progress: float) -> None:
+        """Shrinks a large title toward the bar's title size, from 0 (full) to 1 (collapsed)."""
+        progress = min(max(progress, 0.0), 1.0)
+        if self._big is not None and abs(progress - self._collapse) > 0.001:
+            self._collapse = progress
+            self._style_big()
+
+    def _style_big(self) -> None:
+        if self._big is None:
+            return
+        size = round(28 - 10 * self._collapse)
+        self._big.setStyleSheet(theme.text_css({{ "text-mobile-largeTitle" | tok }}) + f"font-size: {size}px;")
+        self._big.setContentsMargins({{ px("mobile-gutter") | int }}, 0, {{ px("mobile-gutter") | int }},
+                                     round(8 - 4 * self._collapse))
+
+    def _restyle(self) -> None:
+        self._style_big()
+        self.update()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)

@@ -4,15 +4,20 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QPoint, QPointF, QPropertyAnimation, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QFontMetrics, QPainter
 from PySide6.QtWidgets import QGraphicsOpacityEffect, QSizePolicy, QWidget
 
+from ..motion import Spring, VelocityTracker
 from ..theme import theme
 
 
 class Snackbar(QWidget):
-    """A short message with one optional action. It fades out after `duration` ms; zero keeps it up."""
+    """A short message with one optional action. It fades out after `duration` ms; zero keeps it up.
+
+    Swipe it sideways to dismiss it: it follows the pointer and fades, and past 30% of its width, or on a flick, it
+    slides out and emits `closed`. Its timer pauses while the pointer is held on it.
+    """
 
     actionTriggered = Signal()
     closed = Signal()
@@ -34,6 +39,14 @@ class Snackbar(QWidget):
         self._fade.setEasingCurve(theme.easing({{ "easing-sleepy-enter" | tok }}))
         self._fade.finished.connect(self._faded)
         self._font = (theme.font({{ "text-body-medium" | tok }}))
+        self._dx = Spring(0.0, precision=0.5, parent=self)
+        self._dx.changed.connect(self._slid)
+        self._dx.settled.connect(self._settled)
+        self._home: QPoint | None = None
+        self._origin: QPointF | None = None
+        self._axis: str | None = None
+        self._leaving = False
+        self._tracker = VelocityTracker()
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setFixedHeight(48)
         self.hide()
@@ -66,7 +79,66 @@ class Snackbar(QWidget):
         width = QFontMetrics(bold).horizontalAdvance(self._action) + 28
         return QRectF(self.width() - 4 - width, 4, width, 40)
 
+    def _slid(self, dx: float) -> None:
+        if self._home is not None:
+            self.move(self._home + QPoint(round(dx), 0))
+        if not self._leaving:
+            self._opacity.setOpacity(max(0.0, 1 - abs(dx) / (self.width() * 0.6)))
+
+    def _settled(self) -> None:
+        if self._leaving:
+            self._leaving = False
+            self.hide()
+            self._opacity.setOpacity(0.0)
+            self._dx.set(0.0)
+            self._home = None
+            self.closed.emit()
+        elif self._dx.value == 0 and self._home is not None:
+            self.move(self._home)
+            self._home = None
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or self._leaving:
+            return
+        self._origin = event.globalPosition()
+        self._axis = None
+        self._timer.stop()
+        self._tracker.reset()
+        self._tracker.add(event.globalPosition())
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        delta = event.globalPosition() - self._origin
+        self._tracker.add(event.globalPosition())
+        if self._axis is None:
+            if abs(delta.x()) < 10 and abs(delta.y()) < 10:
+                return
+            self._axis = "x" if abs(delta.x()) > abs(delta.y()) else "y"
+            if self._axis == "x" and self._home is None:
+                self._home = self.pos()
+        if self._axis == "x":
+            self._dx.set(delta.x())
+
     def mouseReleaseEvent(self, event) -> None:
+        origin, axis, self._origin, self._axis = self._origin, self._axis, None, None
+        if origin is None:
+            return
+        if axis == "x":
+            dx = self._dx.value
+            velocity = self._tracker.velocity().x() / 1000
+            flick = abs(velocity) > 0.6 and (velocity > 0) == (dx > 0)
+            if abs(dx) >= self.width() * 0.3 or flick:
+                self._leaving = True
+                self._fade_to(0.0)
+                self._dx.to((1 if dx > 0 else -1) * self.width() * 1.2)
+            else:
+                self._dx.to(0.0)
+                if self._duration > 0:
+                    self._timer.start(self._duration)
+            return
+        if self._duration > 0:
+            self._timer.start(self._duration)
         if self._action and self._action_rect().contains(event.position()):
             self.actionTriggered.emit()
             self.dismiss()
@@ -86,6 +158,7 @@ class Snackbar(QWidget):
             rect = self._action_rect()
             bold = QFont(self._font)
             bold.setBold(True)
+            bold.setUnderline(True)
             painter.setFont(bold)
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, self._action)
             painter.setFont(self._font)

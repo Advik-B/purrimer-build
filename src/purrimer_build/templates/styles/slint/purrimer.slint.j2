@@ -76,6 +76,22 @@ export global PurrimerMotion {
     in-out property <bool> pause-loops: false;
     // The clock looping animations read: animation-tick(), or zero while loops are paused.
     out property <duration> loop-tick: self.pause-loops ? 0ms : animation-tick();
+    // The default motion kind for springs and touch feedback: sleepy, or playful when set.
+    in-out property <bool> playful: false;
+    out property <float> press-scale: 0.96;
+    out property <duration> long-press: 450ms;
+    out property <length> slop: 8px;
+
+    // Resistance past an edge: the further the drag, the less the content moves.
+    public pure function rubber-band(overshoot: length, dimension: length) -> length {
+        if dimension <= 0 {
+            return 0px;
+        }
+        let d = Math.abs(overshoot / 1px);
+        let size = dimension / 1px;
+        let pulled = (1 - 1 / (d * 0.55 / size + 1)) * size;
+        return (overshoot < 0 ? -pulled : pulled) * 1px;
+    }
 
     // Durations
 {% for n, v in tokens.durations %}
@@ -87,3 +103,67 @@ export global PurrimerMotion {
     out property <easing> {{ n | kebab }}: {{ slint_easing(n) }};
 {% endfor %}
 }
+
+// A one-dimensional spring for the touch layer. Read value; call to(target, velocity) on release and set(v) while a
+// pointer drives the value directly. Sleepy is critically damped; playful overshoots by about a tenth.
+export component PmSpring {
+    in-out property <float> value;
+    in-out property <float> target;
+    in-out property <float> velocity;
+    in property <float> precision: 0.01;
+    in property <bool> playful: PurrimerMotion.playful;
+    out property <bool> moving: self.active;
+    callback settled();
+    property <bool> active;
+    property <duration> last;
+
+    public function set(v: float) {
+        self.active = false;
+        self.target = v;
+        self.velocity = 0;
+        self.value = v;
+    }
+
+    public function to(t: float, v: float) {
+        self.target = t;
+        self.velocity = v;
+        if PurrimerMotion.pause-loops {
+            self.set(t);
+            self.settled();
+        } else if !self.active {
+            self.last = animation-tick();
+            self.active = true;
+        }
+    }
+
+    public function stop() {
+        self.active = false;
+    }
+
+    function step() {
+        let now = animation-tick();
+        let dt = Math.clamp((now - self.last) / 1s, 0, 0.032);
+        self.last = now;
+        let stiffness = self.playful ? 380 : 180;
+        let damping = self.playful ? 23.4 : 26.8;
+        let accel = -stiffness * (self.value - self.target) - damping * self.velocity;
+        let v = self.velocity + accel * dt;
+        let x = self.value + v * dt;
+        if Math.abs(x - self.target) < self.precision && Math.abs(v) < self.precision * 10 {
+            self.active = false;
+            self.velocity = 0;
+            self.value = self.target;
+            self.settled();
+        } else {
+            self.velocity = v;
+            self.value = x;
+        }
+    }
+
+    Timer {
+        interval: 8ms;
+        running: root.active;
+        triggered => { root.step(); }
+    }
+}
+

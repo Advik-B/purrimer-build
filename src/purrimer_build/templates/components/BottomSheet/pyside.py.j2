@@ -4,147 +4,330 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject, QPoint, QPropertyAnimation, QRect, QRectF, Qt, Signal
+from PySide6.QtCore import QEvent, QObject, QPoint, QPointF, QRect, QRectF, Qt, QVariantAnimation, Signal
 from PySide6.QtGui import QPainter, QPainterPath, QPen
-from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
+from ..icons import paint_icon
+from ..motion import Spring, VelocityTracker, rubber_band
 from ..theme import theme
 
 DISMISS_DISTANCE = 96
+FLICK_VELOCITY = 600
+GUTTER = {{ px("mobile-gutter") | int }}
+RADIUS = {{ px("borderRadius-xlarge") | num }}
+
+
+TONES = {
+{% for t in ["accent", "info", "success", "attention", "danger"] %}    "{{ t }}": ({{ ("fgColor-" ~ t) | tok }}, {{ ("bgColor-" ~ t ~ "-muted") | tok }}),
+{% endfor %}    "neutral": ({{ "fgColor-muted" | tok }}, {{ "bgColor-neutral-muted" | tok }}),
+}
+
+
+# The four message-box icons and the tone each one takes.
+ALERT_ICONS = {"information": ("info", "info"), "warning": ("alert", "attention"), "critical": ("stop", "danger"),
+               "question": ("question", "accent")}
+
+
+class IconTile(QWidget):
+    """A 32px rounded tile holding a 16px Octicon in a tone's colours."""
+
+    def __init__(self, icon: str, tone: str = "", parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        known = ALERT_ICONS.get(icon)
+        self.icon = known[0] if known else icon
+        self.tone = tone or (known[1] if known else "accent")
+        self.setFixedSize(32, 32)
+        theme.changed.connect(self.update)
+
+    def paintEvent(self, event) -> None:
+        ink, fill = TONES.get(self.tone, TONES["accent"])
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color(fill))
+        painter.drawRoundedRect(QRectF(self.rect()), {{ px("borderRadius-medium") | num }}, {{ px("borderRadius-medium") | num }})
+        paint_icon(painter, QRectF(8, 8, 16, 16), self.icon, theme.color(ink))
+
+
+def _muted_css() -> str:
+    return theme.text_css({{ "text-body-medium" | tok }}) + "color: " + theme.color({{ "fgColor-muted" | tok }}).name() + ";"
 
 
 class _Sheet(QWidget):
     def __init__(self, owner: BottomSheet) -> None:
         super().__init__(owner)
         self._owner = owner
-        self._press_y: float | None = None
+        self._grab: QPointF | None = None
 
     def mousePressEvent(self, event) -> None:
-        if event.position().y() <= 24:
-            self._press_y = event.globalPosition().y()
+        if event.position().y() <= self._owner._handle_height():
+            self._grab = event.globalPosition()
+            self._owner._grab_start(event.globalPosition())
 
     def mouseMoveEvent(self, event) -> None:
-        if self._press_y is not None:
-            self._owner._drag(max(0.0, event.globalPosition().y() - self._press_y))
+        if self._grab is not None:
+            self._owner._grab_move(event.globalPosition())
 
     def mouseReleaseEvent(self, event) -> None:
-        if self._press_y is not None:
-            self._press_y = None
-            self._owner._release()
+        if self._grab is not None:
+            self._grab = None
+            self._owner._grab_end()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        radius = {{ px("borderRadius-xlarge") | num }}
-        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, radius)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5 if self._owner.inline else RADIUS)
         path = QPainterPath()
-        path.addRoundedRect(rect, radius, radius)
-        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), 1))
+        path.addRoundedRect(rect, RADIUS, RADIUS)
+        painter.setPen(QPen(theme.color({{ "borderColor-default" | tok }}), {{ px("borderWidth-thin") | num }}))
         painter.setBrush(theme.color({{ "overlay-bgColor" | tok }}))
         painter.drawPath(path)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(theme.color({{ "borderColor-emphasis" | tok }}))
-        painter.drawRoundedRect(QRectF(self.width() / 2 - 18, 10, 36, 4), 2, 2)
+        if self._owner.grabber:
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(theme.color({{ "borderColor-emphasis" | tok }}))
+            painter.drawRoundedRect(QRectF(self.width() / 2 - 18, 8, 36, 5), 2.5, 2.5)
+        actions = self._owner._action_box
+        if actions.isVisible():
+            painter.setPen(QPen(theme.color({{ "borderColor-muted" | tok }}), {{ px("borderWidth-thin") | num }}))
+            y = actions.geometry().top() + 0.5
+            painter.drawLine(QPointF(1, y), QPointF(self.width() - 1, y))
 
 
 class BottomSheet(QWidget):
-    """A sheet that slides up over its parent. Add widgets to `body`; drag the handle down or tap outside to dismiss."""
+    """A sheet that rises over its parent. Add widgets to `body` and buttons with `add_action`.
+
+    `icon` puts an Octicon in a tile before the title; information, warning, critical and question pick their own
+    glyph and tone.
+
+    Drag the handle down, tap outside or press Escape to dismiss. With `inline`, the sheet is drawn in place
+    as an ordinary widget, for docs and previews.
+    """
 
     closed = Signal()
 
-    def __init__(self, parent: QWidget, title: str = "", sheet_height: int = 320) -> None:
+    def __init__(self, parent: QWidget, title: str = "", description: str = "", icon: str = "", tone: str = "",
+                 size: str = "auto",
+                 dismissible: bool = True, grabber: bool = True, inline: bool = False,
+                 sheet_height: int | None = None) -> None:
         super().__init__(parent)
-        self._height = sheet_height
-        self._open = False
+        if size not in ("auto", "half", "full"):
+            raise ValueError("size must be auto, half or full")
+        self.size = size
+        self.dismissible = dismissible
+        self.grabber = grabber
+        self.inline = inline
+        self._fixed_height = sheet_height
+        self._open = inline
         self._offset = 0.0
         self.sheet = _Sheet(self)
-        layout = QVBoxLayout(self.sheet)
-        gutter = {{ px("mobile-gutter") | int }}
-        layout.setContentsMargins(gutter, 24, gutter, gutter)
-        layout.setSpacing(8)
+        # Qt's drop shadow is clipped to the widget, so an inline sheet goes without one.
+        self._shadow = None if inline else {{ "shadow-floating-large" | tok }}
+        if self._shadow:
+            theme.apply_shadow(self.sheet, self._shadow)
+        outer = QVBoxLayout(self.sheet)
+        outer.setContentsMargins(0, 21 if grabber else 8, 0, 0)
+        outer.setSpacing(0)
+        head = QVBoxLayout()
+        head.setContentsMargins(GUTTER, 4, GUTTER, 12)
+        head.setSpacing(4)
         self.title = QLabel(title)
+        self.title.setWordWrap(True)
         self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
         self.title.setVisible(bool(title))
-        layout.addWidget(self.title)
+        title_row = QHBoxLayout()
+        title_row.setSpacing(12)
+        self.tile = IconTile(icon, tone) if icon else None
+        if self.tile:
+            title_row.addWidget(self.tile)
+        title_row.addWidget(self.title, 1)
+        head.addLayout(title_row)
+        self.description = QLabel(description)
+        self.description.setWordWrap(True)
+        self.description.setStyleSheet(_muted_css())
+        self.description.setVisible(bool(title and description))
+        head.addWidget(self.description)
+        self._head = QWidget()
+        self._head.setLayout(head)
+        self._head.setVisible(bool(title))
+        self._head.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents)
+        outer.addWidget(self._head)
         self.body = QVBoxLayout()
+        self.body.setContentsMargins(GUTTER, 0, GUTTER, 16)
+        self.body.setSpacing(8)
         self.body.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout.addLayout(self.body, 1)
-        self._anim = QPropertyAnimation(self.sheet, b"pos", self)
-        self._anim.setDuration(theme.duration({{ "duration-slow" | tok }}))
-        self._anim.setEasingCurve(theme.easing({{ "easing-sleepy-enter" | tok }}))
+        outer.addLayout(self.body, 1)
+        self._action_box = QWidget()
+        self.action_layout = QVBoxLayout(self._action_box)
+        self.action_layout.setContentsMargins(GUTTER, 12, GUTTER, 16)
+        self.action_layout.setSpacing(8)
+        self._action_box.hide()
+        outer.addWidget(self._action_box)
+        self._anim = QVariantAnimation(self)
+        self._anim.valueChanged.connect(self._set_offset)
         self._anim.finished.connect(self._finished)
-        parent.installEventFilter(self)
-        self.hide()
-        theme.changed.connect(self.update)
+        self._spring = Spring(0.0, precision=0.5, parent=self)
+        self._spring.changed.connect(self._set_offset)
+        self._spring.settled.connect(self._finished)
+        self._tracker = VelocityTracker()
+        self._grab_origin = QPointF()
+        self._grab_base = 0.0
+        theme.changed.connect(self._restyle)
+        if inline:
+            layout = QVBoxLayout(self)
+            layout.setContentsMargins(0, 0, 0, 0)
+            layout.addWidget(self.sheet)
+            self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Maximum)
+        else:
+            parent.installEventFilter(self)
+            self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+            self.hide()
+
+    def add_action(self, widget: QWidget) -> None:
+        """Adds a full-width button under the body. Put the accepting button last."""
+        self.action_layout.addWidget(widget)
+        self._action_box.show()
 
     def is_open(self) -> bool:
         return self._open
 
     def open(self) -> None:
+        if self.inline:
+            return
         self._open = True
-        self._offset = 0.0
+        self._spring.stop()
         self._fit()
-        self.sheet.move(self._sheet_x(), self.height())
         self.show()
         self.raise_()
-        self._slide_to(self._open_y())
+        self.setFocus()
+        self._animate(float(self.sheet.height()), 0.0, theme.duration({{ "duration-slow" | tok }}),
+                      {{ "easing-sleepy-enter" | tok }})
 
-    def close_sheet(self) -> None:
-        if not self._open:
+    def close_sheet(self, velocity: float | None = None) -> None:
+        """Closes the sheet. A drag hands over its velocity so the sheet carries on under the spring."""
+        if not self._open or self.inline:
             return
         self._open = False
-        self._slide_to(self.height())
+        if velocity is not None:
+            self._anim.stop()
+            self._spring.set(self._offset)
+            self._spring.to(float(self.sheet.height()), velocity)
+        else:
+            self._spring.stop()
+            self._animate(self._offset, float(self.sheet.height()), theme.duration({{ "duration-sleepy-exit" | tok }}),
+                          {{ "easing-sleepy-exit" | tok }})
         self.closed.emit()
+
+    def _dismiss(self, velocity: float | None = None) -> None:
+        if self.dismissible:
+            self.close_sheet(velocity)
+
+    def _animate(self, start: float, end: float, duration: int, easing: str) -> None:
+        self._anim.stop()
+        if theme.pause_loops:
+            self._set_offset(end)
+            self._finished()
+            return
+        self._anim.setStartValue(start)
+        self._anim.setEndValue(end)
+        self._anim.setDuration(duration)
+        self._anim.setEasingCurve(theme.easing(easing))
+        self._anim.start()
+
+    def _set_offset(self, value: float) -> None:
+        self._offset = float(value)
+        self._place()
+        self.update()
+
+    def _finished(self) -> None:
+        if not self._open and not self.inline:
+            self.hide()
+
+    def _restyle(self) -> None:
+        if self._shadow:
+            theme.apply_shadow(self.sheet, self._shadow)
+        self.title.setStyleSheet(theme.text_css({{ "text-mobile-title" | tok }}))
+        self.description.setStyleSheet(_muted_css())
+        self.update()
+        self.sheet.update()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if watched is self.parent() and event.type() == QEvent.Type.Resize and self.isVisible():
             self._fit()
-            self.sheet.move(self._sheet_x(), self._open_y())
         return False
 
     def keyPressEvent(self, event) -> None:
-        if event.key() == Qt.Key.Key_Escape:
-            self.close_sheet()
+        if event.key() == Qt.Key.Key_Escape and not self.inline:
+            self._dismiss()
             return
         super().keyPressEvent(event)
 
     def mousePressEvent(self, event) -> None:
-        if not self.sheet.geometry().contains(event.position().toPoint()):
-            self.close_sheet()
+        if not self.inline and not self.sheet.geometry().contains(event.position().toPoint()):
+            self._dismiss()
 
     def paintEvent(self, event) -> None:
+        if self.inline:
+            return
         painter = QPainter(self)
-        painter.fillRect(self.rect(), theme.color({{ "overlay-backdrop-bgColor" | tok }}))
+        scrim = theme.color({{ "overlay-backdrop-bgColor" | tok }})
+        height = max(1, self.sheet.height())
+        scrim.setAlphaF(scrim.alphaF() * max(0.0, 1.0 - max(self._offset, 0.0) / height))
+        painter.fillRect(self.rect(), scrim)
+
+    def _sheet_height(self) -> int:
+        limit = self.height() - 48
+        if self._fixed_height is not None:
+            return min(self._fixed_height, limit)
+        if self.size == "half":
+            return self.height() // 2
+        if self.size == "full":
+            return limit
+        width = min(self.width(), {{ px("mobile-sheet-maxWidth") | int }})
+        layout = self.sheet.layout()
+        wanted = layout.heightForWidth(width) if layout.hasHeightForWidth() else layout.sizeHint().height()
+        return min(max(wanted, 48), limit)
 
     def _fit(self) -> None:
         self.setGeometry(QRect(QPoint(0, 0), self.parentWidget().size()))
         width = min(self.width(), {{ px("mobile-sheet-maxWidth") | int }})
-        self.sheet.resize(width, self._height)
+        self.sheet.resize(width, self._sheet_height())
+        self._place()
 
-    def _sheet_x(self) -> int:
-        return (self.width() - self.sheet.width()) // 2
+    def _place(self) -> None:
+        if self.inline:
+            return
+        x = (self.width() - self.sheet.width()) // 2
+        self.sheet.move(x, self.height() - self.sheet.height() + round(self._offset))
 
-    def _open_y(self) -> int:
-        return self.height() - self._height
+    def _handle_height(self) -> int:
+        return self._head.geometry().bottom() if self._head.isVisible() else 24
 
-    def _slide_to(self, y: int) -> None:
+    def _grab_start(self, point: QPointF) -> None:
+        if not self.dismissible or self.inline:
+            return
         self._anim.stop()
-        self._anim.setStartValue(self.sheet.pos())
-        self._anim.setEndValue(QPoint(self._sheet_x(), y))
-        self._anim.start()
+        self._spring.stop()
+        self._grab_origin = point
+        self._grab_base = self._offset
+        self._tracker.reset()
+        self._tracker.add(point)
 
-    def _finished(self) -> None:
-        if not self._open:
-            self.hide()
+    def _grab_move(self, point: QPointF) -> None:
+        if not self.dismissible or self.inline:
+            return
+        self._tracker.add(point)
+        offset = self._grab_base + point.y() - self._grab_origin.y()
+        if offset < 0:
+            offset = rubber_band(offset, self.sheet.height())
+        self._set_offset(offset)
 
-    def _drag(self, offset: float) -> None:
-        self._anim.stop()
-        self._offset = offset
-        self.sheet.move(self._sheet_x(), self._open_y() + int(offset))
-
-    def _release(self) -> None:
-        if self._offset > DISMISS_DISTANCE:
-            self.close_sheet()
+    def _grab_end(self) -> None:
+        if not self.dismissible or self.inline:
+            return
+        velocity = self._tracker.velocity().y()
+        if self._offset > DISMISS_DISTANCE or (self._offset > 24 and velocity > FLICK_VELOCITY):
+            self._dismiss(velocity)
         else:
-            self._offset = 0.0
-            self._slide_to(self._open_y())
+            self._spring.set(self._offset)
+            self._spring.to(0.0, velocity)

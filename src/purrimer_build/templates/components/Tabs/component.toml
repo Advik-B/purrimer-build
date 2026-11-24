@@ -1,6 +1,6 @@
 name = "Tabs"
 group = "Navigation"
-order = 61
+order = 81
 summary = "Document tabs whose current tab joins the panel under it."
 
 [props.items]

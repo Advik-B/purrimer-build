@@ -3,7 +3,11 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 
-Rectangle {
+// One row of a mobile list. swipeStart (revealed by dragging toward the end of the line) and swipeEnd (toward the
+// start) each take { label, icon, tone }: the row follows the pointer over a panel naming the action, and past 40% of
+// the row the panel fills and a release emits swiped("start" | "end"). An earlier release springs back, and a swipe
+// never also counts as a click. Each action is also a button that shows while it has keyboard focus.
+Item {
     id: root
     property string headline
     property string supporting
@@ -11,48 +15,170 @@ Rectangle {
     property string trailing
     property bool chevron: false
     property bool clickable: false
+    property var swipeStart: null
+    property var swipeEnd: null
+    property real dx: 0
+    property bool armed: false
+    readonly property var shown: dx > 0 ? swipeStart : dx < 0 ? swipeEnd : null
+    readonly property var tones: ({
+        neutral: [{{ "fgColor-default" | tok }}, {{ "bgColor-neutral-muted" | tok }}, {{ "bgColor-neutral-emphasis" | tok }}],
+        accent: [{{ "fgColor-accent" | tok }}, {{ "bgColor-accent-muted" | tok }}, {{ "bgColor-accent-emphasis" | tok }}],
+        success: [{{ "fgColor-success" | tok }}, {{ "bgColor-success-muted" | tok }}, {{ "bgColor-success-emphasis" | tok }}],
+        attention: [{{ "fgColor-attention" | tok }}, {{ "bgColor-attention-muted" | tok }}, {{ "bgColor-attention-emphasis" | tok }}],
+        danger: [{{ "fgColor-danger" | tok }}, {{ "bgColor-danger-muted" | tok }}, {{ "bgColor-danger-emphasis" | tok }}],
+        done: [{{ "fgColor-done" | tok }}, {{ "bgColor-done-muted" | tok }}, {{ "bgColor-done-emphasis" | tok }}],
+        info: [{{ "fgColor-info" | tok }}, {{ "bgColor-info-muted" | tok }}, {{ "bgColor-info-emphasis" | tok }}]
+    })
+    readonly property var tone: shown ? (tones[shown.tone] || tones.neutral) : tones.neutral
     signal clicked()
+    signal swiped(string side)
 
     implicitWidth: 360
     implicitHeight: supporting ? {{ "mobile-row-height-twoLine" | tok }} : {{ "mobile-row-height" | tok }}
-    color: tap.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
+    clip: !!(swipeStart || swipeEnd)
     Accessible.role: clickable ? Accessible.Button : Accessible.ListItem
     Accessible.name: headline
+    Behavior on dx { enabled: !drag.active; NumberAnimation { duration: Purrimer.pauseLoops ? 0 : {{ "duration-slow" | tok }}; easing.type: Easing.OutCubic } }
 
-    Row {
+    Rectangle {
+        visible: root.shown !== null
         anchors.fill: parent
-        anchors.leftMargin: {{ "mobile-gutter" | tok }}
-        anchors.rightMargin: {{ "mobile-gutter" | tok }}
-        spacing: 12
+        color: root.armed ? root.tone[2] : root.tone[1]
+        Behavior on color { ColorAnimation { duration: {{ "duration-fast" | tok }} } }
 
-        Rectangle {
-            visible: root.iconName !== ""
-            width: 32
-            height: 32
-            radius: {{ "borderRadius-medium" | tok }}
-            color: {{ "bgColor-accent-muted" | tok }}
+        Row {
+            x: root.dx > 0 ? {{ "base-size-20" | tok }} : parent.width - {{ "base-size-20" | tok }} - width
             anchors.verticalCenter: parent.verticalCenter
-            Icon { anchors.centerIn: parent; name: root.iconName; color: {{ "fgColor-accent" | tok }} }
+            spacing: {{ "base-size-8" | tok }}
+            scale: root.armed && !Purrimer.pauseLoops ? 1.1 : 1
+            Behavior on scale { SpringAnimation { spring: 5; damping: 0.4; epsilon: 0.001 } }
+            Icon {
+                anchors.verticalCenter: parent.verticalCenter
+                name: root.shown ? root.shown.icon : ""
+                size: 24
+                color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : root.tone[0]
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.shown ? root.shown.label : ""
+                font.family: {{ "text-mobile-supporting" | tok }}.family
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : root.tone[0]
+            }
         }
+    }
 
-        Column {
-            width: parent.width - (root.iconName ? 44 : 0) - (trailingText.visible ? trailingText.width + 12 : 0) - (root.chevron ? 28 : 0)
-            anchors.verticalCenter: parent.verticalCenter
-            Text { width: parent.width; text: root.headline; elide: Text.ElideRight; font: {{ "text-mobile-body" | tok }}; color: {{ "fgColor-default" | tok }} }
-            Text { visible: root.supporting !== ""; width: parent.width; text: root.supporting; elide: Text.ElideRight; font: {{ "text-mobile-supporting" | tok }}; color: {{ "fgColor-muted" | tok }} }
-        }
+    Rectangle {
+        id: slide
+        x: root.dx
+        width: parent.width
+        height: parent.height
+        color: root.dx !== 0 ? {{ "bgColor-default" | tok }} : tap.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : "transparent"
 
-        Text {
-            id: trailingText
-            visible: root.trailing !== ""
-            text: root.trailing
-            font: {{ "text-mobile-supporting" | tok }}
-            color: {{ "fgColor-muted" | tok }}
-            anchors.verticalCenter: parent.verticalCenter
-        }
+            Row {
+                anchors.fill: parent
+                anchors.leftMargin: {{ "mobile-gutter" | tok }}
+                anchors.rightMargin: {{ "mobile-gutter" | tok }}
+                spacing: 12
 
-        Icon { visible: root.chevron; name: "chevron-right"; color: {{ "fgColor-muted" | tok }}; anchors.verticalCenter: parent.verticalCenter }
+                Rectangle {
+                    visible: root.iconName !== ""
+                    width: 32
+                    height: 32
+                    radius: {{ "borderRadius-medium" | tok }}
+                    color: {{ "bgColor-accent-muted" | tok }}
+                    anchors.verticalCenter: parent.verticalCenter
+                    Icon { anchors.centerIn: parent; name: root.iconName; color: {{ "fgColor-accent" | tok }} }
+                }
+
+                Column {
+                    width: parent.width - (root.iconName ? 44 : 0) - (trailingText.visible ? trailingText.width + 12 : 0) - (root.chevron ? 28 : 0)
+                    anchors.verticalCenter: parent.verticalCenter
+                    Text { width: parent.width; text: root.headline; elide: Text.ElideRight; font: {{ "text-mobile-body" | tok }}; color: {{ "fgColor-default" | tok }} }
+                    Text { visible: root.supporting !== ""; width: parent.width; text: root.supporting; elide: Text.ElideRight; font: {{ "text-mobile-supporting" | tok }}; color: {{ "fgColor-muted" | tok }} }
+                }
+
+                Text {
+                    id: trailingText
+                    visible: root.trailing !== ""
+                    text: root.trailing
+                    font: {{ "text-mobile-supporting" | tok }}
+                    color: {{ "fgColor-muted" | tok }}
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+
+                Icon { visible: root.chevron; name: "chevron-right"; color: {{ "fgColor-muted" | tok }}; anchors.verticalCenter: parent.verticalCenter }
+            }
     }
 
     TapHandler { id: tap; enabled: root.clickable; onTapped: root.clicked() }
+
+    DragHandler {
+        id: drag
+        target: null
+        yAxis.enabled: false
+        enabled: !!(root.swipeStart || root.swipeEnd)
+        onTranslationChanged: {
+            const toEnd = root.LayoutMirroring.enabled ? translation.x < 0 : translation.x > 0
+            let v = (toEnd && !root.swipeStart) || (!toEnd && !root.swipeEnd) ? 0 : translation.x
+            const limit = root.width * 0.4
+            if (Math.abs(v) > limit)
+                v = Math.sign(v) * (limit + (Math.abs(v) - limit) * 0.35)
+            root.armed = Math.abs(v) >= limit
+            root.dx = v
+        }
+        onActiveChanged: {
+            if (active)
+                return
+            const dx = root.dx
+            const armed = root.armed
+            root.armed = false
+            root.dx = 0
+            if (armed && dx !== 0)
+                root.swiped((root.LayoutMirroring.enabled ? dx < 0 : dx > 0) ? "start" : "end")
+        }
+    }
+
+    // The keyboard and screen-reader twins of the swipe actions, shown only while focused.
+    Row {
+        anchors.right: parent.right
+        anchors.rightMargin: {{ "mobile-gutter" | tok }}
+        anchors.verticalCenter: parent.verticalCenter
+        spacing: {{ "base-size-8" | tok }}
+        Repeater {
+            model: [root.swipeStart ? { side: "start", label: root.swipeStart.label } : null, root.swipeEnd ? { side: "end", label: root.swipeEnd.label } : null].filter(a => a)
+            Rectangle {
+                id: twin
+                required property var modelData
+                width: activeFocus ? twinText.implicitWidth + 24 : 1
+                height: activeFocus ? 32 : 1
+                opacity: activeFocus ? 1 : 0
+                radius: {{ "borderRadius-medium" | tok }}
+                color: {{ "bgColor-accent-muted" | tok }}
+                border.width: activeFocus ? {{ "borderWidth-thick" | tok }} : 0
+                border.color: {{ "focus-outlineColor" | tok }}
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: modelData.label
+                Accessible.onPressAction: root.swiped(twin.modelData.side)
+                Keys.onPressed: (event) => {
+                    if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                        root.swiped(twin.modelData.side)
+                        event.accepted = true
+                    }
+                }
+                Text {
+                    id: twinText
+                    visible: twin.activeFocus
+                    anchors.centerIn: parent
+                    text: twin.modelData.label
+                    font.family: {{ "text-mobile-supporting" | tok }}.family
+                    font.pixelSize: 14
+                    font.weight: Font.DemiBold
+                    color: {{ "fgColor-accent" | tok }}
+                }
+            }
+        }
+    }
 }

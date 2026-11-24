@@ -1,0 +1,104 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using Avalonia;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Media;
+
+namespace {{ ns }};
+
+// One button in an AlertSheet. Variant is default, primary or danger.
+public class AlertSheetButton
+{
+    public string Label { get; set; } = "";
+    public string Variant { get; set; } = "default";
+}
+
+public class AlertSheetButtonEventArgs : RoutedEventArgs
+{
+    public AlertSheetButtonEventArgs(RoutedEvent routedEvent, int index, AlertSheetButton button) : base(routedEvent)
+    {
+        Index = index;
+        Button = button;
+    }
+
+    public int Index { get; }
+    public AlertSheetButton Button { get; }
+}
+
+// A short decision in a bottom sheet. Buttons run top to bottom: help and reset first, destructive and rejecting next,
+// the accepting one last. A press raises ButtonClicked and closes the sheet. IconName takes information, warning,
+// critical, question or any Octicon.
+public class AlertSheet : BottomSheet
+{
+    public static readonly StyledProperty<string?> MessageProperty =
+        AvaloniaProperty.Register<AlertSheet, string?>(nameof(Message));
+
+    public static readonly RoutedEvent<AlertSheetButtonEventArgs> ButtonClickedEvent =
+        RoutedEvent.Register<AlertSheet, AlertSheetButtonEventArgs>(nameof(ButtonClicked), RoutingStrategies.Bubble);
+
+    private readonly TextBlock _message = new()
+    {
+        TextWrapping = TextWrapping.Wrap,
+        FontSize = 16,
+        LineHeight = 24,
+    };
+
+    private readonly StackPanel _buttons = new() { Spacing = 8 };
+
+    public AlertSheet()
+    {
+        Content = _message;
+        Buttons.CollectionChanged += (_, _) => RebuildButtons();
+    }
+
+    protected override Type StyleKeyOverride => typeof(BottomSheet);
+
+    public string? Message
+    {
+        get => GetValue(MessageProperty);
+        set => SetValue(MessageProperty, value);
+    }
+
+    public AvaloniaList<AlertSheetButton> Buttons { get; } = new();
+
+    public event EventHandler<AlertSheetButtonEventArgs>? ButtonClicked
+    {
+        add => AddHandler(ButtonClickedEvent, value);
+        remove => RemoveHandler(ButtonClickedEvent, value);
+    }
+
+    protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
+    {
+        base.OnPropertyChanged(change);
+        if (change.Property == MessageProperty)
+        {
+            _message.Text = Message;
+            _message.IsVisible = !string.IsNullOrEmpty(Message);
+        }
+    }
+
+    private void RebuildButtons()
+    {
+        _buttons.Children.Clear();
+        for (var i = 0; i < Buttons.Count; i++)
+        {
+            var index = i;
+            var spec = Buttons[i];
+            var button = new Button { Content = spec.Label, HorizontalAlignment = HorizontalAlignment.Stretch };
+            button.Classes.Add("block");
+            if (spec.Variant is "primary" or "danger")
+                button.Classes.Add(spec.Variant);
+            button.Click += (_, _) =>
+            {
+                RaiseEvent(new AlertSheetButtonEventArgs(ButtonClickedEvent, index, spec));
+                Close();
+            };
+            _buttons.Children.Add(button);
+        }
+        Actions = Buttons.Count > 0 ? _buttons : null;
+    }
+}

@@ -1,6 +1,6 @@
 name = "AppBar"
 group = "Mobile"
-order = 50
+order = 51
 summary = "The bar at the top of a mobile screen: back, title and up to two actions."
 
 [props.title]

@@ -2,6 +2,7 @@
 // {{ c.summary }}
 using System;
 using Avalonia;
+using Avalonia.Collections;
 using Avalonia.Controls;
 using Avalonia.Controls.Metadata;
 using Avalonia.Controls.Primitives;
@@ -11,9 +12,20 @@ using Avalonia.Media;
 
 namespace {{ ns }};
 
-// The floating action button; set IsExtended to show Label beside the icon.
+// The floating action button; set IsExtended to show Label beside the icon. It compresses while pressed.
+// Fill Actions (two to six HoldMenuItem) and a press and hold opens them above it; slide onto one and release to choose
+// it, which raises ActionSelected. A tap still clicks, or opens them with TapOpens. ActionsLayout picks the labelled
+// "stack" or the icon-only "arc".
 public class FAB : Button
 {
+    public static readonly StyledProperty<string> ActionsLayoutProperty =
+        AvaloniaProperty.Register<FAB, string>(nameof(ActionsLayout), "stack");
+
+    public static readonly StyledProperty<bool> TapOpensProperty =
+        AvaloniaProperty.Register<FAB, bool>(nameof(TapOpens));
+
+    private HoldMenu? _hold;
+
     public static readonly StyledProperty<string> IconNameProperty =
         AvaloniaProperty.Register<FAB, string>(nameof(IconName), "plus");
 
@@ -22,6 +34,16 @@ public class FAB : Button
 
     public static readonly StyledProperty<bool> IsExtendedProperty =
         AvaloniaProperty.Register<FAB, bool>(nameof(IsExtended));
+
+    // Folds an extended FAB to its icon; MobileScreen sets it while the body scrolls down.
+    public static readonly StyledProperty<bool> IsFoldedProperty =
+        AvaloniaProperty.Register<FAB, bool>(nameof(IsFolded));
+
+    public bool IsFolded
+    {
+        get => GetValue(IsFoldedProperty);
+        set => SetValue(IsFoldedProperty, value);
+    }
 
     static FAB()
     {
@@ -44,6 +66,45 @@ public class FAB : Button
     {
         get => GetValue(IsExtendedProperty);
         set => SetValue(IsExtendedProperty, value);
+    }
+
+    public AvaloniaList<HoldMenuItem> Actions { get; } = new();
+    public string ActionsLayout { get => GetValue(ActionsLayoutProperty); set => SetValue(ActionsLayoutProperty, value); }
+    public bool TapOpens { get => GetValue(TapOpensProperty); set => SetValue(TapOpensProperty, value); }
+
+    public event EventHandler<HoldMenuSelectedEventArgs>? ActionSelected
+    {
+        add => AddHandler(HoldMenu.SelectedEvent, value);
+        remove => RemoveHandler(HoldMenu.SelectedEvent, value);
+    }
+
+    public FAB()
+    {
+        Actions.CollectionChanged += (_, _) =>
+        {
+            if (_hold != null)
+                _hold.ItemsSource = Actions;
+        };
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        base.OnApplyTemplate(e);
+        _hold = e.NameScope.Find<HoldMenu>("PART_Hold");
+        if (_hold != null)
+            _hold.ItemsSource = Actions;
+    }
+
+    // The arrow toward the actions opens them for the keyboard, as on a HoldMenu.
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Up && Actions.Count > 0 && _hold is { IsOpen: false })
+        {
+            _hold.Open(false);
+            e.Handled = true;
+            return;
+        }
+        base.OnKeyDown(e);
     }
 
     protected override Type StyleKeyOverride => typeof(FAB);

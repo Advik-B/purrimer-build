@@ -1,0 +1,127 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type ActionSheetItem = {
+    label?: string;
+    description?: string;
+    icon?: string;
+    variant?: "default" | "danger";
+    disabled?: boolean;
+    // Set to show a check mark; the row becomes a checkbox item.
+    checked?: boolean;
+    // A submenu, opened in place.
+    items?: ActionSheetItem[];
+    divider?: boolean;
+    group?: string;
+  };
+</script>
+
+<script lang="ts">
+  import BottomSheet from "./BottomSheet.svelte";
+  import Button from "./Button.svelte";
+  import Icon from "./Icon.svelte";
+  import { buzz } from "../motion";
+
+  let {
+    open = $bindable(false),
+    items = [],
+    title = "",
+    description = "",
+    cancelLabel = "Cancel",
+    backLabel = "Back",
+    closeOnSelect = true,
+    inline = false,
+    ariaLabel = "Options",
+    onselect,
+    onclose,
+  }: {
+    open?: boolean;
+    items?: ActionSheetItem[];
+    title?: string;
+    description?: string;
+    cancelLabel?: string;
+    backLabel?: string;
+    closeOnSelect?: boolean;
+    inline?: boolean;
+    ariaLabel?: string;
+    onselect?: (item: ActionSheetItem, index: number) => void;
+    onclose?: (reason: "select" | "cancel" | "outside") => void;
+  } = $props();
+
+  let path: number[] = $state([]);
+
+  const parent = $derived(path.reduce<ActionSheetItem | null>((at, i) => (at ? at.items?.[i] : items[i]) ?? null, null));
+  const rows = $derived(parent ? (parent.items ?? []) : items);
+  const hasIcons = $derived(rows.some((it) => it.icon));
+
+  $effect(() => {
+    if (!open) path = [];
+  });
+
+  function close(reason: "select" | "cancel" | "outside") {
+    open = false;
+    onclose?.(reason);
+  }
+
+  function choose(item: ActionSheetItem, index: number) {
+    if (item.disabled) return;
+    if (item.items) {
+      path = [...path, index];
+      return;
+    }
+    buzz();
+    onselect?.(item, index);
+    if (closeOnSelect) close("select");
+  }
+</script>
+
+{#snippet cancel()}
+  <Button block label={cancelLabel} onclick={() => close("cancel")} />
+{/snippet}
+
+<BottomSheet
+  bind:open
+  title={parent ? (parent.label ?? "") : title}
+  description={parent ? "" : description}
+  {inline}
+  ariaLabel={title ? "" : ariaLabel}
+  onclose={() => onclose?.("outside")}
+  actions={cancelLabel ? cancel : undefined}
+>
+  <div class="pm-action-sheet__rows" role="menu" aria-label={parent ? parent.label : title || ariaLabel}>
+    {#if parent}
+      <button type="button" role="menuitem" class="pm-action-sheet__row pm-action-sheet__row--back" onclick={() => (path = path.slice(0, -1))}>
+        <span class="pm-action-sheet__tile"><Icon name="chevron-left" /></span>
+        <span class="pm-action-sheet__text"><span class="pm-action-sheet__label">{backLabel}</span></span>
+      </button>
+    {/if}
+    {#each rows as item, i (i)}
+      {#if item.divider}
+        <hr class="pm-action-sheet__divider" />
+      {:else if item.group}
+        <p class="pm-action-sheet__group" role="presentation">{item.group}</p>
+      {:else}
+        <button
+          type="button"
+          role={item.checked !== undefined ? "menuitemcheckbox" : "menuitem"}
+          aria-checked={item.checked !== undefined ? item.checked : undefined}
+          aria-haspopup={item.items ? "menu" : undefined}
+          class={["pm-action-sheet__row", item.variant === "danger" && "pm-action-sheet__row--danger", item.checked && "pm-action-sheet__row--on"]}
+          disabled={item.disabled}
+          onclick={() => choose(item, i)}
+        >
+          {#if hasIcons}<span class="pm-action-sheet__tile">{#if item.icon}<Icon name={item.icon} />{/if}</span>{/if}
+          <span class="pm-action-sheet__text">
+            <span class="pm-action-sheet__label">{item.label}</span>
+            {#if item.description}<span class="pm-action-sheet__desc">{item.description}</span>{/if}
+          </span>
+          {#if item.items}
+            <span class="pm-action-sheet__trail pm-action-sheet__trail--more"><Icon name="chevron-right" /></span>
+          {:else if item.checked}
+            <span class="pm-action-sheet__trail"><Icon name="check" /></span>
+          {/if}
+        </button>
+      {/if}
+    {/each}
+  </div>
+</BottomSheet>

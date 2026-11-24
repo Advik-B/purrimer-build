@@ -1,0 +1,64 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show, createSignal } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { buzz } from "../motion";
+
+type Option = { value: string; label: string; icon?: string; count?: number | string; disabled?: boolean };
+type Value = string | string[] | null;
+
+export type ChipGroupProps = {
+  options?: Option[];
+  value?: Value;
+  multiple?: boolean;
+  allowEmpty?: boolean;
+  wrap?: boolean;
+  ariaLabel?: string;
+  onChange?: (value: Value) => void;
+};
+
+export function ChipGroup(props: ChipGroupProps): JSX.Element {
+  const [value, setValue] = createSignal<Value>(() =>
+    props.value !== undefined ? props.value : props.multiple ? [] : (props.options?.[0]?.value ?? null),
+  );
+  const isOn = (v: string) => (props.multiple ? ((value() as string[] | null) ?? []).includes(v) : value() === v);
+
+  function toggle(v: string) {
+    let next: Value;
+    if (props.multiple) {
+      const list = (value() as string[] | null) ?? [];
+      next = list.includes(v) ? list.filter((x) => x !== v) : [...list, v];
+    } else if (value() === v) {
+      if (!props.allowEmpty) return;
+      next = null;
+    } else {
+      next = v;
+    }
+    buzz();
+    setValue(() => next);
+    props.onChange?.(next);
+  }
+
+  return (
+    <div class={props.wrap ? "pm-chip-group pm-chip-group--wrap" : "pm-chip-group"} role="group" aria-label={props.ariaLabel || undefined}>
+      <For each={props.options ?? []}>
+        {(option) => (
+          <button
+            type="button"
+            class="pm-chip-group__chip"
+            aria-pressed={isOn(option.value) ? "true" : "false"}
+            disabled={option.disabled}
+            onClick={() => toggle(option.value)}
+          >
+            <Show when={isOn(option.value)} fallback={<Show when={option.icon}>{(name) => <Icon name={name()} />}</Show>}>
+              <Icon name="check" />
+            </Show>
+            <span>{option.label}</span>
+            <Show when={option.count != null}><span class="pm-chip-group__count">{option.count}</span></Show>
+          </button>
+        )}
+      </For>
+    </div>
+  );
+}

@@ -10,6 +10,34 @@ QtObject {
     property string theme: "{{ themes[0] }}"
     // Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
     property bool pauseLoops: false
+    // The default motion kind ("sleepy" or "playful") for springs and touch feedback.
+    property string motionKind: "sleepy"
+    // Spring stiffness and damping per motion kind. Sleepy is critically damped; playful overshoots by about a tenth.
+    readonly property var springs: ({ "sleepy": [180, 26.8], "playful": [380, 23.4] })
+    readonly property real pressScale: 0.96
+
+    // Resistance past an edge: the further the drag, the less the content moves.
+    // True inside a touch scope: an ancestor of item declares pmTouchScope: true, as MobileScreen does. Components
+    // there switch to their touch design. Untyped, since any item can declare it.
+    function inTouchScope(item) {
+        for (let node = item ? item.parent : null; node; node = node.parent) {
+            if (node.pmTouchScope === true)
+                return true
+        }
+        return false
+    }
+
+    function rubberBand(overshoot, dimension) {
+        if (dimension <= 0)
+            return 0
+        const d = Math.abs(overshoot)
+        return Math.sign(overshoot) * (1 - 1 / (d * 0.55 / dimension + 1)) * dimension
+    }
+
+    // Where a flick would come to rest, given its velocity in px/s.
+    function project(velocity) {
+        return velocity / 1000 * 0.998 / 0.002
+    }
     readonly property var themes: {{ themes | tojson }}
     readonly property bool dark: {% for t in tokens.dark_themes %}theme === "{{ t }}"{{ " || " if not loop.last }}{% endfor %}
 

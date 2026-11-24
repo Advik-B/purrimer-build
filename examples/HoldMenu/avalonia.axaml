@@ -1,0 +1,15 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <Panel>
+    <TextBlock Margin="16" Text="Hold the button for more ways to start a note." />
+    <pm:HoldMenu Margin="16" HorizontalAlignment="Right" VerticalAlignment="Bottom" IsDefaultOpen="True"
+                 AutomationProperties.Name="Start something">
+      <pm:HoldMenu.Items>
+        <pm:HoldMenuItem Label="New note" IconName="note" />
+        <pm:HoldMenuItem Label="Take photo" IconName="device-camera" />
+        <pm:HoldMenuItem Label="Checklist" IconName="checklist" />
+      </pm:HoldMenu.Items>
+      <pm:FAB Label="New note" />
+    </pm:HoldMenu>
+  </Panel>
+</UserControl>

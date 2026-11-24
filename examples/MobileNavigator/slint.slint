@@ -1,0 +1,43 @@
+import { ListItem, MobileNavigator, MobileScreen, NavScreen, PurrimerIcons, PurrimerNavigator, Purrimer } from "purrimer-components.slint";
+
+export component Example inherits Rectangle {
+    // Screens read their params from the app: here, the thread that was opened.
+    property <string> thread;
+
+    MobileNavigator {
+        tab-screens: ["inbox", "settings"];
+        nav-items: [
+            { icon: PurrimerIcons.inbox-24, label: "Inbox", badge: 3 },
+            { icon: PurrimerIcons.gear-24, label: "Settings" },
+        ];
+
+        NavScreen {
+            name: "inbox";
+            MobileScreen {
+                title: "Inbox";
+                large: true;
+                ListItem { icon: PurrimerIcons.person-16; headline: "Mira Okafor"; supporting: "Lunch on Friday?"; chevron: true; clickable: true; clicked => { root.thread = "Mira Okafor"; PurrimerNavigator.push("thread"); } }
+                ListItem { icon: PurrimerIcons.person-16; headline: "Design review"; supporting: "Notes from today's crit"; chevron: true; clickable: true; clicked => { root.thread = "Design review"; PurrimerNavigator.push("thread"); } }
+                ListItem { icon: PurrimerIcons.person-16; headline: "Jonas Weber"; supporting: "Sent you the photos"; chevron: true; clickable: true; clicked => { root.thread = "Jonas Weber"; PurrimerNavigator.push("thread"); } }
+            }
+        }
+        NavScreen {
+            name: "thread";
+            MobileScreen {
+                title: root.thread;
+                back: true;
+                back-clicked => { PurrimerNavigator.pop(); }
+                Text { text: "Thread"; color: Purrimer.fg-color-default; }
+            }
+        }
+        NavScreen {
+            name: "settings";
+            MobileScreen {
+                title: "Settings";
+                large: true;
+                surface: "inset";
+                ListItem { icon: PurrimerIcons.bell-16; headline: "Notifications"; trailing: "On"; chevron: true; }
+            }
+        }
+    }
+}

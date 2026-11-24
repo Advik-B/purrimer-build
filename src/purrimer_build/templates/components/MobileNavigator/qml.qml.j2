@@ -1,0 +1,342 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+// A stack of phone screens. screens maps a name to a Component whose root declares nav, params and active; each
+// screen usually draws a MobileScreen. push() slides a screen in from the right while the one under it shifts 30% and
+// dims; pop() reverses it. With tabs, each section keeps its own stack and the navigator draws the BottomNav;
+// switching tabs crossfades. A swipe from the left edge drags the top screen back and goes back past 35% of the width
+// or on a flick. Alt+Left goes back too. Requests made during a transition wait their turn.
+Item {
+    id: root
+    property var screens: ({})
+    property string initial
+    property var initialParams
+    // Sections: [{ screen, label, icon, badge?, params? }].
+    property var tabs: []
+    property int tab: 0
+    readonly property int depth: stacks.length ? stacks[tab].length : 0
+    property var stacks: []
+    property bool busy: false
+    property var queue: []
+    property real progress: 0
+    property string mode: ""
+    property var moving: null
+    property var under: null
+
+    readonly property int duration: Purrimer.motionKind === "playful" ? {{ "duration-playful-screen" | tok }} : {{ "duration-sleepy-screen" | tok }}
+
+    function make(name, params) {
+        const component = screens[name]
+        const screen = component.createObject(stage, { nav: root, params: params === undefined ? null : params })
+        screen.width = Qt.binding(() => stage.width)
+        screen.height = Qt.binding(() => stage.height)
+        return screen
+    }
+
+    function setStack(list) {
+        const all = stacks.slice()
+        all[tab] = list
+        stacks = all
+    }
+
+    function topScreen() {
+        const s = stacks[tab]
+        return s[s.length - 1]
+    }
+
+    function belowScreen() {
+        const s = stacks[tab]
+        return s.length > 1 ? s[s.length - 2] : null
+    }
+
+    function enqueue(task) {
+        queue.push(task)
+        if (!busy)
+            next()
+    }
+
+    function next() {
+        if (busy || queue.length === 0)
+            return
+        queue.shift()()
+    }
+
+    function layout() {
+        for (let t = 0; t < stacks.length; t++) {
+            for (let i = 0; i < stacks[t].length; i++) {
+                const screen = stacks[t][i]
+                const isTop = t === tab && i === stacks[t].length - 1
+                screen.visible = isTop || screen === moving || screen === under
+                screen.enabled = isTop && mode === ""
+                if (screen.active !== undefined)
+                    screen.active = isTop
+            }
+        }
+    }
+
+    function run(kind, from) {
+        busy = true
+        mode = kind
+        progress = from || 0
+        if (moving)
+            moving.z = 2
+        layout()
+        if (Purrimer.pauseLoops) {
+            progress = 1
+            finish()
+            return
+        }
+        slide.from = progress
+        slide.duration = kind === "fade" ? {{ "duration-screen-fade" | tok }} : duration * (1 - progress)
+        slide.restart()
+    }
+
+    function finish() {
+        if (moving)
+            moving.z = 0
+        if (mode === "pop") {
+            const s = stacks[tab].slice()
+            const leaving = s.pop()
+            setStack(s)
+            leaving.destroy()
+        }
+        mode = ""
+        moving = null
+        under = null
+        progress = 0
+        busy = false
+        layout()
+        topScreen().forceActiveFocus()
+        next()
+    }
+
+    function push(name, params) {
+        enqueue(() => {
+            under = topScreen()
+            const screen = make(name, params)
+            const s = stacks[tab].slice()
+            s.push(screen)
+            setStack(s)
+            moving = screen
+            run("push", 0)
+        })
+    }
+
+    function pop() {
+        enqueue(() => popNow(0))
+    }
+
+    function popNow(from) {
+        if (depth < 2) {
+            next()
+            return
+        }
+        moving = topScreen()
+        under = belowScreen()
+        run("pop", from)
+    }
+
+    function replace(name, params) {
+        enqueue(() => {
+            const s = stacks[tab].slice()
+            const old = s.pop()
+            s.push(make(name, params))
+            setStack(s)
+            old.destroy()
+            moving = topScreen()
+            run("fade", 0)
+        })
+    }
+
+    function popToRoot() {
+        enqueue(() => {
+            const s = stacks[tab]
+            if (s.length < 2) {
+                next()
+                return
+            }
+            for (let i = 1; i < s.length - 1; i++)
+                s[i].destroy()
+            setStack([s[0], s[s.length - 1]])
+            popNow(0)
+        })
+    }
+
+    function switchTab(index) {
+        enqueue(() => {
+            if (index === tab) {
+                if (depth > 1) {
+                    const s = stacks[tab]
+                    for (let i = 1; i < s.length - 1; i++)
+                        s[i].destroy()
+                    setStack([s[0], s[s.length - 1]])
+                    popNow(0)
+                    return
+                }
+                if (topScreen().scrollToTop)
+                    topScreen().scrollToTop()
+                next()
+                return
+            }
+            tab = index
+            moving = topScreen()
+            run("fade", 0)
+        })
+    }
+
+    Component.onCompleted: {
+        const list = tabs.length ? tabs : [{ screen: initial, params: initialParams }]
+        const all = []
+        for (const t of list)
+            all.push([make(t.screen, t.params)])
+        stacks = all
+        layout()
+    }
+
+    Keys.onPressed: (event) => {
+        if (event.key === Qt.Key_Left && (event.modifiers & Qt.AltModifier) && depth > 1) {
+            pop()
+            event.accepted = true
+        }
+    }
+
+    NumberAnimation {
+        id: slide
+        target: root
+        property: "progress"
+        to: 1
+        easing.type: Easing.BezierSpline
+        easing.bezierCurve: Purrimer.motionKind === "playful" ? {{ "easing-playful-snap" | tok }} : {{ "easing-sleepy-enter" | tok }}
+        onFinished: root.finish()
+    }
+
+    Item {
+        id: stage
+        anchors.top: parent.top
+        anchors.bottom: nav.top
+        width: parent.width
+        clip: true
+
+        // Places the moving and covered screens for the current transition or swipe.
+        Binding {
+            when: root.moving !== null && root.mode !== "fade"
+            target: root.moving
+            property: "x"
+            value: root.mode === "push" ? stage.width * (1 - root.progress) : stage.width * root.progress
+            restoreMode: Binding.RestoreNone
+        }
+        Binding {
+            when: root.under !== null
+            target: root.under
+            property: "x"
+            value: root.mode === "push" ? -0.3 * stage.width * root.progress : -0.3 * stage.width * (1 - root.progress)
+            restoreMode: Binding.RestoreNone
+        }
+        Binding {
+            when: root.moving !== null && root.mode === "fade"
+            target: root.moving
+            property: "opacity"
+            value: root.progress
+            restoreMode: Binding.RestoreValue
+        }
+
+        Rectangle {
+            id: dim
+            visible: root.under !== null
+            z: 1
+            x: root.under ? root.under.x : 0
+            width: stage.width
+            height: stage.height
+            color: {{ "overlay-backdrop-bgColor" | tok }}
+            opacity: 0.4 * (root.mode === "push" ? root.progress : 1 - root.progress)
+        }
+
+        Rectangle {
+            id: mark
+            visible: edge.dragging
+            z: 3
+            x: 4 + Math.min(root.progress * stage.width, 48)
+            y: stage.height / 2 - 16
+            width: 32
+            height: 32
+            radius: 16
+            color: root.progress >= 0.35 ? {{ "button-primary-bgColor-rest" | tok }} : {{ "overlay-bgColor" | tok }}
+            Icon {
+                anchors.centerIn: parent
+                name: "arrow-left"
+                color: root.progress >= 0.35 ? {{ "fgColor-onEmphasis" | tok }} : {{ "fgColor-default" | tok }}
+            }
+        }
+
+        Item {
+            id: edge
+            property bool dragging: swipe.active
+            z: 4
+            visible: root.depth > 1 && !root.busy || swipe.active
+            width: {{ "mobile-edge-width" | tok }}
+            height: parent.height
+
+            DragHandler {
+                id: swipe
+                target: null
+                yAxis.enabled: false
+                onActiveChanged: {
+                    if (active) {
+                        root.busy = true
+                        root.moving = root.topScreen()
+                        root.under = root.belowScreen()
+                        root.mode = "pop"
+                        root.progress = 0
+                        root.layout()
+                        root.moving.z = 2
+                        return
+                    }
+                    const p = root.progress
+                    const velocity = centroid.velocity.x
+                    if (p >= 0.35 || velocity > 600) {
+                        root.busy = false
+                        root.queue.unshift(() => root.popNow(p))
+                        root.next()
+                    } else {
+                        settle.from = p
+                        settle.start()
+                    }
+                }
+                onTranslationChanged: root.progress = Math.min(1, Math.max(0, translation.x / stage.width))
+            }
+        }
+
+        NumberAnimation {
+            id: settle
+            target: root
+            property: "progress"
+            to: 0
+            duration: {{ "duration-base" | tok }}
+            easing.type: Easing.OutCubic
+            onFinished: {
+                if (root.moving)
+                    root.moving.z = 0
+                root.mode = ""
+                root.moving = null
+                root.under = null
+                root.busy = false
+                root.layout()
+                root.next()
+            }
+        }
+    }
+
+    BottomNav {
+        id: nav
+        visible: root.tabs.length > 0
+        anchors.bottom: parent.bottom
+        width: parent.width
+        height: visible ? implicitHeight : 0
+        showLabels: true
+        selected: root.tab
+        items: root.tabs.map(t => ({ icon: t.icon, label: t.label, badge: t.badge || 0 }))
+        onActivated: (index) => root.switchTab(index)
+    }
+}

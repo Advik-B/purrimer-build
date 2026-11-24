@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:pm="using:Purrimer.Avalonia">
+  <pm:MobileScreen>
+    <pm:MobileScreen.AppBar>
+      <pm:AppBar Title="New task" ShowBack="True" />
+    </pm:MobileScreen.AppBar>
+    <pm:MobileScreen.Footer>
+      <pm:KeyboardFooter>
+        <Button Classes="primary block" Content="Add task" />
+      </pm:KeyboardFooter>
+    </pm:MobileScreen.Footer>
+    <pm:TextField Margin="16" Label="Title" Text="Water the plants" />
+  </pm:MobileScreen>
+</UserControl>

@@ -1,9 +1,10 @@
 // {{ note }}
 // {{ c.summary }}
-import { Show } from "solid-js";
+import { Show, createSignal, onCleanup } from "solid-js";
 import type { JSX } from "@solidjs/web";
 import { Icon } from "./Icon";
 import { IconButton } from "./IconButton";
+import { collapseHeight, inTouchScope, settleMs, wireDismissSwipe } from "../motion";
 
 const icons = { info: "info", success: "check-circle", attention: "alert", danger: "stop", done: "check-circle-fill" } as const;
 
@@ -12,13 +13,53 @@ export type BannerProps = {
   title?: string;
   text?: string;
   dismissible?: boolean;
+  // Inside a touch scope a dismissible banner with onDismiss also swipes sideways to dismiss.
   onDismiss?: () => void;
   children?: JSX.Element;
 };
 
 export function Banner(props: BannerProps): JSX.Element {
   const tone = () => props.tone ?? "info";
-  return (
+  const [dx, setDx] = createSignal(0);
+  const [side, setSide] = createSignal(0);
+  const [armed, setArmed] = createSignal(false);
+  const [dragging, setDragging] = createSignal(false);
+  const [leaving, setLeaving] = createSignal(false);
+  let wrap: HTMLDivElement | undefined;
+  let unwire: (() => void) | undefined;
+  let timer = 0;
+  onCleanup(() => {
+    clearTimeout(timer);
+    unwire?.();
+  });
+
+  const wire = (el: HTMLDivElement) => {
+    wrap = el;
+    unwire?.();
+    unwire = wireDismissSwipe({
+      el,
+      enabled: () => !leaving() && inTouchScope(el),
+      onMove: (v, a, d) => {
+        clearTimeout(timer);
+        setDx(v);
+        setArmed(a);
+        setDragging(d);
+        if (v !== 0) setSide(Math.sign(v));
+        else timer = window.setTimeout(() => setSide(0), settleMs(el));
+      },
+      onDismiss: (direction) => {
+        setDragging(false);
+        setLeaving(true);
+        setDx(direction * el.offsetWidth);
+        // The banner slides out, then the gap closes before onDismiss runs.
+        timer = window.setTimeout(() => collapseHeight(el).then(() => props.onDismiss?.()), {{ ms("duration-sleepy-exit") }});
+      },
+    });
+  };
+
+  const opacity = () => (leaving() ? 0 : 1 - Math.min(1, Math.abs(dx()) / (wrap?.offsetWidth || 320)) * 0.6);
+
+  const card = () => (
     <div class={["pm-banner", tone() !== "info" && `pm-banner--${tone()}`]} role={tone() === "danger" ? "alert" : "status"}>
       <Icon name={icons[tone()]} class="pm-banner__icon" />
       <div class="pm-banner__body">
@@ -30,5 +71,25 @@ export function Banner(props: BannerProps): JSX.Element {
         <IconButton class="pm-banner__close" icon="x" label="Dismiss" variant="invisible" onClick={() => props.onDismiss?.()} />
       </Show>
     </div>
+  );
+
+  return (
+    <Show when={props.dismissible && props.onDismiss} fallback={card()}>
+      <div
+        ref={wire}
+        class={["pm-banner-swipe", dragging() && "pm-banner-swipe--dragging", leaving() && "pm-banner-swipe--leaving"]}
+        style={`--pm-banner-dx: ${dx()}px; --pm-banner-opacity: ${opacity()}`}
+      >
+        <Show when={side()}>
+          <span
+            class={["pm-banner-swipe__mark", side() > 0 ? "pm-banner-swipe__mark--start" : "pm-banner-swipe__mark--end", armed() && "pm-banner-swipe__mark--armed"]}
+            aria-hidden="true"
+          >
+            <span class="pm-banner-swipe__icon"><Icon name="x" size={16} /></span>
+          </span>
+        </Show>
+        {card()}
+      </div>
+    </Show>
   );
 }

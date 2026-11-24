@@ -1,0 +1,46 @@
+name = "AlertSheet"
+group = "Mobile"
+order = 56
+summary = "A short decision in a bottom sheet: a title with a status icon, a message and stacked buttons, the accepting one last."
+slint_exports = ["AlertSheet"]
+
+[props.open]
+type = "bool"
+default = false
+doc = "Whether the sheet is shown."
+
+[props.title]
+type = "string"
+default = ""
+doc = "The question or warning."
+
+[props.message]
+type = "string"
+default = ""
+doc = "16px text under the title."
+
+[props.icon]
+type = "string"
+default = ""
+doc = "information, warning, critical, question, or any Octicon."
+
+[props.tone]
+type = "enum"
+default = ""
+doc = "Tile colour for a custom icon; the four named icons pick their own."
+values = ["", "accent", "info", "success", "attention", "danger", "neutral"]
+
+[props.buttons]
+type = "list"
+default = []
+doc = "Buttons top to bottom: { label, variant? }. Put help and reset first, destructive and rejecting next, the accepting one last."
+
+[props.dismissible]
+type = "bool"
+default = true
+doc = "Dragging, the scrim and Escape close it. Off, only a button does."
+
+[props.inline]
+type = "bool"
+default = false
+doc = "Draws the sheet in place, for docs and previews."

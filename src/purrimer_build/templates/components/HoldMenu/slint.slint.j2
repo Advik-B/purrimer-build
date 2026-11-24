@@ -1,0 +1,379 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion } from "../purrimer.slint";
+import { Icon } from "icon.slint";
+
+// One option. icon takes 24px path commands (PurrimerIcons.note-24).
+export struct HoldMenuItem {
+    label: string,
+    icon: string,
+    danger: bool,
+    disabled: bool,
+}
+
+component HoldOption {
+    in property <HoldMenuItem> item;
+    in property <int> index;
+    in property <bool> arc;
+    in property <bool> start;
+    in property <bool> shown;
+    in property <bool> active;
+    in property <bool> ring;
+    // The pointer, in the same space as this option's x and y.
+    in property <length> px;
+    in property <length> py;
+    // For the arc: the pointer's angle and distance from the trigger centre, this option's angle, and the gap between options.
+    in property <float> pointer-angle;
+    in property <length> pointer-distance;
+    in property <float> angle;
+    in property <float> spacing;
+    in property <length> radius;
+    in property <bool> tappable;
+    callback choose(int);
+    out property <bool> hit: !root.item.disabled && (root.arc
+        ? abs(root.pointer-angle - root.angle) <= root.spacing / 2 && abs(root.pointer-distance - root.radius) <= 48px
+        : root.px >= root.x - 24px && root.px <= root.x + root.width + 24px && root.py >= root.y - 4px && root.py <= root.y + root.height + 4px);
+    property <float> enter: root.shown ? 1 : 0;
+
+    height: 48px;
+    width: root.arc ? 48px : pill.width + 12px + 48px;
+    opacity: root.enter;
+    animate enter {
+        delay: PurrimerMotion.pause-loops ? 0ms : root.index * 30ms;
+        duration: PurrimerMotion.pause-loops ? 0ms : {{ "duration-base" | tok }};
+        easing: ease-out;
+    }
+
+    pill := Rectangle {
+        visible: !root.arc;
+        x: root.start ? 60px : 0px;
+        y: (parent.height - self.height) / 2 + (1 - root.enter) * 8px;
+        width: label.preferred-width + 24px;
+        height: 32px;
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: {{ "overlay-bgColor" | tok }};
+        border-width: {{ "borderWidth-thin" | tok }};
+        border-color: root.active ? {{ "borderColor-accent-emphasis" | tok }} : {{ "borderColor-default" | tok }};
+        drop-shadow-blur: 8px;
+        drop-shadow-offset-y: 2px;
+        drop-shadow-color: #0000001a;
+        label := Text {
+            text: root.item.label;
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: root.item.disabled ? {{ "fgColor-disabled" | tok }} : {{ "fgColor-default" | tok }};
+        }
+    }
+
+    tile := Rectangle {
+        x: root.arc || !root.start ? parent.width - 48px : 0px;
+        y: root.arc ? 0px : (1 - root.enter) * 8px;
+        width: 48px;
+        height: 48px;
+        transform-scale: root.active && !PurrimerMotion.pause-loops ? (root.arc ? 1.14 : 1.08) : 1;
+        animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out-back; }
+        border-radius: {{ "borderRadius-large" | tok }} * 1.2;
+        background: root.active ? (root.item.danger ? {{ "bgColor-danger-emphasis" | tok }} : {{ "button-primary-bgColor-rest" | tok }}) : {{ "overlay-bgColor" | tok }};
+        border-width: root.active ? 0px : {{ "borderWidth-thin" | tok }};
+        border-color: {{ "borderColor-default" | tok }};
+        drop-shadow-blur: root.active ? 0px : 8px;
+        drop-shadow-offset-y: 2px;
+        drop-shadow-color: #0000001a;
+        Icon {
+            path: root.item.icon;
+            size: 24px;
+            box: 24;
+            color: root.item.disabled ? {{ "fgColor-disabled" | tok }} : root.active ? {{ "fgColor-onEmphasis" | tok }} : root.item.danger ? {{ "fgColor-danger" | tok }} : {{ "fgColor-accent" | tok }};
+        }
+        Rectangle {
+            visible: root.ring;
+            x: -4px;
+            y: -4px;
+            width: parent.width + 8px;
+            height: parent.height + 8px;
+            border-radius: parent.border-radius + 4px;
+            border-width: {{ "borderWidth-thick" | tok }};
+            border-color: {{ "focus-outlineColor" | tok }};
+        }
+    }
+
+    TouchArea {
+        enabled: root.tappable && !root.item.disabled;
+        clicked => { root.choose(root.index); }
+    }
+}
+
+// Press and hold the button inside to open more options around it, slide onto one and release to choose it; a plain
+// tap calls clicked(), or opens the menu with tap-opens. Moving 10px before the hold completes cancels it. Releasing on
+// the button keeps the menu open for tapping. Right-click, the Menu key, Shift+F10 and the arrow towards the menu open
+// it for the keyboard; arrows move between options, Enter chooses and Escape closes.
+// With no items it is a plain button: a tap or the default accessible action calls clicked().
+// HoldMenu takes the button's pointer input, so wire its tap to HoldMenu's clicked rather than the button's own. Place
+// it last among its siblings so the options draw above them, and set screen-width and screen-height to the window's
+// size for the scrim.
+export component HoldMenu inherits FocusScope {
+    in property <[HoldMenuItem]> items;
+    // "stack": labelled options in a column. "arc": two to four icon-only options fanned around a corner button.
+    in property <string> layout: "stack";
+    in property <string> direction: "up";
+    in property <string> align: "end";
+    in property <bool> tap-opens;
+    in property <duration> hold-delay: {{ "duration-hold" | tok }};
+    in property <length> radius;
+    in property <string> hint: "Slide to choose";
+    in property <string> accessible-name: "More options";
+    in property <bool> default-open;
+    in property <length> screen-width;
+    in property <length> screen-height;
+    // Shrinks the trigger while it is held; off for a trigger that draws its own press feedback.
+    in property <bool> press-feedback: true;
+    // "", "held" while the finger is still down, or "sticky" for tapping and the keyboard.
+    out property <string> mode;
+    out property <int> active: -1;
+    // The trigger's pointer state, for a trigger that draws its own press and hover.
+    out property <bool> pressed: touch.pressed;
+    out property <bool> hovered: touch.has-hover;
+    callback clicked();
+    callback selected(int);
+    property <bool> arc: root.layout == "arc";
+    property <bool> start: root.align == "start";
+    property <bool> up: root.direction == "up";
+    property <length> arc-radius: root.radius > 0 ? root.radius : max(96px, 72px + root.items.length * 12px);
+    property <float> from: root.up ? 90 : 270;
+    property <float> to: root.up ? (root.start ? 0 : 180) : (root.start ? 360 : 180);
+    property <float> spacing: root.items.length > 1 ? abs(root.to - root.from) / (root.items.length - 1) : 360;
+    property <bool> holding;
+    property <length> grab-x;
+    property <length> grab-y;
+    property <length> px: -1000px;
+    property <length> py: -1000px;
+    property <length> dx: root.px - root.width / 2;
+    property <length> dy: root.height / 2 - root.py;
+    property <float> pointer-angle: Math.mod(atan2(root.dy / 1px, root.dx / 1px) / 1deg + 360, 360);
+
+    min-width: content.min-width;
+    min-height: content.min-height;
+    preferred-width: content.preferred-width;
+    preferred-height: content.preferred-height;
+    accessible-role: button;
+    accessible-label: root.accessible-name;
+    accessible-expanded: root.mode != "";
+    accessible-action-default => {
+        if root.tap-opens && root.items.length > 0 {
+            root.open-sticky();
+        } else {
+            root.clicked();
+        }
+    }
+
+    init => {
+        if root.default-open {
+            root.open-sticky();
+        }
+    }
+
+    function first-enabled() -> int {
+        if root.items.length > 0 && !root.items[0].disabled { return 0; }
+        if root.items.length > 1 && !root.items[1].disabled { return 1; }
+        if root.items.length > 2 && !root.items[2].disabled { return 2; }
+        if root.items.length > 3 && !root.items[3].disabled { return 3; }
+        if root.items.length > 4 && !root.items[4].disabled { return 4; }
+        if root.items.length > 5 && !root.items[5].disabled { return 5; }
+        return -1;
+    }
+
+    function open-sticky() {
+        if root.items.length == 0 {
+            return;
+        }
+        root.px = -1000px;
+        root.py = -1000px;
+        root.mode = "sticky";
+        root.active = root.first-enabled();
+        root.focus();
+    }
+
+    function close() {
+        root.mode = "";
+        root.active = -1;
+        root.px = -1000px;
+        root.py = -1000px;
+    }
+
+    function choose(i: int) {
+        if i < 0 || i >= root.items.length || root.items[i].disabled {
+            return;
+        }
+        root.close();
+        root.selected(i);
+    }
+
+    function step(delta: int) {
+        let n = root.items.length;
+        if n == 0 {
+            return;
+        }
+        // Up to six options, so six tries always reach an enabled one if there is one.
+        let i1 = Math.mod(root.active + delta + n, n);
+        let i2 = Math.mod(i1 + delta + n, n);
+        let i3 = Math.mod(i2 + delta + n, n);
+        let i4 = Math.mod(i3 + delta + n, n);
+        let i5 = Math.mod(i4 + delta + n, n);
+        root.active = !root.items[i1].disabled ? i1 : !root.items[i2].disabled ? i2 : !root.items[i3].disabled ? i3 : !root.items[i4].disabled ? i4 : !root.items[i5].disabled ? i5 : root.active;
+    }
+
+    key-pressed(event) => {
+        if root.mode == "" {
+            if (event.text == Key.UpArrow && root.up) || (event.text == Key.DownArrow && !root.up) || event.text == Key.Menu || (event.text == Key.F10 && event.modifiers.shift) {
+                root.open-sticky();
+                return accept;
+            }
+            return reject;
+        }
+        if event.text == (root.up ? Key.UpArrow : Key.DownArrow) || (root.arc && event.text == (root.start ? Key.RightArrow : Key.LeftArrow)) {
+            root.step(1);
+        } else if event.text == (root.up ? Key.DownArrow : Key.UpArrow) || (root.arc && event.text == (root.start ? Key.LeftArrow : Key.RightArrow)) {
+            root.step(-1);
+        } else if (event.text == Key.Return || event.text == " ") && root.active >= 0 {
+            root.choose(root.active);
+        } else if event.text == Key.Escape || event.text == Key.Tab {
+            root.close();
+        } else {
+            return reject;
+        }
+        accept
+    }
+
+    Timer {
+        interval: root.hold-delay;
+        running: root.holding;
+        triggered => {
+            root.holding = false;
+            root.active = -1;
+            root.mode = "held";
+        }
+    }
+
+    // The scrim, reaching from the window's corner across screen-width by screen-height.
+    if root.mode != "": Rectangle {
+        x: -root.absolute-position.x;
+        y: -root.absolute-position.y;
+        width: root.screen-width;
+        height: root.screen-height;
+        background: {{ "overlay-backdrop-bgColor" | tok }};
+        TouchArea {
+            clicked => { root.close(); }
+        }
+    }
+
+    slot := Rectangle {
+        transform-scale: root.holding && root.press-feedback ? PurrimerMotion.press-scale : 1;
+        animate transform-scale { duration: {{ "duration-fast" | tok }}; easing: ease-out; }
+        content := VerticalLayout {
+            @children
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => {
+            if root.items.length == 0 {
+                root.clicked();
+            }
+        }
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.right && root.mode == "" {
+                root.open-sticky();
+            } else if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                if root.mode == "sticky" {
+                    root.close();
+                    return;
+                }
+                root.grab-x = self.mouse-x;
+                root.grab-y = self.mouse-y;
+                root.holding = root.items.length > 0;
+            } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                if root.holding {
+                    root.holding = false;
+                    if root.tap-opens {
+                        root.open-sticky();
+                    } else {
+                        root.clicked();
+                    }
+                } else if root.mode == "held" {
+                    if root.active >= 0 {
+                        root.choose(root.active);
+                    } else if self.mouse-x >= 0 && self.mouse-x <= self.width && self.mouse-y >= 0 && self.mouse-y <= self.height {
+                        root.open-sticky();
+                    } else {
+                        root.close();
+                    }
+                }
+            } else if event.kind == PointerEventKind.cancel {
+                root.holding = false;
+                if root.mode == "held" {
+                    root.close();
+                }
+            }
+        }
+        moved => {
+            if root.holding && (abs(self.mouse-x - root.grab-x) > 10px || abs(self.mouse-y - root.grab-y) > 10px) {
+                root.holding = false;
+            }
+            if root.mode == "held" {
+                root.px = self.mouse-x;
+                root.py = self.mouse-y;
+            }
+        }
+    }
+
+    for item[i] in root.items: HoldOption {
+        item: item;
+        index: i;
+        arc: root.arc;
+        start: root.start;
+        shown: root.mode != "";
+        visible: root.mode != "";
+        active: root.active == i;
+        ring: root.mode == "sticky" && root.has-focus && root.active == i;
+        px: root.px;
+        py: root.py;
+        pointer-angle: root.pointer-angle;
+        pointer-distance: sqrt(root.dx * root.dx / 1px / 1px + root.dy * root.dy / 1px / 1px) * 1px;
+        angle: root.items.length > 1 ? root.from + (root.to - root.from) * i / (root.items.length - 1) : root.from;
+        spacing: root.spacing;
+        radius: root.arc-radius;
+        tappable: root.mode == "sticky";
+        x: root.arc ? root.width / 2 + cos(self.angle * 1deg) * root.arc-radius - 24px : root.start ? 0px : root.width - self.width;
+        y: root.arc ? root.height / 2 - sin(self.angle * 1deg) * root.arc-radius - 24px : root.up ? -12px - 48px - i * 56px : root.height + 12px + i * 56px;
+        changed hit => {
+            if self.hit {
+                root.active = i;
+            } else if root.active == i && root.mode == "held" {
+                root.active = -1;
+            }
+        }
+        choose(index) => { root.choose(index); }
+    }
+
+    if root.arc && root.mode != "": Rectangle {
+        x: root.start ? 0px : root.width - self.width;
+        y: root.up ? root.height / 2 - root.arc-radius - 36px - self.height : root.height / 2 + root.arc-radius + 36px;
+        width: hint-text.preferred-width + 24px;
+        height: 32px;
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: {{ "bgColor-emphasis" | tok }};
+        hint-text := Text {
+            text: root.active >= 0 && root.active < root.items.length ? root.items[root.active].label : root.hint;
+            font-family: {{ "text-body-medium" | tok }}.font-family;
+            font-size: 14px;
+            font-weight: 600;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+            color: {{ "fgColor-onEmphasis" | tok }};
+        }
+    }
+}

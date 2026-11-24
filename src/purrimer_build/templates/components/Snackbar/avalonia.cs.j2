@@ -35,11 +35,35 @@ public class Snackbar : TemplatedControl
         RoutedEvent.Register<Snackbar, RoutedEventArgs>(nameof(Closed), RoutingStrategies.Bubble);
 
     private readonly global::Avalonia.Threading.DispatcherTimer _timer = new();
+    private readonly PurrimerSpring _dx = new(0, 0.5);
+    private readonly TranslateTransform _shift = new();
+    private readonly PurrimerVelocityTracker _tracker = new();
     private Button? _action;
+    private Border? _bar;
+    private Point? _origin;
+    private char _axis;
+    private bool _leaving;
 
     public Snackbar()
     {
         _timer.Tick += (_, _) => Close();
+        RenderTransform = _shift;
+        _dx.Changed += v =>
+        {
+            _shift.X = v;
+            if (_bar != null && !_leaving)
+                _bar.Opacity = Math.Max(0, 1 - Math.Abs(v) / Math.Max(1, Bounds.Width * 0.6));
+        };
+        _dx.Settled += () =>
+        {
+            if (!_leaving)
+                return;
+            _leaving = false;
+            Close();
+            _dx.Set(0);
+            if (_bar != null)
+                _bar.Opacity = 1;
+        };
     }
 
     public bool IsOpen
@@ -90,6 +114,8 @@ public class Snackbar : TemplatedControl
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == ActionTextProperty)
+            SetActionContent();
         if (change.Property == IsOpenProperty)
         {
             PseudoClasses.Set(":open", IsOpen);
@@ -108,6 +134,8 @@ public class Snackbar : TemplatedControl
             _action.Click -= OnActionClick;
         base.OnApplyTemplate(e);
         _action = e.NameScope.Find<Button>("PART_Action");
+        _bar = e.NameScope.Find<Border>("PART_Bar");
+        SetActionContent();
         if (_action != null)
             _action.Click += OnActionClick;
     }
@@ -116,6 +144,70 @@ public class Snackbar : TemplatedControl
     {
         base.OnDetachedFromVisualTree(e);
         _timer.Stop();
+    }
+
+    // Swipe it sideways to dismiss it: it follows the pointer and fades, and past 30% of its width, or on a flick, it
+    // slides out and closes. Its timer pauses while the pointer is held on it.
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (_leaving || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _origin = e.GetPosition(Parent as Visual ?? this);
+        _axis = '\0';
+        _timer.Stop();
+        _tracker.Reset();
+        _tracker.Add(_origin.Value);
+        e.Pointer.Capture(this);
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var p = e.GetPosition(Parent as Visual ?? this);
+        _tracker.Add(p);
+        var mx = p.X - origin.X;
+        var my = p.Y - origin.Y;
+        if (_axis == '\0')
+        {
+            if (Math.Abs(mx) < 10 && Math.Abs(my) < 10)
+                return;
+            _axis = Math.Abs(mx) > Math.Abs(my) ? 'x' : 'y';
+        }
+        if (_axis == 'x')
+            _dx.Set(mx);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        if (_origin is null)
+            return;
+        _origin = null;
+        e.Pointer.Capture(null);
+        var dx = _dx.Value;
+        var v = _tracker.Velocity().X / 1000;
+        var flick = Math.Abs(v) > 0.6 && (v > 0) == (dx > 0);
+        if (_axis == 'x' && dx != 0 && (Math.Abs(dx) >= Bounds.Width * 0.3 || flick))
+        {
+            _leaving = true;
+            if (_bar != null)
+                _bar.Opacity = 0;
+            _dx.To(Math.Sign(dx) * Bounds.Width * 1.2);
+            return;
+        }
+        _dx.To(0);
+        if (IsOpen && Duration > TimeSpan.Zero)
+            _timer.Start();
+    }
+
+    // The action reads as a link: underlined.
+    private void SetActionContent()
+    {
+        if (_action != null)
+            _action.Content = new TextBlock { Text = ActionText, TextDecorations = TextDecorations.Underline };
     }
 
     private void OnActionClick(object? sender, RoutedEventArgs e)

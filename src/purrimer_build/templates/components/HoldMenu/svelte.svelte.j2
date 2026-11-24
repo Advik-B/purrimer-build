@@ -1,0 +1,155 @@
+<!-- {{ note }} -->
+<!-- {{ c.summary }} -->
+<script lang="ts" module>
+  export type HoldMenuItem = { label: string; icon: string; variant?: "default" | "danger"; disabled?: boolean; onselect?: () => void };
+</script>
+
+<script lang="ts">
+  import type { Snippet } from "svelte";
+  import { tick } from "svelte";
+  import Icon from "./Icon.svelte";
+  import { arcAngles, buzz, holdMenuKeydown, placeHoldMenu, wireHoldMenu, type HoldMode } from "../motion";
+
+  let {
+    items = [],
+    layout = "stack",
+    direction = "up",
+    align = "end",
+    tapOpens = false,
+    holdDelay = 400,
+    radius = 0,
+    hint = "Slide to choose",
+    defaultOpen = false,
+    ariaLabel = "More options",
+    onselect,
+    children,
+  }: {
+    items?: HoldMenuItem[];
+    layout?: "stack" | "arc";
+    direction?: "up" | "down";
+    align?: "end" | "start";
+    tapOpens?: boolean;
+    holdDelay?: number;
+    radius?: number;
+    hint?: string;
+    defaultOpen?: boolean;
+    ariaLabel?: string;
+    onselect?: (item: HoldMenuItem, index: number) => void;
+    children: Snippet;
+  } = $props();
+
+  let wrap: HTMLElement | undefined = $state();
+  let layer: HTMLElement | undefined = $state();
+  let menu: HTMLElement | undefined = $state();
+  let mode: HoldMode | null = $state(null);
+  let active = $state(-1);
+  let place: Record<string, string> | null = $state(null);
+  const id = `pm-holdmenu-${Math.random().toString(36).slice(2, 9)}`;
+  const angles = $derived(layout === "arc" ? arcAngles(items.length, direction, align) : []);
+  const r = $derived(radius || Math.max(96, 72 + items.length * 12));
+  const menuStyle = $derived(place ? Object.entries(place).map(([k, v]) => `${k}: ${v}`).join("; ") : "visibility: hidden");
+
+  function trigger(): HTMLElement | null {
+    return wrap?.querySelector<HTMLElement>("button, [href], [tabindex]:not([tabindex='-1'])") ?? null;
+  }
+
+  async function open(next: HoldMode) {
+    active = -1;
+    place = null;
+    mode = next;
+    await tick();
+    if (!wrap || !menu) return;
+    place = placeHoldMenu(wrap, menu, layout, direction, align);
+    if (next === "sticky") {
+      await tick();
+      menu.querySelector<HTMLElement>("[data-hold-index]:not([disabled])")?.focus({ preventScroll: true });
+    }
+  }
+
+  function close(refocus: boolean) {
+    mode = null;
+    active = -1;
+    if (refocus) trigger()?.focus({ preventScroll: true });
+  }
+
+  function choose(i: number) {
+    const item = items[i];
+    if (!item || item.disabled) return;
+    close(true);
+    buzz();
+    item.onselect?.();
+    onselect?.(item, i);
+  }
+
+  $effect(() => {
+    if (!wrap) return;
+    return wireHoldMenu({
+      wrap,
+      delay: () => holdDelay,
+      tapOpens: () => tapOpens,
+      enabled: () => items.length > 0,
+      direction: () => direction,
+      mode: () => mode,
+      open,
+      close,
+      choose,
+      setActive: (i) => {
+        if (i !== active && i !== -1) buzz(6);
+        active = i;
+      },
+      layer: () => layer ?? null,
+    });
+  });
+
+  $effect(() => {
+    const t = trigger();
+    if (!t) return;
+    t.setAttribute("aria-haspopup", "menu");
+    t.setAttribute("aria-expanded", mode ? "true" : "false");
+    if (mode) t.setAttribute("aria-controls", id);
+    else t.removeAttribute("aria-controls");
+  });
+
+  $effect(() => {
+    if (defaultOpen && wrap) open("sticky");
+  });
+</script>
+
+<span bind:this={wrap} class={["pm-hold", mode && "pm-hold--open"]}>{@render children()}</span>
+{#if mode}
+  <div bind:this={layer} class="pm-holdlayer" data-density="touch">
+    <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+    <div class="pm-holdlayer__scrim" aria-hidden="true" onclick={() => close(true)}></div>
+    <div
+      bind:this={menu}
+      {id}
+      role="menu"
+      tabindex="-1"
+      aria-label={ariaLabel}
+      class={["pm-holdmenu", `pm-holdmenu--${layout}`, `pm-holdmenu--${direction}`, align === "start" && "pm-holdmenu--start"]}
+      style={menuStyle}
+      onkeydown={(e) => menu && holdMenuKeydown(e, menu, layout, direction, align, close)}
+    >
+      {#each items as item, i (i)}
+        {@const a = layout === "arc" ? (angles[i] * Math.PI) / 180 : 0}
+        <button
+          type="button"
+          role="menuitem"
+          tabindex="-1"
+          data-hold-index={i}
+          disabled={item.disabled}
+          class={["pm-holdmenu__item", i === active && "pm-holdmenu__item--active", item.variant === "danger" && "pm-holdmenu__item--danger"]}
+          style={layout === "arc" ? `--pm-hold-x: ${(Math.cos(a) * r).toFixed(1)}px; --pm-hold-y: ${(-Math.sin(a) * r).toFixed(1)}px; --pm-hold-i: ${i}` : `--pm-hold-i: ${i}`}
+          onclick={() => choose(i)}
+          onfocus={() => (active = i)}
+        >
+          <span class="pm-holdmenu__label">{item.label}</span>
+          <span class="pm-holdmenu__icon"><Icon name={item.icon} size={24} /></span>
+        </button>
+      {/each}
+      {#if layout === "arc"}
+        <span class="pm-holdmenu__hint" aria-hidden="true" style="--pm-hold-r: {r}px">{active >= 0 && items[active] ? items[active].label : hint}</span>
+      {/if}
+    </div>
+  </div>
+{/if}

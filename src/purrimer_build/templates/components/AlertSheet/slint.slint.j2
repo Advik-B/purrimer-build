@@ -1,0 +1,23 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer } from "../purrimer.slint";
+import { BottomSheet } from "bottom-sheet.slint";
+
+// A short decision in a bottom sheet. List actions top to bottom: help and reset first, destructive and rejecting
+// next, the accepting one last. A press calls action(index); the default handler closes the sheet, so a handler of
+// your own should call close() too. For the status icon pass path commands (PurrimerIcons.stop-16) with a tone:
+// info, attention, danger or accent.
+export component AlertSheet inherits BottomSheet {
+    in property <string> message;
+
+    action(index) => { self.close(); }
+
+    if root.message != "": Text {
+        text: root.message;
+        wrap: word-wrap;
+        color: {{ "fgColor-default" | tok }};
+        font-family: {{ "text-body-medium" | tok }}.font-family;
+        font-size: 16px;
+        accessible-role: text;
+    }
+}

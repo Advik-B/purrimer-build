@@ -1,0 +1,294 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from PySide6.QtCore import QPointF, QRectF, QSize, Qt, Signal
+from PySide6.QtGui import QFont, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..motion import SLOP, PressFeedback, Spring, VelocityTracker, project, rubber_band
+from ..theme import theme
+
+CHIP_H = 36
+PAD_X = 12
+GAP = 8
+GUTTER = 16
+RADIUS = {{ px("borderRadius-medium") | num }}
+
+
+@dataclass
+class ChipOption:
+    value: str
+    label: str
+    icon: str | None = None
+    count: int | str | None = None
+    disabled: bool = False
+
+
+class ChipGroup(QWidget):
+    """Filter chips in a row that scrolls sideways under the finger, or wraps onto several lines."""
+
+    changed = Signal(object)
+
+    def __init__(self, options: list[ChipOption], value: str | list[str] | None = None, multiple: bool = False,
+                 allow_empty: bool = False, wrap: bool = False, accessible_name: str = "",
+                 parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._options = options
+        self._multiple = multiple
+        self._allow_empty = allow_empty
+        self._wrap = wrap
+        if value is None and not multiple and options:
+            value = options[0].value
+        self._value: str | list[str] | None = list(value or []) if multiple else value
+        self._font = theme.font({{ "text-body-medium" | tok }})
+        self._font.setPixelSize(14)
+        self._font.setWeight(QFont.Weight.DemiBold)
+        self._count_font = QFont(self._font)
+        self._count_font.setWeight(QFont.Weight.Normal)
+        self._focus = 0
+        self._keyboard = False
+        self._pressed = -1
+        # The chip the press spring belongs to; it keeps springing back after release.
+        self._scaled = -1
+        self._press = PressFeedback(self)
+        self._scroll = Spring(0.0, precision=0.5, parent=self)
+        self._scroll.changed.connect(lambda _v: self.update())
+        self._tracker = VelocityTracker()
+        self._origin: QPointF | None = None
+        self._origin_scroll = 0.0
+        self._dragging = False
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setAccessibleName(accessible_name)
+        policy = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        policy.setHeightForWidth(wrap)
+        self.setSizePolicy(policy)
+        theme.changed.connect(self.update)
+
+    def value(self) -> str | list[str] | None:
+        return list(self._value) if isinstance(self._value, list) else self._value
+
+    def is_on(self, value: str) -> bool:
+        return value in self._value if isinstance(self._value, list) else self._value == value
+
+    def _chip_width(self, option: ChipOption) -> float:
+        width = 2 * PAD_X + QFontMetrics(self._font).horizontalAdvance(option.label)
+        if option.icon or self.is_on(option.value):
+            width += 16 + 6
+        if option.count is not None:
+            width += 6 + QFontMetrics(self._count_font).horizontalAdvance(str(option.count))
+        return float(width)
+
+    def _layout(self, width: float) -> list[QRectF]:
+        rects = []
+        x, y = float(GUTTER), 8.0
+        for option in self._options:
+            w = self._chip_width(option)
+            if self._wrap and x > GUTTER and x + w > width - GUTTER:
+                x, y = float(GUTTER), y + CHIP_H + GAP
+            rects.append(QRectF(x, y, w, CHIP_H))
+            x += w + GAP
+        return rects
+
+    def _content_width(self) -> float:
+        rects = self._layout(float(self.width()))
+        return rects[-1].right() + GUTTER if rects else 0.0
+
+    def _max_scroll(self) -> float:
+        return 0.0 if self._wrap else max(0.0, self._content_width() - self.width())
+
+    def sizeHint(self) -> QSize:
+        return QSize(int(self._content_width()) if not self._wrap else 320, self.heightForWidth(320))
+
+    def minimumSizeHint(self) -> QSize:
+        return QSize(GUTTER * 2 + 48, CHIP_H + 16)
+
+    def hasHeightForWidth(self) -> bool:
+        return self._wrap
+
+    def heightForWidth(self, width: int) -> int:
+        rects = self._layout(float(width))
+        return int(rects[-1].bottom() + 8) if rects else CHIP_H + 16
+
+    def _hit(self, point: QPointF) -> int:
+        shifted = point + QPointF(self._scroll.value, 0)
+        for i, rect in enumerate(self._layout(float(self.width()))):
+            if rect.adjusted(0, -4, 0, 4).contains(shifted):
+                return i
+        return -1
+
+    def _toggle(self, index: int) -> None:
+        option = self._options[index]
+        if option.disabled:
+            return
+        if self._multiple:
+            values = list(self._value or [])
+            if option.value in values:
+                values.remove(option.value)
+            else:
+                values.append(option.value)
+            self._value = values
+        elif self._value == option.value:
+            if not self._allow_empty:
+                return
+            self._value = None
+        else:
+            self._value = option.value
+        self.updateGeometry()
+        self.update()
+        self.changed.emit(self.value())
+
+    def _scroll_into_view(self, index: int) -> None:
+        if self._wrap:
+            return
+        rect = self._layout(float(self.width()))[index]
+        left = rect.left() - GUTTER
+        right = rect.right() + GUTTER - self.width()
+        target = min(max(self._scroll.target, right), left)
+        self._scroll.to(min(max(target, 0.0), self._max_scroll()))
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._keyboard = False
+        self._scroll.stop()
+        self._origin = event.position()
+        self._origin_scroll = self._scroll.value
+        self._dragging = False
+        self._tracker.reset()
+        self._tracker.add(event.position())
+        self._pressed = self._hit(event.position())
+        if self._pressed >= 0 and not self._options[self._pressed].disabled:
+            self._scaled = self._pressed
+            self._press.press()
+        else:
+            self._pressed = -1
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        self._tracker.add(event.position())
+        dx = event.position().x() - self._origin.x()
+        if not self._dragging and abs(dx) > SLOP and self._max_scroll() > 0:
+            self._dragging = True
+            if self._pressed >= 0:
+                self._press.release()
+                self._pressed = -1
+        if self._dragging:
+            offset = self._origin_scroll - dx
+            limit = self._max_scroll()
+            if offset < 0:
+                offset = rubber_band(offset, self.width())
+            elif offset > limit:
+                offset = limit + rubber_band(offset - limit, self.width())
+            self._scroll.set(offset)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._origin is None:
+            return
+        if self._dragging:
+            velocity = -self._tracker.velocity().x()
+            rest = min(max(self._scroll.value + project(velocity), 0.0), self._max_scroll())
+            self._scroll.to(rest, velocity)
+        elif self._pressed >= 0:
+            self._press.release()
+            if self._hit(event.position()) == self._pressed:
+                self._focus = self._pressed
+                self._toggle(self._pressed)
+        self._pressed = -1
+        self._origin = None
+        self._dragging = False
+
+    def wheelEvent(self, event) -> None:
+        delta = event.angleDelta().x() or event.angleDelta().y()
+        if self._max_scroll() <= 0 or not delta:
+            event.ignore()
+            return
+        self._scroll.set(min(max(self._scroll.value - delta / 2, 0.0), self._max_scroll()))
+
+    def keyPressEvent(self, event) -> None:
+        step = {Qt.Key.Key_Left: -1, Qt.Key.Key_Right: 1}.get(event.key())
+        if step:
+            self._keyboard = True
+            i = self._focus
+            while 0 <= i + step < len(self._options):
+                i += step
+                if not self._options[i].disabled:
+                    self._focus = i
+                    break
+            self._scroll_into_view(self._focus)
+            self.update()
+        elif event.key() in (Qt.Key.Key_Space, Qt.Key.Key_Return, Qt.Key.Key_Enter):
+            self._keyboard = True
+            self._toggle(self._focus)
+        else:
+            super().keyPressEvent(event)
+
+    def focusInEvent(self, event) -> None:
+        if event.reason() in (Qt.FocusReason.TabFocusReason, Qt.FocusReason.BacktabFocusReason):
+            self._keyboard = True
+        super().focusInEvent(event)
+        self.update()
+
+    def focusOutEvent(self, event) -> None:
+        self._keyboard = False
+        super().focusOutEvent(event)
+        self.update()
+
+    def resizeEvent(self, event) -> None:
+        self._scroll.set(min(self._scroll.value, self._max_scroll()))
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(-self._scroll.value, 0)
+        for i, (option, rect) in enumerate(zip(self._options, self._layout(float(self.width())), strict=True)):
+            on = self.is_on(option.value)
+            painter.save()
+            if i == self._scaled:
+                scale = self._press.scale
+                painter.translate(rect.center())
+                painter.scale(scale, scale)
+                painter.translate(-rect.center())
+            if option.disabled:
+                ink, muted = theme.color({{ "fgColor-disabled" | tok }}), theme.color({{ "fgColor-disabled" | tok }})
+                border, fill = theme.color({{ "borderColor-default" | tok }}), theme.color({{ "bgColor-default" | tok }})
+            elif on:
+                ink = muted = theme.color({{ "fgColor-accent" | tok }})
+                border, fill = theme.color({{ "borderColor-accent-emphasis" | tok }}), theme.color({{ "bgColor-accent-muted" | tok }})
+            else:
+                ink, muted = theme.color({{ "fgColor-default" | tok }}), theme.color({{ "fgColor-muted" | tok }})
+                border, fill = theme.color({{ "borderColor-emphasis" | tok }}), theme.color({{ "bgColor-default" | tok }})
+            if i == self._pressed and not on:
+                fill = theme.color({{ "control-transparent-bgColor-selected" | tok }})
+            path = QPainterPath()
+            path.addRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), RADIUS, RADIUS)
+            painter.fillPath(path, fill)
+            painter.setPen(QPen(border, {{ px("borderWidth-thin") | num }}))
+            painter.drawPath(path)
+            x = rect.left() + PAD_X
+            icon = "check" if on else option.icon
+            if icon:
+                paint_icon(painter, QRectF(x, rect.top() + 10, 16, 16), icon, muted)
+                x += 16 + 6
+            painter.setFont(self._font)
+            painter.setPen(ink)
+            label_w = QFontMetrics(self._font).horizontalAdvance(option.label)
+            painter.drawText(QRectF(x, rect.top(), label_w + 1, CHIP_H), Qt.AlignmentFlag.AlignVCenter, option.label)
+            if option.count is not None:
+                x += label_w + 6
+                painter.setFont(self._count_font)
+                painter.setPen(muted)
+                painter.drawText(QRectF(x, rect.top(), 64, CHIP_H), Qt.AlignmentFlag.AlignVCenter, str(option.count))
+            if self.hasFocus() and self._keyboard and i == self._focus:
+                ring = QPainterPath()
+                ring.addRoundedRect(rect.adjusted(-3, -3, 3, 3), RADIUS + 3, RADIUS + 3)
+                painter.setPen(QPen(theme.color({{ "focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+                painter.setBrush(Qt.BrushStyle.NoBrush)
+                painter.drawPath(ring)
+            painter.restore()

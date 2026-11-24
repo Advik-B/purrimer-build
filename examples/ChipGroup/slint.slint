@@ -1,0 +1,16 @@
+import { ChipGroup, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    ChipGroup {
+        accessible-label: "Filter inbox";
+        current: 1;
+        options: [
+            { value: "all", label: "All" },
+            { value: "unread", label: "Unread", count: "12" },
+            { value: "mentions", label: "Mentions", icon: PurrimerIcons.mention-16 },
+            { value: "snoozed", label: "Snoozed", disabled: true },
+        ];
+        changed(index, on) => { debug("filter", index, on); }
+    }
+}

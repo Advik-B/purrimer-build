@@ -1,0 +1,421 @@
+// {{ note }}
+// {{ c.summary }}
+pragma ComponentBehavior: Bound
+import QtQuick
+
+// A photo on a dark stage. Pinch or double-click to zoom (2.5x around the point, or back to fit), drag to look around
+// when zoomed, and drag down at fit to close: past 96px the close button fills, and release or a flick closes. Ctrl
+// and the wheel zoom around the pointer; the wheel pans when zoomed. With the stage focused, Plus and Minus zoom, 0
+// fits, the arrow keys pan and Escape closes. Set open to show it over the window, or inline to draw it in place.
+Item {
+    id: root
+    property url source
+    property string alt
+    property string caption
+    property bool open: false
+    property bool inline: false
+    property real maxScale: 4
+    // Leave false to drop the close button and the drag to close.
+    property bool closable: true
+    // Words for image, stage, close, zoomIn and zoomOut, for translation.
+    property var labels: ({})
+    readonly property real zoom: zoomSpring.value
+    readonly property bool shown: inline || open
+    property real fade: shown ? 1 : 0
+    property real dismissScale: 1
+    property real backdrop: 1
+    property bool armed: false
+    readonly property string name: alt || labels.image || "Image"
+    signal closed()
+
+    implicitWidth: 390
+    implicitHeight: 520
+    Behavior on fade {
+        enabled: !root.inline
+        NumberAnimation {
+            duration: Purrimer.pauseLoops ? 0 : (root.shown ? {{ "duration-slow" | tok }} : {{ "duration-sleepy-exit" | tok }})
+            easing.type: root.shown ? Easing.OutCubic : Easing.InCubic
+        }
+    }
+    onShownChanged: {
+        if (shown && !inline) {
+            reset(false)
+            closeButton.forceActiveFocus()
+        }
+    }
+
+    function apply(s, x, y, animate) {
+        if (animate) {
+            zoomSpring.to(s)
+            xSpring.to(x)
+            ySpring.to(y)
+        } else {
+            zoomSpring.set(s)
+            xSpring.set(x)
+            ySpring.set(y)
+        }
+    }
+
+    function bounds(s) {
+        return Qt.point(Math.max(0, (photo.paintedWidth * s - stage.width) / 2), Math.max(0, (photo.paintedHeight * s - stage.height) / 2))
+    }
+
+    function clamp(v, lo, hi) {
+        return Math.min(hi, Math.max(lo, v))
+    }
+
+    function resist(v, lo, hi) {
+        return v < lo ? lo - (lo - v) * 0.35 : v > hi ? hi + (v - hi) * 0.35 : v
+    }
+
+    function settle() {
+        const s = clamp(zoomSpring.value, 1, maxScale)
+        if (s < 1.01) {
+            apply(1, 0, 0, true)
+            return
+        }
+        const b = bounds(s)
+        apply(s, clamp(xSpring.value, -b.x, b.x), clamp(ySpring.value, -b.y, b.y), true)
+    }
+
+    // Zooms to s keeping the image point under (px, py), measured from the stage centre, where it is.
+    function zoomTo(s, px, py, animate) {
+        const k = s / zoomSpring.value
+        const x = px - (px - xSpring.value) * k
+        const y = py - (py - ySpring.value) * k
+        if (animate) {
+            apply(s, x, y, false)
+            settle()
+        } else {
+            apply(s, x, y, false)
+        }
+    }
+
+    function zoomBy(f) {
+        zoomTo(clamp(zoomSpring.target * f, 1, maxScale), 0, 0, true)
+    }
+
+    function reset(animate) {
+        dismissScale = 1
+        backdrop = 1
+        armed = false
+        apply(1, 0, 0, animate)
+    }
+
+    function close() {
+        if (!closable)
+            return
+        closed()
+        if (inline)
+            reset(true)
+    }
+
+    PmSpring { id: zoomSpring; value: 1; target: 1; precision: 0.001 }
+    PmSpring { id: xSpring; precision: 0.5 }
+    PmSpring { id: ySpring; precision: 0.5 }
+
+    component StageButton: Rectangle {
+        id: button
+        property string iconName
+        property string label
+        property bool armed: false
+        signal clicked()
+        width: {{ "touch-target-min" | tok }}
+        height: {{ "touch-target-min" | tok }}
+        radius: width / 2
+        color: armed ? {{ "media-stage-control-bgColor-armed" | tok }} : {{ "media-stage-control-bgColor" | tok }}
+        border.width: {{ "borderWidth-thin" | tok }}
+        border.color: armed ? {{ "media-stage-control-bgColor-armed" | tok }} : {{ "media-stage-control-borderColor" | tok }}
+        opacity: enabled ? 1 : 0.4
+        scale: tap.pressed ? Purrimer.pressScale : 1
+        Behavior on scale { SpringAnimation { spring: 5; damping: 0.35; epsilon: 0.001 } }
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: label
+        Accessible.onPressAction: button.clicked()
+        Keys.onPressed: (event) => {
+            if (event.key === Qt.Key_Space || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                button.clicked()
+                event.accepted = true
+            }
+        }
+        Icon {
+            anchors.centerIn: parent
+            name: button.iconName
+            color: button.armed ? {{ "media-stage-control-fgColor-armed" | tok }} : {{ "media-stage-fgColor" | tok }}
+        }
+        Rectangle {
+            visible: button.activeFocus
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: width / 2
+            color: "transparent"
+            border.width: {{ "borderWidth-thick" | tok }}
+            border.color: {{ "media-stage-focus-outlineColor" | tok }}
+        }
+        TapHandler {
+            id: tap
+            onTapped: button.clicked()
+        }
+    }
+
+    FocusScope {
+        id: viewer
+        parent: root.inline || !root.Window.window ? root : root.Window.window.contentItem
+        anchors.fill: parent
+        z: root.inline ? 0 : 900
+        visible: root.inline || root.fade > 0
+        opacity: root.fade
+        clip: true
+        Accessible.role: root.inline ? Accessible.Grouping : Accessible.Dialog
+        Accessible.name: root.name
+
+        Rectangle {
+            anchors.fill: parent
+            color: {{ "media-stage-bgColor" | tok }}
+            opacity: root.backdrop
+            Behavior on opacity { enabled: !area.dragging; NumberAnimation { duration: {{ "duration-base" | tok }} } }
+        }
+
+        Item {
+            id: stage
+            anchors.fill: parent
+            focus: true
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Graphic
+            Accessible.name: (root.labels.stage || "{name}. Plus and minus zoom, arrow keys move.").replace("{name}", root.name)
+
+            Image {
+                id: photo
+                source: root.source
+                width: stage.width
+                height: stage.height
+                fillMode: Image.PreserveAspectFit
+                asynchronous: false
+                smooth: true
+                mipmap: true
+                x: xSpring.value
+                y: ySpring.value
+                scale: zoomSpring.value * root.dismissScale * (root.inline ? 1 : 0.96 + 0.04 * root.fade)
+            }
+
+            Rectangle {
+                visible: stage.activeFocus
+                anchors.fill: parent
+                anchors.margins: 4
+                color: "transparent"
+                border.width: {{ "borderWidth-thick" | tok }}
+                border.color: {{ "media-stage-focus-outlineColor" | tok }}
+            }
+
+            Keys.onPressed: (event) => {
+                const t = event.text
+                if (event.key === Qt.Key_Escape && root.closable)
+                    root.close()
+                else if (t === "+" || t === "=")
+                    root.zoomBy(1.5)
+                else if (t === "-" || t === "_")
+                    root.zoomBy(1 / 1.5)
+                else if (t === "0")
+                    root.apply(1, 0, 0, true)
+                else if (zoomSpring.value > 1.01 && (event.key === Qt.Key_Left || event.key === Qt.Key_Right || event.key === Qt.Key_Up || event.key === Qt.Key_Down)) {
+                    const b = root.bounds(zoomSpring.value)
+                    const dx = event.key === Qt.Key_Left ? 48 : event.key === Qt.Key_Right ? -48 : 0
+                    const dy = event.key === Qt.Key_Up ? 48 : event.key === Qt.Key_Down ? -48 : 0
+                    root.apply(zoomSpring.value, root.clamp(xSpring.value + dx, -b.x, b.x), root.clamp(ySpring.value + dy, -b.y, b.y), true)
+                } else
+                    return
+                event.accepted = true
+            }
+
+            MouseArea {
+                id: area
+                property point origin
+                property real tx
+                property real ty
+                property string mode: ""
+                property bool dragging: false
+                property real vy
+                property real lastY
+                property real lastT
+                anchors.fill: parent
+                cursorShape: Qt.CrossCursor
+                onPressed: (mouse) => {
+                    stage.forceActiveFocus()
+                    origin = Qt.point(mouse.x, mouse.y)
+                    tx = xSpring.value
+                    ty = ySpring.value
+                    mode = ""
+                    vy = 0
+                    lastY = mouse.y
+                    lastT = Date.now()
+                    zoomSpring.stop()
+                    xSpring.stop()
+                    ySpring.stop()
+                }
+                onPositionChanged: (mouse) => {
+                    const dx = mouse.x - origin.x
+                    const dy = mouse.y - origin.y
+                    if (mode === "") {
+                        if (Math.abs(dx) < 10 && Math.abs(dy) < 10)
+                            return
+                        mode = zoomSpring.value > 1.01 ? "pan" : Math.abs(dy) > Math.abs(dx) && root.closable ? "dismiss" : "none"
+                        dragging = mode === "dismiss"
+                    }
+                    if (mode === "pan") {
+                        const b = root.bounds(zoomSpring.value)
+                        root.apply(zoomSpring.value, root.resist(tx + dx, -b.x, b.x), root.resist(ty + dy, -b.y, b.y), false)
+                    } else if (mode === "dismiss") {
+                        const k = Math.min(1, Math.abs(dy) / (96 * 3))
+                        root.dismissScale = 1 - k * 0.1
+                        root.backdrop = 1 - k * 0.7
+                        root.apply(1, 0, dy, false)
+                        root.armed = Math.abs(dy) >= 96
+                        const now = Date.now()
+                        if (now > lastT)
+                            vy = (mouse.y - lastY) / (now - lastT)
+                        lastY = mouse.y
+                        lastT = now
+                    }
+                }
+                onReleased: {
+                    dragging = false
+                    if (mode === "dismiss") {
+                        const dy = ySpring.value
+                        const flick = Math.abs(vy) > 0.6 && (vy > 0) === (dy > 0)
+                        if (root.armed || flick) {
+                            root.armed = false
+                            root.close()
+                            return
+                        }
+                        root.dismissScale = 1
+                        root.backdrop = 1
+                        root.apply(1, 0, 0, true)
+                        return
+                    }
+                    root.settle()
+                }
+                onCanceled: {
+                    dragging = false
+                    root.armed = false
+                    root.dismissScale = 1
+                    root.backdrop = 1
+                    root.settle()
+                }
+                onDoubleClicked: (mouse) => {
+                    if (zoomSpring.value > 1.01)
+                        root.apply(1, 0, 0, true)
+                    else
+                        root.zoomTo(Math.min(2.5, root.maxScale), mouse.x - stage.width / 2, mouse.y - stage.height / 2, true)
+                }
+                onWheel: (wheel) => {
+                    const dy = wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.angleDelta.y / 1.2
+                    const dx = wheel.pixelDelta.x !== 0 ? wheel.pixelDelta.x : wheel.angleDelta.x / 1.2
+                    if (wheel.modifiers & Qt.ControlModifier) {
+                        root.zoomTo(root.clamp(zoomSpring.value * Math.exp(dy * 0.01), 1, root.maxScale), wheel.x - stage.width / 2, wheel.y - stage.height / 2, false)
+                        wheelSettle.restart()
+                    } else if (zoomSpring.value > 1.01) {
+                        const b = root.bounds(zoomSpring.value)
+                        root.apply(zoomSpring.value, root.clamp(xSpring.value + dx, -b.x, b.x), root.clamp(ySpring.value + dy, -b.y, b.y), false)
+                    }
+                }
+            }
+
+            PinchHandler {
+                id: pinch
+                target: null
+                property real s0: 1
+                property real cx: 0
+                property real cy: 0
+                onActiveChanged: {
+                    if (active) {
+                        s0 = zoomSpring.value
+                        cx = (centroid.position.x - stage.width / 2 - xSpring.value) / s0
+                        cy = (centroid.position.y - stage.height / 2 - ySpring.value) / s0
+                    } else {
+                        root.settle()
+                    }
+                }
+                onActiveScaleChanged: {
+                    if (!active)
+                        return
+                    const raw = s0 * activeScale
+                    const s = raw < 1 ? 1 - (1 - raw) * 0.4 : raw > root.maxScale ? root.maxScale + (raw - root.maxScale) * 0.4 : raw
+                    root.apply(s, centroid.position.x - stage.width / 2 - cx * s, centroid.position.y - stage.height / 2 - cy * s, false)
+                }
+            }
+
+            Timer {
+                id: wheelSettle
+                interval: 120
+                onTriggered: root.settle()
+            }
+        }
+
+        StageButton {
+            id: closeButton
+            visible: root.closable
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.margins: 8
+            iconName: "x"
+            label: root.labels.close || "Close"
+            armed: root.armed
+            onClicked: root.close()
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 24 + {{ "touch-target-min" | tok }} + 8
+            color: {{ "media-stage-bar-bgColor" | tok }}
+
+            Text {
+                anchors.left: parent.left
+                anchors.leftMargin: {{ "mobile-gutter" | tok }}
+                anchors.right: zoomRow.left
+                anchors.rightMargin: 8
+                anchors.verticalCenter: zoomRow.verticalCenter
+                text: root.caption
+                elide: Text.ElideRight
+                font.family: {{ "text-body-medium" | tok }}.family
+                font.pixelSize: 14
+                color: {{ "media-stage-fgColor" | tok }}
+            }
+
+            Row {
+                id: zoomRow
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                anchors.margins: 8
+                spacing: {{ "base-size-4" | tok }}
+                StageButton {
+                    iconName: "dash"
+                    label: root.labels.zoomOut || "Zoom out"
+                    enabled: zoomSpring.target > 1.01
+                    onClicked: root.zoomBy(1 / 1.5)
+                }
+                Text {
+                    width: 48
+                    height: {{ "touch-target-min" | tok }}
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    text: Math.round(zoomSpring.value * 100) + "%"
+                    font.family: {{ "text-body-medium" | tok }}.family
+                    font.pixelSize: 14
+                    font.features: { "tnum": 1 }
+                    color: {{ "media-stage-fgColor" | tok }}
+                    Accessible.role: Accessible.StaticText
+                    Accessible.name: text
+                }
+                StageButton {
+                    iconName: "plus"
+                    label: root.labels.zoomIn || "Zoom in"
+                    enabled: zoomSpring.target < root.maxScale - 0.01
+                    onClicked: root.zoomBy(1.5)
+                }
+            }
+        }
+    }
+}

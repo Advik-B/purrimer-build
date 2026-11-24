@@ -1,0 +1,332 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { IconButton } from "icon-button.slint";
+import { Icon } from "icon.slint";
+
+// One row. icon takes path commands (PurrimerIcons.inbox-16); leave supporting empty for a one-line row.
+export struct ReorderItem {
+    key: string,
+    headline: string,
+    supporting: string,
+    icon: string,
+}
+
+component ReorderRow inherits Rectangle {
+    in property <ReorderItem> item;
+    in property <int> index;
+    in property <int> count;
+    in property <int> dragging;
+    in property <length> drag-y;
+    in property <length> drag-center;
+    in property <length> drag-height;
+    in property <bool> moving;
+    in property <bool> enabled;
+    in property <bool> divider;
+    callback lift(length);
+    callback drag(length);
+    callback drop();
+    callback move-mode();
+    callback step(int);
+    callback done();
+    callback passed-changed(bool, length);
+    out property <bool> lifted: root.dragging == root.index;
+    property <length> mid: root.y + root.height / 2;
+    out property <bool> passed: root.dragging >= 0 && !root.lifted && ((root.dragging < root.index && root.drag-center > root.mid) || (root.dragging > root.index && root.drag-center < root.mid));
+    property <length> grab;
+    property <bool> holding;
+
+    height: root.item.supporting == "" ? {{ "mobile-row-height" | tok }} : {{ "mobile-row-height-twoLine" | tok }};
+    z: root.lifted ? 2 : 0;
+
+    changed passed => {
+        shift.to(root.passed ? (root.dragging < root.index ? -root.drag-height / 1px : root.drag-height / 1px) : 0, 0);
+        root.passed-changed(root.passed, root.height);
+    }
+
+    shift := PmSpring { precision: 0.5; }
+    lift-scale := PmSpring { precision: 0.0005; value: 1; target: 1; }
+
+    Timer {
+        interval: PurrimerMotion.long-press;
+        running: root.holding;
+        triggered => {
+            root.holding = false;
+            lift-scale.to(1.02, 0);
+            root.lift(root.y + root.height / 2);
+        }
+    }
+
+    body := Rectangle {
+        y: root.lifted ? root.drag-y : root.dragging >= 0 ? shift.value * 1px : 0;
+        width: root.width;
+        height: root.height;
+        transform-scale: root.lifted ? lift-scale.value : 1;
+        border-radius: root.lifted ? {{ "borderRadius-medium" | tok }} : 0;
+        background: root.moving ? {{ "bgColor-accent-muted" | tok }} : root.lifted ? {{ "bgColor-default" | tok }} : transparent;
+        drop-shadow-blur: root.lifted ? 12px : 0;
+        drop-shadow-offset-y: root.lifted ? 4px : 0;
+        drop-shadow-color: root.lifted ? {{ "borderColor-default" | tok }} : transparent;
+
+        Rectangle {
+            visible: root.divider && !root.lifted;
+            y: 0;
+            height: 1px;
+            background: {{ "borderColor-muted" | tok }};
+        }
+
+        touch := TouchArea {
+            enabled: root.enabled && !root.moving;
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                    root.grab = self.mouse-y;
+                    root.holding = true;
+                } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                    root.holding = false;
+                    if root.lifted {
+                        lift-scale.to(1, 0);
+                        root.drop();
+                    }
+                }
+            }
+            moved => {
+                if root.holding && abs(self.mouse-y - root.grab) + abs(self.mouse-x - self.pressed-x) > PurrimerMotion.slop {
+                    root.holding = false;
+                }
+                if root.lifted {
+                    root.drag(self.mouse-y - root.grab);
+                }
+            }
+        }
+
+        HorizontalLayout {
+            padding-left: {{ "mobile-gutter" | tok }};
+            padding-right: 4px;
+            spacing: 12px;
+
+            if root.item.icon != "": Rectangle {
+                width: 32px;
+                height: 32px;
+                y: (parent.height - self.height) / 2;
+                border-radius: {{ "borderRadius-medium" | tok }};
+                background: {{ "bgColor-accent-muted" | tok }};
+                Icon { path: root.item.icon; color: {{ "fgColor-accent" | tok }}; }
+            }
+
+            VerticalLayout {
+                alignment: center;
+                Text {
+                    text: root.item.headline;
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 16px;
+                    color: {{ "fgColor-default" | tok }};
+                    overflow: elide;
+                }
+                if root.item.supporting != "": Text {
+                    text: root.item.supporting;
+                    font-family: {{ "text-body-medium" | tok }}.font-family;
+                    font-size: 14px;
+                    color: {{ "fgColor-muted" | tok }};
+                    overflow: elide;
+                }
+            }
+
+            if root.moving: HorizontalLayout {
+                alignment: end;
+                IconButton {
+                    icon: PurrimerIcons.arrow-up-16;
+                    label: "Move up";
+                    variant: "invisible";
+                    enabled: root.index > 0;
+                    clicked => { root.step(-1); }
+                }
+                IconButton {
+                    icon: PurrimerIcons.arrow-down-16;
+                    label: "Move down";
+                    variant: "invisible";
+                    enabled: root.index < root.count - 1;
+                    clicked => { root.step(1); }
+                }
+                IconButton {
+                    icon: PurrimerIcons.check-16;
+                    label: "Done";
+                    variant: "invisible";
+                    clicked => { root.done(); }
+                }
+            }
+
+            if !root.moving && root.enabled: Rectangle {
+                width: 44px;
+                accessible-role: button;
+                accessible-label: "Reorder " + root.item.headline;
+                accessible-action-default => { root.move-mode(); }
+                Icon {
+                    path: PurrimerIcons.grabber-16;
+                    color: {{ "fgColor-muted" | tok }};
+                }
+                TouchArea {
+                    property <length> start;
+                    property <length> travel;
+                    pointer-event(event) => {
+                        if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                            self.start = self.mouse-y;
+                            self.travel = 0;
+                            lift-scale.to(1.02, 0);
+                            root.lift(root.y + root.height / 2);
+                        } else if event.kind == PointerEventKind.up || event.kind == PointerEventKind.cancel {
+                            lift-scale.to(1, 0);
+                            if self.travel < 4px {
+                                root.move-mode();
+                            } else {
+                                root.drop();
+                            }
+                        }
+                    }
+                    moved => {
+                        self.travel = max(self.travel, abs(self.mouse-y - self.start));
+                        root.drag(self.mouse-y - self.start);
+                    }
+                }
+            }
+        }
+    }
+}
+
+// A list people put in their own order. Holding a row, or pressing its handle, lifts it to follow the finger or
+// mouse; the rows it passes slide aside and release settles the row into its gap and calls reordered(from, to). Slint
+// arrays cannot be rearranged in markup, so the app moves the row in its model in that callback (VecModel remove and
+// insert). A tap on the handle moves a row with Move up, Move down and Done buttons instead; the arrow keys, Home and
+// End move it too and Escape puts it back.
+export component ReorderList inherits FocusScope {
+    in property <[ReorderItem]> items;
+    // "inset" draws a card for settings; "plain" runs edge to edge.
+    in property <string> variant: "inset";
+    in property <bool> disabled;
+    in property <string> accessible-name;
+    callback reordered(int, int);
+    out property <int> moving: -1;
+    property <int> moving-start: -1;
+    property <int> dragging: -1;
+    property <length> drag-base;
+    property <length> drag-height;
+    property <length> passed-height;
+    property <int> passed-down;
+    property <int> passed-up;
+    property <int> target: root.dragging + root.passed-down - root.passed-up;
+    property <bool> inset: root.variant == "inset";
+
+    accessible-role: list;
+    accessible-label: root.accessible-name;
+    accessible-description: root.moving >= 0 && root.moving < root.items.length ? "Moving " + root.items[root.moving].headline + ", position " + (root.moving + 1) + " of " + root.items.length : "";
+
+    function step-to(to: int) {
+        if to >= 0 && to < root.items.length && to != root.moving {
+            root.reordered(root.moving, to);
+            root.moving = to;
+        }
+    }
+
+    key-pressed(event) => {
+        if root.moving < 0 {
+            return reject;
+        }
+        if event.text == Key.UpArrow {
+            root.step-to(root.moving - 1);
+        } else if event.text == Key.DownArrow {
+            root.step-to(root.moving + 1);
+        } else if event.text == Key.Home {
+            root.step-to(0);
+        } else if event.text == Key.End {
+            root.step-to(root.items.length - 1);
+        } else if event.text == Key.Escape {
+            root.step-to(root.moving-start);
+            root.moving = -1;
+        } else if event.text == Key.Return || event.text == " " {
+            root.moving = -1;
+        } else {
+            return reject;
+        }
+        accept
+    }
+
+    settle := PmSpring {
+        precision: 0.5;
+        settled => {
+            if root.dragging >= 0 {
+                root.finish();
+            }
+        }
+    }
+
+    function finish() {
+        let from = root.dragging;
+        let to = root.target;
+        root.dragging = -1;
+        settle.set(0);
+        if from != to {
+            root.reordered(from, to);
+        }
+    }
+
+    VerticalLayout {
+        padding-left: root.inset ? {{ "mobile-gutter" | tok }} : 0;
+        padding-right: self.padding-left;
+
+        Rectangle {
+            border-radius: root.inset ? {{ "borderRadius-large" | tok }} : 0;
+            background: {{ "bgColor-default" | tok }};
+            border-width: root.inset ? {{ "borderWidth-thin" | tok }} : 0;
+            border-color: {{ "borderColor-default" | tok }};
+
+            VerticalLayout {
+                padding: 1px;
+                for item[i] in root.items: ReorderRow {
+                    item: item;
+                    index: i;
+                    count: root.items.length;
+                    dragging: root.dragging;
+                    drag-y: settle.value * 1px;
+                    drag-center: root.drag-base + settle.value * 1px;
+                    drag-height: root.drag-height;
+                    moving: root.moving == i;
+                    enabled: !root.disabled && root.moving < 0;
+                    divider: i > 0;
+                    lift(center) => {
+                        root.drag-base = center;
+                        root.drag-height = self.height;
+                        root.passed-down = 0;
+                        root.passed-up = 0;
+                        root.passed-height = 0;
+                        settle.set(0);
+                        root.dragging = i;
+                    }
+                    drag(dy) => { settle.set(dy / 1px); }
+                    drop => {
+                        let offset = root.target > i ? root.passed-height : -root.passed-height;
+                        if PurrimerMotion.pause-loops || abs(settle.value * 1px - offset) < 0.5px {
+                            root.finish();
+                        } else {
+                            settle.to(offset / 1px, 0);
+                        }
+                    }
+                    passed-changed(on, h) => {
+                        if i > root.dragging {
+                            root.passed-down += on ? 1 : -1;
+                        } else {
+                            root.passed-up += on ? 1 : -1;
+                        }
+                        root.passed-height += on ? h : -h;
+                    }
+                    move-mode => {
+                        root.moving = i;
+                        root.moving-start = i;
+                        root.focus();
+                    }
+                    step(d) => { root.step-to(i + d); }
+                    done => { root.moving = -1; }
+                }
+            }
+        }
+    }
+}

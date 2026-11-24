@@ -1,0 +1,425 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+import math
+
+from PySide6.QtCore import QEasingCurve, QElapsedTimer, QEvent, QPointF, QRectF, QSize, Qt, QTimer, QVariantAnimation, Signal
+from PySide6.QtGui import QFont, QPainter, QPen, QPixmap
+from PySide6.QtWidgets import QAbstractButton, QPinchGesture, QSizePolicy, QWidget
+
+from ..icons import paint_icon
+from ..motion import PressFeedback, Spring
+from ..theme import theme
+
+DISMISS = 96
+FLICK = 0.6
+BUTTON = {{ px("touch-target-min") | int }}
+BAR = 24 + BUTTON + 8
+
+
+class _StageButton(QAbstractButton):
+    """A round button on the dark stage; armed fills it, for the close button past the dismiss point."""
+
+    def __init__(self, icon: str, label: str, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.icon_name = icon
+        self.armed = False
+        self.setAccessibleName(label)
+        self.setToolTip(label)
+        self.setFixedSize(BUTTON, BUTTON)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self._press = PressFeedback(self)
+        self.pressed.connect(self._press.press)
+        self.released.connect(self._press.release)
+
+    def sizeHint(self) -> QSize:
+        return QSize(BUTTON, BUTTON)
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        p.setOpacity(1.0 if self.isEnabled() else 0.4)
+        scale = self._press.scale
+        p.translate(self.width() / 2, self.height() / 2)
+        p.scale(scale, scale)
+        p.translate(-self.width() / 2, -self.height() / 2)
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        if self.armed:
+            p.setPen(QPen(theme.color({{ "media-stage-control-bgColor-armed" | tok }}), {{ px("borderWidth-thin") | num }}))
+            p.setBrush(theme.color({{ "media-stage-control-bgColor-armed" | tok }}))
+        else:
+            p.setPen(QPen(theme.color({{ "media-stage-control-borderColor" | tok }}), {{ px("borderWidth-thin") | num }}))
+            p.setBrush(theme.color({{ "media-stage-control-bgColor" | tok }}))
+        p.drawEllipse(rect)
+        ink = {{ "media-stage-control-fgColor-armed" | tok }} if self.armed else {{ "media-stage-fgColor" | tok }}
+        paint_icon(p, QRectF(self.width() / 2 - 8, self.height() / 2 - 8, 16, 16), self.icon_name, theme.color(ink))
+        if self.hasFocus():
+            p.setPen(QPen(theme.color({{ "media-stage-focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawEllipse(QRectF(self.rect()).adjusted(-3, -3, 3, 3))
+
+
+class ImageViewer(QWidget):
+    """A photo on a dark stage. Pinch or double-click to zoom (2.5x around the point, or back to fit), drag to look
+    around when zoomed, and drag down at fit to close: past 96px the close button fills, and release or a flick closes.
+    Ctrl and the wheel, or a trackpad pinch, zoom around the pointer; the wheel pans when zoomed. With the viewer
+    focused, Plus and Minus zoom, 0 fits, the arrow keys pan and Escape closes.
+
+    Call `open()` to show it over its window, or pass inline=True to place it in a layout like any widget. `closed` is
+    emitted when people close it; set closable=False to leave out the close button and the drag to close.
+    """
+
+    closed = Signal()
+
+    def __init__(self, image: QPixmap | str, alt: str, caption: str = "", inline: bool = False, max_scale: float = 4.0,
+                 closable: bool = True, labels: dict[str, str] | None = None, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        labels = labels or {}
+        self.pixmap = image if isinstance(image, QPixmap) else QPixmap(image)
+        self.alt = alt
+        self.caption = caption
+        self.inline = inline
+        self.max_scale = max_scale
+        self.closable = closable
+        name = alt or labels.get("image", "Image")
+        self.setAccessibleName(name)
+        self.setAccessibleDescription(labels.get("stage", "{name}. Plus and minus zoom, arrow keys move.").replace("{name}", name))
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.setMinimumHeight(320)
+        self.grabGesture(Qt.GestureType.PinchGesture)
+        self.setCursor(Qt.CursorShape.CrossCursor)
+        self._s = Spring(1.0, precision=0.001, parent=self)
+        self._x = Spring(0.0, precision=0.5, parent=self)
+        self._y = Spring(0.0, precision=0.5, parent=self)
+        for spring in (self._s, self._x, self._y):
+            spring.changed.connect(self._changed)
+        self._dismiss_scale = 1.0
+        self._backdrop = 1.0
+        self._fade = QVariantAnimation(self)
+        self._fade.setStartValue(0.0)
+        self._fade.setEndValue(1.0)
+        self._fade.valueChanged.connect(lambda _v: self.update())
+        self._fade.finished.connect(self._faded)
+        self._closing = False
+        self._drag: dict | None = None
+        self._pinch: tuple[float, float, float] | None = None
+        self._settle_timer = QTimer(self)
+        self._settle_timer.setSingleShot(True)
+        self._settle_timer.setInterval(120)
+        self._settle_timer.timeout.connect(self._settle)
+        self._before: QWidget | None = None
+        self._font = QFont(theme.font({{ "text-body-medium" | tok }}))
+        self._font.setPixelSize(14)
+        self._close = _StageButton("x", labels.get("close", "Close"), self)
+        self._close.clicked.connect(self.close_viewer)
+        self._close.setVisible(closable)
+        self._zoom_out = _StageButton("dash", labels.get("zoom_out", "Zoom out"), self)
+        self._zoom_out.clicked.connect(lambda: self.zoom_by(1 / 1.5))
+        self._zoom_in = _StageButton("plus", labels.get("zoom_in", "Zoom in"), self)
+        self._zoom_in.clicked.connect(lambda: self.zoom_by(1.5))
+        self._sync_buttons()
+        theme.changed.connect(self.update)
+        if not inline:
+            self.hide()
+
+    @property
+    def scale(self) -> float:
+        return self._s.value
+
+    def sizeHint(self) -> QSize:
+        return QSize(390, 520)
+
+    def open(self) -> None:
+        """Shows the viewer over its window, fading the stage in, and moves focus to Close."""
+        if self.inline:
+            return
+        window = (self.parentWidget() or self).window()
+        self._before = window.focusWidget()
+        if self.parentWidget() is not window:
+            self.setParent(window)
+        window.installEventFilter(self)
+        self.setGeometry(window.rect())
+        self._reset(animate=False)
+        self._closing = False
+        self._fade.setDirection(QVariantAnimation.Direction.Forward)
+        self._fade.setEasingCurve(QEasingCurve.Type.OutCubic)
+        self._fade.setDuration(0 if theme.pause_loops else {{ ms("duration-slow") }})
+        self.show()
+        self.raise_()
+        self._fade.start()
+        (self._close if self.closable else self).setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def close_viewer(self) -> None:
+        """Fades the viewer out and emits `closed`; an inline viewer settles back to fit and stays."""
+        if self._closing:
+            return
+        self.closed.emit()
+        if self.inline:
+            self._reset(animate=True)
+            return
+        self._closing = True
+        self._fade.setDirection(QVariantAnimation.Direction.Backward)
+        self._fade.setDuration(0 if theme.pause_loops else {{ ms("duration-sleepy-exit") }})
+        self._fade.start()
+
+    def _faded(self) -> None:
+        if not self._closing:
+            return
+        self._closing = False
+        self.hide()
+        self._reset(animate=False)
+        self.window().removeEventFilter(self)
+        if self._before is not None:
+            self._before.setFocus(Qt.FocusReason.PopupFocusReason)
+
+    def zoom_by(self, factor: float) -> None:
+        self._zoom_to(max(1.0, min(self.max_scale, self._s.target * factor)), QPointF(), animate=True)
+
+    def eventFilter(self, watched, event) -> bool:
+        if event.type() == QEvent.Type.Resize and self.isVisible() and not self.inline:
+            self.setGeometry(watched.rect())
+        return False
+
+    def _changed(self, _value: float) -> None:
+        self._sync_buttons()
+        self.update()
+
+    def _sync_buttons(self) -> None:
+        self._zoom_out.setEnabled(self._s.target > 1.01)
+        self._zoom_in.setEnabled(self._s.target < self.max_scale - 0.01)
+
+    def _stage(self) -> QRectF:
+        return QRectF(self.rect())
+
+    def _fit(self) -> QRectF:
+        stage = self._stage()
+        if self.pixmap.isNull():
+            return QRectF()
+        k = min(stage.width() / self.pixmap.width(), stage.height() / self.pixmap.height())
+        w, h = self.pixmap.width() * k, self.pixmap.height() * k
+        return QRectF(stage.center().x() - w / 2, stage.center().y() - h / 2, w, h)
+
+    def _bounds(self, s: float) -> tuple[float, float]:
+        fit, stage = self._fit(), self._stage()
+        return max(0.0, (fit.width() * s - stage.width()) / 2), max(0.0, (fit.height() * s - stage.height()) / 2)
+
+    def _from_centre(self, pos: QPointF) -> QPointF:
+        return pos - self._stage().center()
+
+    def _apply(self, s: float, x: float, y: float, animate: bool) -> None:
+        for spring, value in ((self._s, s), (self._x, x), (self._y, y)):
+            if animate:
+                spring.to(value)
+            else:
+                spring.set(value)
+        self._sync_buttons()
+
+    def _settle(self) -> None:
+        s = max(1.0, min(self.max_scale, self._s.value))
+        if s < 1.01:
+            self._apply(1.0, 0.0, 0.0, True)
+            return
+        bx, by = self._bounds(s)
+        self._apply(s, max(-bx, min(bx, self._x.value)), max(-by, min(by, self._y.value)), True)
+
+    def _reset(self, animate: bool) -> None:
+        self._dismiss_scale = 1.0
+        self._backdrop = 1.0
+        self._close.armed = False
+        self._apply(1.0, 0.0, 0.0, animate)
+
+    # Zooms to s keeping the image point under p, measured from the stage centre, where it is.
+    def _zoom_to(self, s: float, p: QPointF, animate: bool) -> None:
+        k = s / self._s.value
+        x = p.x() - (p.x() - self._x.value) * k
+        y = p.y() - (p.y() - self._y.value) * k
+        if animate:
+            self._s.set(s)
+            self._x.set(x)
+            self._y.set(y)
+            self._settle()
+        else:
+            self._apply(s, x, y, False)
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.Type.Gesture:
+            pinch = event.gesture(Qt.GestureType.PinchGesture)
+            if isinstance(pinch, QPinchGesture):
+                self._on_pinch(pinch)
+                event.accept()
+                return True
+        return super().event(event)
+
+    def _on_pinch(self, pinch: QPinchGesture) -> None:
+        centre = self._from_centre(QPointF(self.mapFromGlobal(pinch.centerPoint().toPoint())))
+        if pinch.state() == Qt.GestureState.GestureStarted or self._pinch is None:
+            s0 = self._s.value
+            self._pinch = (s0, (centre.x() - self._x.value) / s0, (centre.y() - self._y.value) / s0)
+            self._drag = None
+        s0, cx, cy = self._pinch
+        raw = s0 * pinch.totalScaleFactor()
+        s = 1 - (1 - raw) * 0.4 if raw < 1 else self.max_scale + (raw - self.max_scale) * 0.4 if raw > self.max_scale else raw
+        self._apply(s, centre.x() - cx * s, centre.y() - cy * s, False)
+        if pinch.state() in (Qt.GestureState.GestureFinished, Qt.GestureState.GestureCanceled):
+            self._pinch = None
+            self._settle()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton or self._pinch is not None:
+            return
+        self.setFocus(Qt.FocusReason.MouseFocusReason)
+        clock = QElapsedTimer()
+        clock.start()
+        self._drag = {"origin": event.position(), "tx": self._x.value, "ty": self._y.value, "mode": None,
+                      "clock": clock, "last_y": event.position().y(), "last_t": 0, "vy": 0.0, "armed": False}
+        for spring in (self._s, self._x, self._y):
+            spring.stop()
+
+    def mouseMoveEvent(self, event) -> None:
+        d = self._drag
+        if d is None:
+            return
+        delta = event.position() - d["origin"]
+        if d["mode"] is None:
+            if abs(delta.x()) < 10 and abs(delta.y()) < 10:
+                return
+            if self._s.value > 1.01:
+                d["mode"] = "pan"
+            elif abs(delta.y()) > abs(delta.x()) and self.closable:
+                d["mode"] = "dismiss"
+            else:
+                d["mode"] = "none"
+        if d["mode"] == "pan":
+            bx, by = self._bounds(self._s.value)
+            self._apply(self._s.value, _resist(d["tx"] + delta.x(), -bx, bx), _resist(d["ty"] + delta.y(), -by, by), False)
+        elif d["mode"] == "dismiss":
+            dy = delta.y()
+            k = min(1.0, abs(dy) / (DISMISS * 3))
+            self._dismiss_scale = 1 - k * 0.1
+            self._backdrop = 1 - k * 0.7
+            self._apply(1.0, 0.0, dy, False)
+            armed = abs(dy) >= DISMISS
+            if armed != d["armed"]:
+                d["armed"] = armed
+                self._close.armed = armed
+                self._close.update()
+            now = d["clock"].elapsed()
+            if now > d["last_t"]:
+                d["vy"] = (event.position().y() - d["last_y"]) / (now - d["last_t"])
+            d["last_y"], d["last_t"] = event.position().y(), now
+
+    def mouseReleaseEvent(self, event) -> None:
+        d, self._drag = self._drag, None
+        if d is None:
+            return
+        if d["mode"] == "dismiss":
+            dy = self._y.value
+            self._close.armed = False
+            self._close.update()
+            flick = abs(d["vy"]) > FLICK and (d["vy"] > 0) == (dy > 0)
+            if d["armed"] or flick:
+                self._dismiss_out(dy)
+                return
+            self._dismiss_scale = 1.0
+            self._backdrop = 1.0
+            self._apply(1.0, 0.0, 0.0, True)
+            return
+        self._settle()
+
+    def _dismiss_out(self, dy: float) -> None:
+        if not theme.pause_loops:
+            self._y.to(dy + math.copysign(self.height() * 0.5, dy or 1))
+        self.close_viewer()
+        if self.inline:
+            self._reset(animate=False)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+        self._drag = None
+        if self._s.value > 1.01:
+            self._apply(1.0, 0.0, 0.0, True)
+        else:
+            self._zoom_to(min(2.5, self.max_scale), self._from_centre(event.position()), animate=True)
+
+    def wheelEvent(self, event) -> None:
+        delta = event.pixelDelta() if not event.pixelDelta().isNull() else event.angleDelta() / 1.2
+        if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            s = max(1.0, min(self.max_scale, self._s.value * math.exp(delta.y() * 0.01)))
+            self._zoom_to(s, self._from_centre(event.position()), animate=False)
+            self._settle_timer.start()
+        elif self._s.value > 1.01:
+            bx, by = self._bounds(self._s.value)
+            self._apply(self._s.value, max(-bx, min(bx, self._x.value + delta.x())), max(-by, min(by, self._y.value + delta.y())), False)
+        event.accept()
+
+    def keyPressEvent(self, event) -> None:
+        key, text = event.key(), event.text()
+        if key == Qt.Key.Key_Escape and self.closable:
+            self.close_viewer()
+        elif text in ("+", "="):
+            self.zoom_by(1.5)
+        elif text in ("-", "_"):
+            self.zoom_by(1 / 1.5)
+        elif text == "0":
+            self._apply(1.0, 0.0, 0.0, True)
+        elif self._s.value > 1.01 and key in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down):
+            bx, by = self._bounds(self._s.value)
+            dx = 48 if key == Qt.Key.Key_Left else -48 if key == Qt.Key.Key_Right else 0
+            dy = 48 if key == Qt.Key.Key_Up else -48 if key == Qt.Key.Key_Down else 0
+            self._apply(self._s.value, max(-bx, min(bx, self._x.value + dx)), max(-by, min(by, self._y.value + dy)), True)
+        else:
+            super().keyPressEvent(event)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._close.move(self.width() - 8 - BUTTON, 8)
+        y = self.height() - 8 - BUTTON
+        self._zoom_in.move(self.width() - 8 - BUTTON, y)
+        self._zoom_out.move(self.width() - 8 - BUTTON - 4 - 48 - 4 - BUTTON, y)
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        fade = self._fade.currentValue() if self._fade.state() == QVariantAnimation.State.Running else (0.0 if self._closing else 1.0)
+        if self.inline:
+            fade = 1.0
+        p.setOpacity(fade * self._backdrop)
+        p.fillRect(self.rect(), theme.color({{ "media-stage-bgColor" | tok }}))
+        p.setOpacity(fade)
+        fit = self._fit()
+        if not fit.isNull():
+            centre = self._stage().center()
+            enter = 0.96 + 0.04 * fade if not self.inline else 1.0
+            s = self._s.value * self._dismiss_scale * enter
+            p.save()
+            p.translate(centre.x() + self._x.value, centre.y() + self._y.value)
+            p.scale(s, s)
+            p.translate(-centre.x(), -centre.y())
+            p.drawPixmap(fit, self.pixmap, QRectF(self.pixmap.rect()))
+            p.restore()
+        if self.hasFocus() and self.focusWidget() is self:
+            p.setPen(QPen(theme.color({{ "media-stage-focus-outlineColor" | tok }}), {{ px("borderWidth-thick") | num }}))
+            p.setBrush(Qt.BrushStyle.NoBrush)
+            p.drawRect(QRectF(self.rect()).adjusted(4, 4, -4, -4))
+        bar = QRectF(0, self.height() - BAR, self.width(), BAR)
+        p.fillRect(bar, theme.color({{ "media-stage-bar-bgColor" | tok }}))
+        p.setFont(self._font)
+        p.setPen(theme.color({{ "media-stage-fgColor" | tok }}))
+        pct = QRectF(self.width() - 8 - BUTTON - 4 - 48, self.height() - 8 - BUTTON, 48, BUTTON)
+        p.drawText(pct, Qt.AlignmentFlag.AlignCenter, f"{round(self._s.value * 100)}%")
+        if self.caption:
+            left = {{ px("mobile-gutter") | int }}
+            text = QRectF(left, self.height() - 8 - BUTTON, self._zoom_out.x() - left - 8, BUTTON)
+            elided = p.fontMetrics().elidedText(self.caption, Qt.TextElideMode.ElideRight, int(text.width()))
+            p.drawText(text, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft, elided)
+
+
+def _resist(v: float, lo: float, hi: float) -> float:
+    return lo - (lo - v) * 0.35 if v < lo else hi + (v - hi) * 0.35 if v > hi else v

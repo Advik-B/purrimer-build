@@ -1,0 +1,118 @@
+// {{ note }}
+// {{ c.summary }}
+import { Purrimer, PurrimerMotion, PmSpring } from "../purrimer.slint";
+import { PurrimerIcons } from "../icons.slint";
+import { AppBar, AppBarAction } from "app-bar.slint";
+import { BottomNav, BottomNavItem } from "bottom-nav.slint";
+import { Button } from "button.slint";
+import { FAB } from "fab.slint";
+import { Icon } from "icon.slint";
+import { KeyboardFooter } from "keyboard-footer.slint";
+
+// One phone screen. Slint has one child slot, so the screen draws its own AppBar (title, large, back, actions),
+// BottomNav (nav-items), FAB (fab-icon, fab-label, fab-extended) and KeyboardFooter (footer-label); the children are
+// the scrolling body. Its scroll elevates the bar, shrinks a large title over the first 48px and folds an extended
+// FAB while scrolling down. With refreshable, pulling down at the top calls refresh(); call finish-refresh() when
+// it is done.
+export component MobileScreen inherits Rectangle {
+    in property <string> title;
+    in property <bool> large;
+    in property <bool> back;
+    in property <[AppBarAction]> actions;
+    in property <[BottomNavItem]> nav-items;
+    in-out property <int> nav-selected;
+    // 24px path commands, such as PurrimerIcons.pencil-24; empty hides the FAB.
+    in property <string> fab-icon;
+    in property <string> fab-label;
+    in property <bool> fab-extended;
+    // The primary action in a KeyboardFooter; empty hides the footer.
+    in property <string> footer-label;
+    // "inset" paints the body bgColor-inset, for settings and forms.
+    in property <string> surface: "default";
+    in property <bool> refreshable;
+    out property <bool> refreshing;
+    callback back-clicked();
+    callback action-clicked(int);
+    callback nav-activated(int);
+    callback fab-clicked();
+    callback footer-clicked();
+    callback refresh();
+    property <length> last-y;
+    property <bool> folded;
+    property <length> scrolled: -body.content-y;
+    property <length> pulled: root.refreshing ? 48px : Math.max(0px, body.content-y / 2);
+
+    public function finish-refresh() {
+        root.refreshing = false;
+    }
+
+    background: root.surface == "inset" ? {{ "bgColor-inset" | tok }} : {{ "bgColor-default" | tok }};
+
+    VerticalLayout {
+        bar := AppBar {
+            title: root.title;
+            large: root.large;
+            back: root.back;
+            actions: root.actions;
+            elevated: root.scrolled > 0;
+            collapse: root.scrolled / 48px;
+            back-clicked => { root.back-clicked(); }
+            action-clicked(i) => { root.action-clicked(i); }
+        }
+        body := Flickable {
+            vertical-stretch: 1;
+            content-height: Math.max(self.height, content.preferred-height + (root.nav-items.length > 0 || root.footer-label != "" ? 16px : 96px));
+            flicked => {
+                if Math.abs(root.scrolled - root.last-y) > 4px {
+                    root.folded = root.scrolled > root.last-y && root.scrolled > 0;
+                    root.last-y = root.scrolled;
+                }
+                if root.refreshable && !root.refreshing && self.content-y / 2 >= 64px {
+                    root.refreshing = true;
+                    root.refresh();
+                }
+            }
+            content := VerticalLayout {
+                alignment: start;
+                @children
+            }
+        }
+        if root.footer-label != "": KeyboardFooter {
+            Button { text: root.footer-label; variant: "primary"; clicked => { root.footer-clicked(); } }
+        }
+        if root.nav-items.length > 0: BottomNav {
+            items: root.nav-items;
+            selected <=> root.nav-selected;
+            show-labels: true;
+            activated(i) => { root.nav-activated(i); }
+        }
+    }
+
+    if root.refreshable && root.pulled > 1px: Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: bar.height + root.pulled - 44px;
+        width: 36px;
+        height: 36px;
+        border-radius: 18px;
+        opacity: Math.min(1, root.pulled / 32px);
+        background: {{ "overlay-bgColor" | tok }};
+        drop-shadow-offset-y: {{ "shadow-floating-small" | tok }}.offset-y;
+        drop-shadow-blur: {{ "shadow-floating-small" | tok }}.blur;
+        drop-shadow-color: {{ "shadow-floating-small" | tok }}.color;
+        Icon {
+            path: root.refreshing ? PurrimerIcons.sync-16 : PurrimerIcons.arrow-down-16;
+            color: {{ "fgColor-accent" | tok }};
+            transform-rotation: root.refreshing ? Math.mod(PurrimerMotion.loop-tick / 1600ms, 1) * 360deg : root.pulled >= 64px ? 180deg : 0deg;
+        }
+    }
+
+    if root.fab-icon != "": FAB {
+        x: parent.width - self.width - {{ "mobile-gutter" | tok }};
+        y: body.y + body.height - self.height - 16px;
+        icon: root.fab-icon;
+        label: root.fab-label;
+        extended: root.fab-extended;
+        folded: root.folded;
+        clicked => { root.fab-clicked(); }
+    }
+}

@@ -1,0 +1,55 @@
+// {{ note }}
+// {{ c.summary }}
+import { Show, onCleanup, onSettled } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { Icon } from "./Icon";
+import { wireMobileScreen } from "../motion";
+
+export type MobileScreenProps = {
+  surface?: "default" | "inset";
+  // Turns on pull to refresh. Resolve the promise when the refresh ends.
+  onRefresh?: () => Promise<unknown> | void;
+  appBar?: JSX.Element;
+  bottomNav?: JSX.Element;
+  fab?: JSX.Element;
+  // A KeyboardFooter for the screen's primary action.
+  footer?: JSX.Element;
+  // BottomSheets and Snackbars.
+  overlays?: JSX.Element;
+  children?: JSX.Element;
+};
+
+export function MobileScreen(props: MobileScreenProps): JSX.Element {
+  let screen: HTMLDivElement | undefined;
+  let body: HTMLDivElement | undefined;
+  let content: HTMLDivElement | undefined;
+  let pull: HTMLDivElement | undefined;
+
+  let unwire: (() => void) | undefined;
+  onSettled(() => {
+    if (!screen || !body || !content) return;
+    unwire = wireMobileScreen({ screen, body, content, pull, onRefresh: props.onRefresh ? () => props.onRefresh?.() : undefined });
+  });
+  onCleanup(() => unwire?.());
+
+  const classes = () =>
+    ["pm-mobile-screen", props.surface === "inset" && "pm-mobile-screen--inset", props.bottomNav && "pm-mobile-screen--has-nav", props.footer && "pm-mobile-screen--has-footer"]
+      .filter(Boolean)
+      .join(" ");
+
+  return (
+    <div ref={screen} class={classes()} data-density="touch">
+      <Show when={props.appBar}><div class="pm-mobile-screen__bar">{props.appBar}</div></Show>
+      <div ref={body} class="pm-mobile-screen__body">
+        <Show when={props.onRefresh}>
+          <div ref={pull} class="pm-mobile-screen__pull" aria-hidden="true"><Icon name="arrow-down" /></div>
+        </Show>
+        <div ref={content} class="pm-mobile-screen__content">{props.children}</div>
+      </div>
+      {props.footer}
+      <Show when={props.fab}><div class="pm-mobile-screen__fab">{props.fab}</div></Show>
+      <Show when={props.bottomNav}><div class="pm-mobile-screen__nav">{props.bottomNav}</div></Show>
+      {props.overlays}
+    </div>
+  );
+}

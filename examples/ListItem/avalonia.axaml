@@ -3,5 +3,13 @@
   <StackPanel>
     <pm:ListItem IconName="bell" Headline="Notifications" Supporting="Mentions and replies" Trailing="On" ShowChevron="True" />
     <pm:ListItem IconName="globe" Headline="Language" Trailing="English" />
+    <pm:ListItem IconName="mail" Headline="Weekly digest" Trailing="Mon">
+      <pm:ListItem.SwipeStart>
+        <pm:ListItemSwipeAction Label="Mark as read" IconName="check" Tone="accent" />
+      </pm:ListItem.SwipeStart>
+      <pm:ListItem.SwipeEnd>
+        <pm:ListItemSwipeAction Label="Archive" IconName="archive" Tone="success" />
+      </pm:ListItem.SwipeEnd>
+    </pm:ListItem>
   </StackPanel>
 </UserControl>

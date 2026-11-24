@@ -1,12 +1,13 @@
 name = "BottomNav"
 group = "Mobile"
-order = 51
-summary = "Three to five destinations at the bottom of the screen, marked by a bar on top."
+order = 52
+summary = "Three to five destinations at the bottom of the screen, marked by a bar on top that people can scrub across."
+web_exports = ["type BottomNavItem"]
 
 [props.items]
 type = "list"
 default = []
-doc = "Items with icon, label and an optional badge count."
+doc = "Three to five items: icon, label, an optional activeIcon, and a badge count or dot."
 
 [props.selected]
 type = "int"

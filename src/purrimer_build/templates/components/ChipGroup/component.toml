@@ -1,0 +1,35 @@
+name = "ChipGroup"
+group = "Mobile"
+order = 60
+summary = "A row of filter chips that narrow what a screen shows; one or several can be on."
+slint_exports = ["ChipGroup", "ChipGroupOption"]
+
+[props.options]
+type = "list"
+default = []
+doc = "Options: { value, label, icon?, count?, disabled? }."
+
+[props.value]
+type = "list"
+default = []
+doc = "Values that are on. Single choice starts with the first option on."
+
+[props.multiple]
+type = "bool"
+default = false
+doc = "Lets several chips be on at once."
+
+[props.allowEmpty]
+type = "bool"
+default = false
+doc = "Lets a single choice be turned off."
+
+[props.wrap]
+type = "bool"
+default = false
+doc = "Wraps onto several lines instead of scrolling sideways."
+
+[props.ariaLabel]
+type = "string"
+default = ""
+doc = "Accessible name of the group."

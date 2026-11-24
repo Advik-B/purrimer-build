@@ -1,0 +1,1708 @@
+// {{ note }}
+// Springs and gesture helpers for the touch layer. Direct manipulation follows the pointer with no easing;
+// releases hand the pointer's velocity to a spring that settles on the current motion kind.
+
+export type MotionKind = "sleepy" | "playful";
+
+export interface SpringConfig {
+  stiffness: number;
+  damping: number;
+}
+
+// Sleepy is critically damped (no overshoot); playful overshoots by about a tenth and settles.
+export const springs: Record<MotionKind, SpringConfig> = {
+  sleepy: { stiffness: 180, damping: 26.8 },
+  playful: { stiffness: 380, damping: 23.4 },
+};
+
+export function motionKind(el: Element | null): MotionKind {
+  const scope = el?.closest("[data-motion]");
+  return scope?.getAttribute("data-motion") === "playful" ? "playful" : "sleepy";
+}
+
+export function reducedMotion(): boolean {
+  return typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+// A one-dimensional spring. onFrame receives every value, including the final one.
+export class Spring {
+  value: number;
+  velocity = 0;
+  target: number;
+  private frame = 0;
+  private last = 0;
+  private pending: (() => void)[] = [];
+
+  constructor(
+    value: number,
+    private onFrame: (value: number) => void,
+    public config: SpringConfig = springs.sleepy,
+    private precision = 0.01,
+  ) {
+    this.value = value;
+    this.target = value;
+  }
+
+  get moving(): boolean {
+    return this.frame !== 0;
+  }
+
+  // Runs once, when the current motion comes to rest. stop() and set() drop it.
+  onSettleOnce(fn: () => void): void {
+    this.pending.push(fn);
+    if (!this.frame && this.value === this.target && this.velocity === 0) this.settle();
+  }
+
+  set(value: number): void {
+    this.stop();
+    this.value = value;
+    this.target = value;
+    this.velocity = 0;
+    this.onFrame(value);
+  }
+
+  to(target: number, velocity?: number): void {
+    this.target = target;
+    if (velocity !== undefined) this.velocity = velocity;
+    if (reducedMotion() || typeof requestAnimationFrame !== "function") {
+      const pending = this.pending;
+      this.set(target);
+      this.pending = pending;
+      this.settle();
+      return;
+    }
+    if (!this.frame) {
+      this.last = performance.now();
+      this.frame = requestAnimationFrame(this.step);
+    }
+  }
+
+  stop(): void {
+    if (this.frame) cancelAnimationFrame(this.frame);
+    this.frame = 0;
+    this.pending = [];
+  }
+
+  private settle(): void {
+    const pending = this.pending;
+    this.pending = [];
+    for (const fn of pending) fn();
+  }
+
+  private step = (now: number): void => {
+    let dt = Math.min((now - this.last) / 1000, 0.064);
+    this.last = now;
+    const { stiffness, damping } = this.config;
+    while (dt > 0) {
+      const h = Math.min(dt, 1 / 240);
+      const accel = -stiffness * (this.value - this.target) - damping * this.velocity;
+      this.velocity += accel * h;
+      this.value += this.velocity * h;
+      dt -= h;
+    }
+    if (Math.abs(this.value - this.target) < this.precision && Math.abs(this.velocity) < this.precision * 10) {
+      this.frame = 0;
+      this.value = this.target;
+      this.velocity = 0;
+      this.onFrame(this.value);
+      this.settle();
+      return;
+    }
+    this.onFrame(this.value);
+    this.frame = requestAnimationFrame(this.step);
+  };
+}
+
+// Resistance past an edge: the further the drag, the less the content moves.
+export function rubberBand(overshoot: number, dimension: number, constant = 0.55): number {
+  if (dimension <= 0) return 0;
+  const sign = Math.sign(overshoot);
+  const d = Math.abs(overshoot);
+  return sign * (1 - 1 / ((d * constant) / dimension + 1)) * dimension;
+}
+
+// Where a flick would come to rest, given its velocity in px/s.
+export function project(velocity: number, deceleration = 0.998): number {
+  return ((velocity / 1000) * deceleration) / (1 - deceleration);
+}
+
+// Pointer velocity over the last 100ms, in px/s.
+export class VelocityTracker {
+  private samples: { t: number; x: number; y: number }[] = [];
+
+  add(x: number, y: number, t = performance.now()): void {
+    this.samples.push({ t, x, y });
+    while (this.samples.length > 2 && t - this.samples[0].t > 100) this.samples.shift();
+  }
+
+  reset(): void {
+    this.samples = [];
+  }
+
+  velocity(): { x: number; y: number } {
+    if (this.samples.length < 2) return { x: 0, y: 0 };
+    const a = this.samples[0];
+    const b = this.samples[this.samples.length - 1];
+    const dt = (b.t - a.t) / 1000;
+    return dt > 0 ? { x: (b.x - a.x) / dt, y: (b.y - a.y) / dt } : { x: 0, y: 0 };
+  }
+}
+
+// Light haptic tick on devices that support it.
+export function buzz(ms = 8): void {
+  // Browsers refuse (and log) vibration before the person has interacted with the page.
+  const activation = typeof navigator !== "undefined" ? (navigator as Navigator & { userActivation?: { hasBeenActive: boolean } }).userActivation : undefined;
+  if (activation && !activation.hasBeenActive) return;
+  if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+    try {
+      navigator.vibrate(ms);
+    } catch {
+      // Some browsers refuse vibration outside a user gesture.
+    }
+  }
+}
+
+export interface ScreenParts {
+  screen: HTMLElement;
+  body: HTMLElement;
+  content: HTMLElement;
+  pull?: HTMLElement | null;
+  // Turns on pull to refresh. Resolve the promise when the refresh ends.
+  onRefresh?: () => Promise<unknown> | void;
+}
+
+const PULL_ARM = 64;
+const PULL_HOLD = 48;
+
+// Wires a MobileScreen: the body's scroll sets --pm-scroll-p and the --scrolled and --down modifiers on the screen
+// without re-rendering it, and a pull down at the top of the body refreshes. Returns a cleanup function.
+export function wireMobileScreen(parts: ScreenParts): () => void {
+  const { screen, body, content } = parts;
+  let last = body.scrollTop;
+  let frame = 0;
+  const onScroll = () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      const top = body.scrollTop;
+      screen.style.setProperty("--pm-scroll-p", String(Math.min(1, Math.max(0, top / 48))));
+      screen.classList.toggle("pm-mobile-screen--scrolled", top > 0);
+      if (Math.abs(top - last) > 4) {
+        screen.classList.toggle("pm-mobile-screen--down", top > last && top > 0);
+        last = top;
+      }
+    });
+  };
+  body.addEventListener("scroll", onScroll, { passive: true });
+  onScroll();
+
+  let pulled = 0;
+  let busy = false;
+  let start: { y: number; armed: boolean } | null = null;
+  const show = (v: number) => {
+    pulled = v;
+    content.style.transform = v ? `translateY(${v}px)` : "";
+    parts.pull?.style.setProperty("--pm-pull", `${v}px`);
+  };
+  const spring = new Spring(0, show, springs.sleepy, 0.5);
+  const begin = (y: number) => {
+    if (!parts.onRefresh || busy || body.scrollTop > 0) return;
+    spring.stop();
+    start = { y: y - pulled * 2, armed: pulled >= PULL_ARM };
+  };
+  const move = (y: number, e: Event) => {
+    if (!start) return;
+    const dy = y - start.y;
+    if (dy <= 0 && pulled === 0) {
+      start = null;
+      return;
+    }
+    if (e.cancelable) e.preventDefault();
+    body.classList.add("pm-mobile-screen__body--pulling");
+    const next = Math.max(0, dy / 2);
+    const armed = next >= PULL_ARM;
+    if (armed !== start.armed) {
+      start.armed = armed;
+      parts.pull?.classList.toggle("pm-mobile-screen__pull--armed", armed);
+      if (armed) buzz();
+    }
+    show(next);
+  };
+  const end = () => {
+    if (!start) return;
+    start = null;
+    body.classList.remove("pm-mobile-screen__body--pulling");
+    spring.config = springs[motionKind(screen)];
+    if (pulled >= PULL_ARM && parts.onRefresh) {
+      busy = true;
+      parts.pull?.classList.remove("pm-mobile-screen__pull--armed");
+      parts.pull?.classList.add("pm-mobile-screen__pull--busy");
+      spring.to(PULL_HOLD);
+      Promise.resolve(parts.onRefresh()).finally(() => {
+        busy = false;
+        parts.pull?.classList.remove("pm-mobile-screen__pull--busy");
+        spring.to(0);
+      });
+    } else {
+      parts.pull?.classList.remove("pm-mobile-screen__pull--armed");
+      spring.to(0);
+    }
+  };
+  const touchStart = (e: TouchEvent) => begin(e.touches[0].clientY);
+  const touchMove = (e: TouchEvent) => move(e.touches[0].clientY, e);
+  // A mouse drags like a finger, so the gesture works the same at a desk.
+  const mouseDown = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.button > 0) return;
+    begin(e.clientY);
+  };
+  const mouseMove = (e: PointerEvent) => e.pointerType === "mouse" && move(e.clientY, e);
+  body.addEventListener("touchstart", touchStart, { passive: true });
+  body.addEventListener("touchmove", touchMove, { passive: false });
+  body.addEventListener("touchend", end);
+  body.addEventListener("touchcancel", end);
+  body.addEventListener("pointerdown", mouseDown);
+  window.addEventListener("pointermove", mouseMove);
+  window.addEventListener("pointerup", end);
+
+  return () => {
+    cancelAnimationFrame(frame);
+    spring.stop();
+    body.removeEventListener("scroll", onScroll);
+    body.removeEventListener("touchstart", touchStart);
+    body.removeEventListener("touchmove", touchMove);
+    body.removeEventListener("touchend", end);
+    body.removeEventListener("touchcancel", end);
+    body.removeEventListener("pointerdown", mouseDown);
+    window.removeEventListener("pointermove", mouseMove);
+    window.removeEventListener("pointerup", end);
+  };
+}
+
+// Keeps a KeyboardFooter above the on-screen keyboard: it moves up by exactly the height the keyboard covers, and the
+// enclosing MobileScreen's body gains the same room (--pm-kb) so the focused field can scroll into view.
+export function wireKeyboardFooter(footer: HTMLElement): () => void {
+  const viewport = typeof window !== "undefined" ? window.visualViewport : null;
+  if (!viewport) return () => {};
+  const screen = footer.closest<HTMLElement>(".pm-mobile-screen");
+  const update = () => {
+    const cover = Math.max(0, Math.round(window.innerHeight - viewport.height - viewport.offsetTop));
+    footer.style.translate = cover ? `0 ${-cover}px` : "";
+    screen?.style.setProperty("--pm-kb", `${cover}px`);
+  };
+  viewport.addEventListener("resize", update);
+  viewport.addEventListener("scroll", update);
+  update();
+  return () => {
+    viewport.removeEventListener("resize", update);
+    viewport.removeEventListener("scroll", update);
+    screen?.style.removeProperty("--pm-kb");
+  };
+}
+
+// Screen transitions for MobileNavigator. Timing comes from the CSS custom properties, so motion kinds and reduced
+// motion apply without code here.
+function cssMs(el: Element, name: string, fallback: number): number {
+  const raw = getComputedStyle(el).getPropertyValue(name).trim();
+  const n = parseFloat(raw);
+  if (Number.isNaN(n)) return fallback;
+  return raw.endsWith("ms") ? n : raw.endsWith("s") ? n * 1000 : n;
+}
+
+function cssValue(el: Element, name: string, fallback: string): string {
+  return getComputedStyle(el).getPropertyValue(name).trim() || fallback;
+}
+
+// Inside a touch scope: MobileScreen, MobileNavigator and the other touch containers mark one with
+// data-density="touch", and so can the page's html element.
+export function inTouchScope(el: Element): boolean {
+  return el.closest('[data-density="touch"]') !== null;
+}
+
+// How long a released drag takes to spring back, from the motion kind in scope.
+export function settleMs(el: Element): number {
+  return reducedMotion() ? cssMs(el, "--duration-reduced", 120) : cssMs(el, "--pm-settle-dur", 360);
+}
+
+// Shrinks an element's height to nothing and resolves when it has; at once with reduced motion.
+export function collapseHeight(el: HTMLElement): Promise<void> {
+  el.style.overflow = "hidden";
+  const duration = reducedMotion() ? 0 : cssMs(el, "--duration-base", 200);
+  if (duration <= 0 || typeof el.animate !== "function") {
+    el.style.height = "0px";
+    return Promise.resolve();
+  }
+  const anim = el.animate([{ height: `${el.offsetHeight}px` }, { height: "0px" }], {
+    duration,
+    easing: cssValue(el, "--easing-standard", "ease"),
+    fill: "forwards",
+  });
+  return anim.finished.then(
+    () => undefined,
+    () => undefined,
+  );
+}
+
+export function screenTiming(el: Element): { duration: number; easing: string; reduced: boolean } {
+  const reduced = reducedMotion();
+  const playful = motionKind(el) === "playful";
+  if (reduced) return { duration: cssMs(el, "--duration-reduced", 120), easing: "linear", reduced };
+  return {
+    duration: cssMs(el, playful ? "--duration-playful-screen" : "--duration-sleepy-screen", 360),
+    easing: cssValue(el, playful ? "--easing-playful-snap" : "--easing-sleepy-enter", "ease-out"),
+    reduced,
+  };
+}
+
+// Slides incoming over outgoing (push) or outgoing off over incoming (pop). from is the progress to start at, for a
+// pop that an edge swipe has already carried part of the way.
+export function slideScreens(
+  root: Element,
+  kind: "push" | "pop",
+  incoming: HTMLElement,
+  outgoing: HTMLElement,
+  from = 0,
+): Promise<void> {
+  const { duration, easing, reduced } = screenTiming(root);
+  if (typeof incoming.animate !== "function") return Promise.resolve();
+  const opts: KeyframeAnimationOptions = { duration: duration * (1 - from), easing, fill: "both" };
+  const dim = (el: HTMLElement) => el.querySelector<HTMLElement>(":scope > .pm-navigator__dim");
+  const anims: Animation[] = [];
+  if (reduced) {
+    const fading = kind === "push" ? incoming : outgoing;
+    anims.push(fading.animate([{ opacity: kind === "push" ? 0 : 1 }, { opacity: kind === "push" ? 1 : 0 }], opts));
+  } else if (kind === "push") {
+    anims.push(incoming.animate([{ translate: "100% 0" }, { translate: "0 0" }], opts));
+    anims.push(outgoing.animate([{ translate: "0 0" }, { translate: "-30% 0" }], opts));
+    const d = dim(outgoing);
+    if (d) anims.push(d.animate([{ opacity: 0 }, { opacity: 1 }], opts));
+  } else {
+    const p = from * 100;
+    anims.push(outgoing.animate([{ translate: `${p}% 0` }, { translate: "100% 0" }], opts));
+    anims.push(incoming.animate([{ translate: `${-30 + 30 * from}% 0` }, { translate: "0 0" }], opts));
+    const d = dim(incoming);
+    if (d) anims.push(d.animate([{ opacity: 1 - from }, { opacity: 0 }], opts));
+  }
+  return Promise.all(anims.map((a) => a.finished.catch(() => undefined))).then(() => {
+    for (const a of anims) a.cancel();
+  });
+}
+
+export function fadeScreens(root: Element, incoming: HTMLElement): Promise<void> {
+  if (typeof incoming.animate !== "function") return Promise.resolve();
+  const duration = reducedMotion() ? cssMs(root, "--duration-reduced", 120) : cssMs(root, "--duration-screen-fade", 200);
+  const a = incoming.animate([{ opacity: 0 }, { opacity: 1 }], { duration, easing: "ease-out" });
+  return a.finished.then(() => undefined).catch(() => undefined);
+}
+
+export interface EdgeSwipe {
+  root: HTMLElement;
+  // The pushed screen and the one under it, or null when there is nothing to go back to.
+  screens: () => { top: HTMLElement; below: HTMLElement } | null;
+  onCommit: (progress: number) => void;
+}
+
+// A swipe from the leading edge drags the pushed screen back one to one. Past 35% of the width, or on a flick, it
+// commits; earlier it settles where it was. A vertical drag is left to scrolling.
+export function wireEdgeSwipe(edge: HTMLElement, opts: EdgeSwipe): () => void {
+  type Pair = { top: HTMLElement; below: HTMLElement };
+  let drag: (Pair & { x: number; y: number; id: number; armed: boolean; live: boolean }) | null = null;
+  const tracker = new VelocityTracker();
+  const mark = () => opts.root.querySelector<HTMLElement>(":scope > .pm-navigator__back-mark");
+  const dimOf = (el: HTMLElement) => el.querySelector<HTMLElement>(":scope > .pm-navigator__dim");
+  const apply = (pair: Pair, p: number) => {
+    pair.top.style.translate = `${p * 100}% 0`;
+    pair.below.style.translate = `${-30 + 30 * p}% 0`;
+    const d = dimOf(pair.below);
+    if (d) d.style.opacity = String(1 - p);
+    const m = mark();
+    if (m) {
+      m.style.opacity = String(Math.min(1, p * 4));
+      m.style.translate = `${Math.min(p * opts.root.clientWidth, 48)}px 0`;
+    }
+  };
+  const reset = (pair: Pair, hideBelow: boolean) => {
+    pair.top.style.translate = "";
+    pair.below.style.translate = "";
+    if (hideBelow) pair.below.hidden = true;
+    const d = dimOf(pair.below);
+    if (d) d.style.opacity = "";
+    const m = mark();
+    if (m) {
+      m.style.opacity = "";
+      m.style.translate = "";
+      m.classList.remove("pm-navigator__back-mark--armed");
+    }
+  };
+  const down = (e: PointerEvent) => {
+    const pair = opts.screens();
+    if (!pair || e.button > 0) return;
+    drag = { ...pair, x: e.clientX, y: e.clientY, id: e.pointerId, armed: false, live: false };
+    tracker.reset();
+    tracker.add(e.clientX, e.clientY);
+    edge.setPointerCapture(e.pointerId);
+  };
+  const move = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    tracker.add(e.clientX, e.clientY);
+    const dx = e.clientX - drag.x;
+    const dy = e.clientY - drag.y;
+    if (!drag.live) {
+      if (Math.abs(dy) > 8 && Math.abs(dy) > Math.abs(dx)) {
+        drag = null;
+        return;
+      }
+      if (dx < 8) return;
+      drag.live = true;
+      drag.below.hidden = false;
+    }
+    const p = Math.min(1, Math.max(0, dx / opts.root.clientWidth));
+    const armed = p >= 0.35;
+    if (armed !== drag.armed) {
+      drag.armed = armed;
+      mark()?.classList.toggle("pm-navigator__back-mark--armed", armed);
+      if (armed) buzz();
+    }
+    apply(drag, p);
+  };
+  const up = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    const pair = drag;
+    drag = null;
+    if (!pair.live) return;
+    const p = Math.min(1, Math.max(0, (e.clientX - pair.x) / opts.root.clientWidth));
+    const v = tracker.velocity().x;
+    if (p >= 0.35 || v > 600) {
+      reset(pair, false);
+      opts.onCommit(p);
+    } else {
+      // Settle back under a spring, then hand the screens back to their rest styles.
+      const spring = new Spring(p, (value) => apply(pair, value), springs[motionKind(opts.root)], 0.002);
+      spring.to(0, v / opts.root.clientWidth);
+      spring.onSettleOnce(() => reset(pair, true));
+    }
+  };
+  edge.addEventListener("pointerdown", down);
+  edge.addEventListener("pointermove", move);
+  edge.addEventListener("pointerup", up);
+  edge.addEventListener("pointercancel", up);
+  return () => {
+    edge.removeEventListener("pointerdown", down);
+    edge.removeEventListener("pointermove", move);
+    edge.removeEventListener("pointerup", up);
+    edge.removeEventListener("pointercancel", up);
+  };
+}
+
+export interface CarouselParts {
+  track: HTMLElement;
+  dots?: HTMLElement | null;
+  onIndex: (index: number) => void;
+}
+
+// Wires a Carousel track: the page marker follows the scroll one to one, the phone ticks as each slide takes over
+// (firmer at the ends), and a mouse drag pages the track the way a finger would. Returns go(index) and a cleanup.
+export function wireCarousel(parts: CarouselParts): { go: (index: number, smooth?: boolean) => void; dispose: () => void } {
+  const { track } = parts;
+  const slides = () => Array.from(track.children) as HTMLElement[];
+  const position = () => {
+    const list = slides();
+    if (list.length < 2) return 0;
+    const step = list[1].offsetLeft - list[0].offsetLeft || 1;
+    return track.scrollLeft / step;
+  };
+  let current = -1;
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const pos = position();
+    const dots = parts.dots ? (Array.from(parts.dots.children) as HTMLElement[]) : [];
+    dots.forEach((dot, i) => dot.style.setProperty("--pm-dot", String(Math.max(0, 1 - Math.abs(pos - i)))));
+    const index = Math.round(pos);
+    if (index !== current) {
+      const first = current === -1;
+      current = index;
+      if (!first) buzz(index === 0 || index === slides().length - 1 ? 14 : 6);
+      parts.onIndex(index);
+    }
+  };
+  const onScroll = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  const go = (index: number, smooth = true) => {
+    const list = slides();
+    const slide = list[Math.max(0, Math.min(index, list.length - 1))];
+    if (!slide) return;
+    const slideBox = slide.getBoundingClientRect();
+    const trackBox = track.getBoundingClientRect();
+    const delta = slideBox.left + slideBox.width / 2 - (trackBox.left + track.clientWidth / 2);
+    track.scrollTo({ left: track.scrollLeft + delta, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
+  };
+  let drag: { x: number; left: number; id: number } | null = null;
+  const tracker = new VelocityTracker();
+  const down = (e: PointerEvent) => {
+    if (e.pointerType !== "mouse" || e.button > 0) return;
+    drag = { x: e.clientX, left: track.scrollLeft, id: e.pointerId };
+    tracker.reset();
+    tracker.add(e.clientX, 0);
+    track.setPointerCapture(e.pointerId);
+    track.classList.add("pm-carousel__track--dragging");
+  };
+  const move = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    tracker.add(e.clientX, 0);
+    track.scrollLeft = drag.left - (e.clientX - drag.x);
+  };
+  const up = (e: PointerEvent) => {
+    if (!drag || drag.id !== e.pointerId) return;
+    drag = null;
+    const v = tracker.velocity().x;
+    const target = Math.round(position() + (Math.abs(v) > 300 ? -Math.sign(v) * 0.5 : 0));
+    track.classList.remove("pm-carousel__track--dragging");
+    go(target);
+  };
+  track.addEventListener("scroll", onScroll, { passive: true });
+  track.addEventListener("pointerdown", down);
+  track.addEventListener("pointermove", move);
+  track.addEventListener("pointerup", up);
+  track.addEventListener("pointercancel", up);
+  update();
+  return {
+    go,
+    dispose: () => {
+      cancelAnimationFrame(frame);
+      track.removeEventListener("scroll", onScroll);
+      track.removeEventListener("pointerdown", down);
+      track.removeEventListener("pointermove", move);
+      track.removeEventListener("pointerup", up);
+      track.removeEventListener("pointercancel", up);
+    },
+  };
+}
+
+// Wires one WheelPicker column: the row on the band is the value, the phone ticks as each row reaches it (firmer at
+// the ends), and keys step the wheel. Returns go(index) and a cleanup.
+export function wireWheel(column: HTMLElement, onIndex: (index: number) => void): { go: (index: number, smooth?: boolean) => void; dispose: () => void } {
+  const ROW = 44;
+  const count = () => column.children.length;
+  let current = -1;
+  let frame = 0;
+  const update = () => {
+    frame = 0;
+    const index = Math.max(0, Math.min(count() - 1, Math.round(column.scrollTop / ROW)));
+    if (index === current) return;
+    const first = current === -1;
+    current = index;
+    Array.from(column.children).forEach((row, i) => row.classList.toggle("pm-wheel__item--on", i === index));
+    // The wheel's starting position is not a change.
+    if (first) return;
+    buzz(index === 0 || index === count() - 1 ? 14 : 5);
+    onIndex(index);
+  };
+  const onScroll = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  const go = (index: number, smooth = true) => {
+    const target = Math.max(0, Math.min(count() - 1, index)) * ROW;
+    column.scrollTo({ top: target, behavior: smooth && !reducedMotion() ? "smooth" : "auto" });
+  };
+  const onKey = (e: KeyboardEvent) => {
+    const steps: Record<string, number> = { ArrowUp: -1, ArrowDown: 1, PageUp: -5, PageDown: 5 };
+    let next: number | undefined;
+    if (e.key in steps) next = Math.max(0, current) + steps[e.key];
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = count() - 1;
+    if (next === undefined) return;
+    e.preventDefault();
+    go(next);
+  };
+  const onClick = (e: MouseEvent) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".pm-wheel__item");
+    if (row && row.parentElement === column) go(Array.from(column.children).indexOf(row));
+  };
+  column.addEventListener("scroll", onScroll, { passive: true });
+  column.addEventListener("keydown", onKey);
+  column.addEventListener("click", onClick);
+  update();
+  return {
+    go,
+    dispose: () => {
+      cancelAnimationFrame(frame);
+      column.removeEventListener("scroll", onScroll);
+      column.removeEventListener("keydown", onKey);
+      column.removeEventListener("click", onClick);
+    },
+  };
+}
+
+export interface ReorderParts {
+  list: HTMLElement;
+  // Moves the row at from to to in the app's own array.
+  onDrop: (from: number, to: number) => void;
+  // A press on a row's handle that never moved: start moving that row with buttons.
+  onHandleTap?: (index: number) => void;
+  disabled?: () => boolean;
+}
+
+// Wires a ReorderList: holding a row (or pressing its handle) lifts it to follow the finger one to one, the rows it
+// passes slide aside, the list's scroll container scrolls near its edges, and release settles the row into its gap.
+export function wireReorder(parts: ReorderParts): () => void {
+  const { list } = parts;
+  const HOLD = 400;
+  type Drag = { row: HTMLElement; from: number; to: number; startY: number; rects: DOMRect[]; height: number; pointer: number; scroller: HTMLElement | null; scrollStart: number; handle: boolean; travel: number };
+  let pending: { row: HTMLElement; x: number; y: number; pointer: number; timer: number } | null = null;
+  let drag: Drag | null = null;
+  let lastY = 0;
+  let autoFrame = 0;
+  const rows = () => Array.from(list.children).filter((el) => el.classList.contains("pm-reorder__row")) as HTMLElement[];
+  const scrollerOf = (el: HTMLElement): HTMLElement | null => {
+    for (let p = el.parentElement; p; p = p.parentElement) {
+      const style = getComputedStyle(p);
+      if (/(auto|scroll)/.test(style.overflowY) && p.scrollHeight > p.clientHeight) return p;
+    }
+    return null;
+  };
+  const lift = (row: HTMLElement, y: number, pointer: number, handle = false) => {
+    const all = rows();
+    const from = all.indexOf(row);
+    if (from < 0) return;
+    const scroller = scrollerOf(list);
+    drag = { row, from, to: from, startY: y, rects: all.map((r) => r.getBoundingClientRect()), height: row.offsetHeight, pointer, scroller, scrollStart: scroller?.scrollTop ?? 0, handle, travel: 0 };
+    lastY = y;
+    row.classList.add("pm-reorder__row--lifted");
+    row.style.transition = "scale var(--pm-release-dur) var(--pm-release-ease), box-shadow var(--duration-fast)";
+    buzz(10);
+    try {
+      list.setPointerCapture(pointer);
+    } catch {
+      // The pointer may already be gone.
+    }
+    autoScroll();
+  };
+  const place = (y: number) => {
+    if (!drag) return;
+    lastY = y;
+    const scrolled = (drag.scroller?.scrollTop ?? 0) - drag.scrollStart;
+    const dy = y - drag.startY + scrolled;
+    drag.travel = Math.max(drag.travel, Math.abs(y - drag.startY));
+    drag.row.style.translate = `0 ${dy}px`;
+    const center = drag.rects[drag.from].top + drag.rects[drag.from].height / 2 + dy;
+    let to = drag.from;
+    drag.rects.forEach((r, i) => {
+      const mid = r.top + r.height / 2;
+      if (i > drag!.from && center > mid) to = i;
+      if (i < drag!.from && center < mid && to === drag!.from) to = i;
+    });
+    if (to !== drag.to) {
+      drag.to = to;
+      buzz(to === 0 || to === drag.rects.length - 1 ? 14 : 6);
+    }
+    rows().forEach((r, i) => {
+      if (i === drag!.from) return;
+      const shift = drag!.from < drag!.to && i > drag!.from && i <= drag!.to ? -drag!.height : drag!.from > drag!.to && i < drag!.from && i >= drag!.to ? drag!.height : 0;
+      r.style.translate = shift ? `0 ${shift}px` : "";
+    });
+  };
+  // Near the top or bottom of the scrolling screen the list scrolls on its own, faster closer to the edge.
+  const autoScroll = () => {
+    cancelAnimationFrame(autoFrame);
+    if (!drag || !drag.scroller) return;
+    const box = drag.scroller.getBoundingClientRect();
+    const zone = 64;
+    const speed = lastY < box.top + zone ? -(box.top + zone - lastY) / 4 : lastY > box.bottom - zone ? (lastY - (box.bottom - zone)) / 4 : 0;
+    if (speed) {
+      drag.scroller.scrollTop += speed;
+      place(lastY);
+    }
+    autoFrame = requestAnimationFrame(autoScroll);
+  };
+  const drop = (cancel: boolean) => {
+    cancelAnimationFrame(autoFrame);
+    if (!drag) return;
+    const d = drag;
+    drag = null;
+    if (d.handle && d.travel < 4) {
+      d.row.classList.remove("pm-reorder__row--lifted");
+      d.row.style.transition = "";
+      d.row.style.translate = "";
+      parts.onHandleTap?.(d.from);
+      return;
+    }
+    const to = cancel ? d.from : d.to;
+    // Settle the lifted row into its gap, then hand the new order to the app.
+    let offset = 0;
+    if (to > d.from) for (let i = d.from + 1; i <= to; i++) offset += d.rects[i].height;
+    if (to < d.from) for (let i = to; i < d.from; i++) offset -= d.rects[i].height;
+    d.row.classList.remove("pm-reorder__row--lifted");
+    d.row.style.transition = "";
+    d.row.style.translate = `0 ${offset}px`;
+    if (cancel) rows().forEach((r) => (r.style.translate = ""));
+    const finish = () => {
+      for (const r of rows()) {
+        r.style.transition = "none";
+        r.style.translate = "";
+      }
+      if (to !== d.from) parts.onDrop(d.from, to);
+      requestAnimationFrame(() => requestAnimationFrame(() => rows().forEach((r) => (r.style.transition = ""))));
+    };
+    if (reducedMotion()) finish();
+    else window.setTimeout(finish, Number.parseFloat(getComputedStyle(d.row).transitionDuration) * 1000 || 300);
+  };
+  const down = (e: PointerEvent) => {
+    if (parts.disabled?.() || e.button > 0 || drag) return;
+    const row = (e.target as HTMLElement).closest<HTMLElement>(".pm-reorder__row");
+    if (!row || row.classList.contains("pm-reorder__row--moving")) return;
+    if ((e.target as HTMLElement).closest(".pm-reorder__handle")) {
+      e.preventDefault();
+      lift(row, e.clientY, e.pointerId, true);
+      return;
+    }
+    if ((e.target as HTMLElement).closest("button")) return;
+    pending = { row, x: e.clientX, y: e.clientY, pointer: e.pointerId, timer: window.setTimeout(() => {
+      if (pending) lift(pending.row, pending.y, pending.pointer);
+      pending = null;
+    }, HOLD) };
+  };
+  const move = (e: PointerEvent) => {
+    if (pending && Math.hypot(e.clientX - pending.x, e.clientY - pending.y) > 8) {
+      clearTimeout(pending.timer);
+      pending = null;
+    }
+    if (drag && e.pointerId === drag.pointer) {
+      e.preventDefault();
+      place(e.clientY);
+    }
+  };
+  const up = (e: PointerEvent) => {
+    if (pending) {
+      clearTimeout(pending.timer);
+      pending = null;
+    }
+    if (drag && e.pointerId === drag.pointer) drop(e.type === "pointercancel");
+  };
+  // A held row must not scroll the page under the finger.
+  const touchMove = (e: TouchEvent) => {
+    if (drag && e.cancelable) e.preventDefault();
+  };
+  list.addEventListener("pointerdown", down);
+  list.addEventListener("pointermove", move);
+  list.addEventListener("pointerup", up);
+  list.addEventListener("pointercancel", up);
+  list.addEventListener("touchmove", touchMove, { passive: false });
+  return () => {
+    cancelAnimationFrame(autoFrame);
+    list.removeEventListener("pointerdown", down);
+    list.removeEventListener("pointermove", move);
+    list.removeEventListener("pointerup", up);
+    list.removeEventListener("pointercancel", up);
+    list.removeEventListener("touchmove", touchMove);
+  };
+}
+
+export type HoldMode = "held" | "sticky";
+
+export interface HoldParts {
+  wrap: HTMLElement;
+  delay: () => number;
+  tapOpens: () => boolean;
+  enabled: () => boolean;
+  direction: () => "up" | "down";
+  mode: () => HoldMode | null;
+  open: (mode: HoldMode) => void;
+  close: (refocus: boolean) => void;
+  choose: (index: number) => void;
+  setActive: (index: number) => void;
+  layer: () => HTMLElement | null;
+}
+
+// Angles in degrees for an arc of n options fanning out from the trigger; item 0 is nearest the vertical.
+export function arcAngles(n: number, direction: "up" | "down", align: "end" | "start"): number[] {
+  const from = direction === "down" ? 270 : 90;
+  const to = direction === "down" ? (align === "end" ? 180 : 360) : align === "end" ? 180 : 0;
+  return Array.from({ length: n }, (_, i) => (n === 1 ? from : from + ((to - from) * i) / (n - 1)));
+}
+
+// The enabled option nearest a point, if one is within 24px of it.
+export function holdItemAt(layer: HTMLElement | null, x: number, y: number): number {
+  if (!layer) return -1;
+  let best = -1;
+  let bestDist = Infinity;
+  for (const node of Array.from(layer.querySelectorAll<HTMLButtonElement>("[data-hold-index]"))) {
+    if (node.disabled) continue;
+    const r = node.getBoundingClientRect();
+    const dist = Math.hypot(Math.max(r.left - x, 0, x - r.right), Math.max(r.top - y, 0, y - r.bottom));
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = Number(node.dataset.holdIndex);
+    }
+  }
+  return bestDist <= 24 ? best : -1;
+}
+
+// Where the menu goes: a stack anchored to the trigger's edges, so late-loading fonts can't shift it, kept 8px inside
+// the layer; or the arc centred on the trigger.
+export function placeHoldMenu(wrap: HTMLElement, menu: HTMLElement, layout: "stack" | "arc", direction: "up" | "down", align: "end" | "start"): Record<string, string> {
+  const t = wrap.getBoundingClientRect();
+  const l = (menu.offsetParent ?? document.documentElement).getBoundingClientRect();
+  if (layout === "arc") return { left: `${t.left - l.left}px`, top: `${t.top - l.top}px`, width: `${t.width}px`, height: `${t.height}px` };
+  const px = (v: number) => `${Math.max(8, v)}px`;
+  return {
+    ...(align === "end" ? { right: px(l.right - t.right) } : { left: px(t.left - l.left) }),
+    ...(direction === "up" ? { bottom: px(l.bottom - t.top + 12) } : { top: px(t.bottom - l.top + 12) }),
+  };
+}
+
+// Arrow keys inside an open menu: the arrow pointing away from the trigger moves outward. Escape closes.
+export function holdMenuKeydown(e: KeyboardEvent, menu: HTMLElement, layout: "stack" | "arc", direction: "up" | "down", align: "end" | "start", close: (refocus: boolean) => void): void {
+  if (e.key === "Escape") {
+    e.preventDefault();
+    close(true);
+    return;
+  }
+  if (e.key === "Tab") {
+    close(false);
+    return;
+  }
+  const nodes = Array.from(menu.querySelectorAll<HTMLElement>("[data-hold-index]:not([disabled])"));
+  const at = nodes.indexOf(document.activeElement as HTMLElement);
+  const outward = direction === "up" ? "ArrowUp" : "ArrowDown";
+  const inward = direction === "up" ? "ArrowDown" : "ArrowUp";
+  const away = align === "end" ? "ArrowLeft" : "ArrowRight";
+  const back = align === "end" ? "ArrowRight" : "ArrowLeft";
+  const step = e.key === outward || (layout === "arc" && e.key === away) ? 1 : e.key === inward || (layout === "arc" && e.key === back) ? -1 : 0;
+  if (!step || !nodes.length) return;
+  e.preventDefault();
+  nodes[(at + step + nodes.length) % nodes.length].focus();
+}
+
+// Press and hold on the wrapped trigger opens the menu held; sliding picks the option under the finger and release
+// chooses it. Moving 10px before the hold completes gives the press back to the page. A tap passes through to the
+// trigger, or opens the menu with tapOpens. Right-click, the Menu key, Shift+F10 and the arrow towards the menu open it
+// for tapping.
+export function wireHoldMenu(parts: HoldParts): () => void {
+  const { wrap } = parts;
+  let timer = 0;
+  let pointer: number | null = null;
+  let x = 0;
+  let y = 0;
+  let suppress = false;
+  const listen = (on: boolean) => {
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("pointermove", move as EventListener, true);
+    window[method]("pointerup", up as EventListener, true);
+    window[method]("pointercancel", cancel as EventListener, true);
+  };
+  const clear = () => {
+    if (timer) clearTimeout(timer);
+    timer = 0;
+  };
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || parts.mode() || !parts.enabled()) return;
+    suppress = false;
+    x = e.clientX;
+    y = e.clientY;
+    pointer = e.pointerId;
+    clear();
+    listen(true);
+    timer = window.setTimeout(() => {
+      timer = 0;
+      suppress = true;
+      buzz(10);
+      parts.open("held");
+    }, parts.delay());
+  };
+  function move(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    if (timer) {
+      if (Math.abs(e.clientX - x) > 10 || Math.abs(e.clientY - y) > 10) {
+        clear();
+        pointer = null;
+        listen(false);
+      }
+      return;
+    }
+    if (parts.mode() === "held") {
+      const i = holdItemAt(parts.layer(), e.clientX, e.clientY);
+      parts.setActive(i);
+    }
+  }
+  function up(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    pointer = null;
+    listen(false);
+    if (timer) {
+      clear();
+      return;
+    }
+    if (parts.mode() !== "held") return;
+    const i = holdItemAt(parts.layer(), e.clientX, e.clientY);
+    if (i !== -1) {
+      parts.choose(i);
+      return;
+    }
+    const r = wrap.getBoundingClientRect();
+    if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) parts.open("sticky");
+    else parts.close(false);
+  }
+  function cancel(e: PointerEvent) {
+    if (pointer !== e.pointerId) return;
+    pointer = null;
+    listen(false);
+    clear();
+    if (parts.mode() === "held") parts.close(false);
+  }
+  const contextmenu = (e: MouseEvent) => {
+    e.preventDefault();
+    if (!parts.mode() && parts.enabled()) parts.open("sticky");
+  };
+  const click = (e: MouseEvent) => {
+    if (suppress) {
+      suppress = false;
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    if (parts.tapOpens() && !parts.mode() && parts.enabled()) {
+      e.preventDefault();
+      e.stopPropagation();
+      parts.open("sticky");
+    }
+  };
+  const keydown = (e: KeyboardEvent) => {
+    if (e.key === (parts.direction() === "up" ? "ArrowUp" : "ArrowDown") && !parts.mode() && parts.enabled()) {
+      e.preventDefault();
+      parts.open("sticky");
+    }
+  };
+  wrap.addEventListener("pointerdown", down);
+  wrap.addEventListener("contextmenu", contextmenu);
+  wrap.addEventListener("click", click, true);
+  wrap.addEventListener("keydown", keydown);
+  return () => {
+    clear();
+    listen(false);
+    wrap.removeEventListener("pointerdown", down);
+    wrap.removeEventListener("contextmenu", contextmenu);
+    wrap.removeEventListener("click", click, true);
+    wrap.removeEventListener("keydown", keydown);
+  };
+}
+
+export interface ViewerParts {
+  stage: HTMLElement;
+  img: HTMLImageElement;
+  backdrop: HTMLElement;
+  maxScale: () => number;
+  canClose: () => boolean;
+  close: () => void;
+  onScale: (scale: number) => void;
+  onArmed: (armed: boolean) => void;
+}
+
+export interface Viewer {
+  zoomBy: (factor: number) => void;
+  reset: () => void;
+  keydown: (e: KeyboardEvent) => boolean;
+  destroy: () => void;
+}
+
+const VIEWER_DISMISS = 96;
+const VIEWER_FLICK = 0.6;
+const VIEWER_DOUBLE_TAP = 300;
+
+// Pinch and double-tap zoom, panning with resistance at the edges, and drag down to close, for ImageViewer.
+export function wireImageViewer(parts: ViewerParts): Viewer {
+  const { stage, img, backdrop } = parts;
+  let t = { s: 1, x: 0, y: 0 };
+  const pointers = new Map<number, { x: number; y: number }>();
+  let lastTap: { t: number; x: number; y: number } | null = null;
+  let wheelTimer = 0;
+  type Gesture = {
+    mode: "pinch" | "pan" | "dismiss" | "none" | null;
+    moved: boolean;
+    startT: number;
+    sy: number;
+    armed: boolean;
+    x0: number;
+    y0: number;
+    tx: number;
+    ty: number;
+    d0: number;
+    s0: number;
+    cx: number;
+    cy: number;
+    atMax: boolean;
+    dy: number;
+    vy: number;
+    lastY: number | null;
+    lastT: number;
+  };
+  let g: Gesture | null = null;
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const resist = (v: number, lo: number, hi: number) => (v < lo ? lo - (lo - v) * 0.35 : v > hi ? hi + (v - hi) * 0.35 : v);
+
+  function bounds(s: number) {
+    return {
+      x: Math.max(0, (img.offsetWidth * s - stage.clientWidth) / 2),
+      y: Math.max(0, (img.offsetHeight * s - stage.clientHeight) / 2),
+    };
+  }
+
+  function apply(animate: boolean, extra = "") {
+    img.style.transition = animate
+      ? "transform var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease), opacity {{ "duration-base" | tok }} {{ "easing-standard" | tok }}"
+      : "none";
+    img.style.transform = `translate(${t.x}px, ${t.y}px) scale(${t.s})${extra}`;
+  }
+
+  function settle() {
+    const s = clamp(t.s, 1, parts.maxScale());
+    if (s < 1.01) t = { s: 1, x: 0, y: 0 };
+    else {
+      const b = bounds(s);
+      t = { s, x: clamp(t.x, -b.x, b.x), y: clamp(t.y, -b.y, b.y) };
+    }
+    apply(true);
+    parts.onScale(t.s);
+  }
+
+  // Zooms to s keeping the image point under (px, py), measured from the stage centre, where it is.
+  function zoomTo(s: number, px: number, py: number, animate: boolean) {
+    const k = s / t.s;
+    t = { s, x: px - (px - t.x) * k, y: py - (py - t.y) * k };
+    if (animate) settle();
+    else {
+      apply(false);
+      parts.onScale(t.s);
+    }
+  }
+
+  function fromCentre(x: number, y: number) {
+    const r = stage.getBoundingClientRect();
+    return { x: x - r.left - r.width / 2, y: y - r.top - r.height / 2 };
+  }
+
+  function dismissOut(dy: number) {
+    img.style.transition = "transform {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}, opacity {{ "duration-sleepy-exit" | tok }} {{ "easing-sleepy-exit" | tok }}";
+    if (!reducedMotion()) img.style.transform = `translate(0px, ${dy + Math.sign(dy || 1) * innerHeight * 0.5}px) scale(0.9)`;
+    img.style.opacity = "0";
+    backdrop.style.opacity = "0";
+    setTimeout(() => {
+      parts.close();
+      t = { s: 1, x: 0, y: 0 };
+      img.style.opacity = "";
+      backdrop.style.opacity = "";
+      apply(false);
+    }, {{ ms("duration-sleepy-exit") }});
+  }
+
+  function startGesture() {
+    if (!g) return;
+    const ids = [...pointers.values()];
+    if (ids.length >= 2) {
+      const [a, b] = ids;
+      const m = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+      g.mode = "pinch";
+      g.d0 = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      g.s0 = t.s;
+      g.cx = (m.x - t.x) / t.s;
+      g.cy = (m.y - t.y) / t.s;
+      g.atMax = t.s >= parts.maxScale();
+      g.moved = true;
+    } else if (ids.length === 1) {
+      g.mode = null;
+      g.x0 = ids[0].x;
+      g.y0 = ids[0].y;
+      g.tx = t.x;
+      g.ty = t.y;
+    }
+  }
+
+  function down(e: PointerEvent) {
+    if (e.button > 0 || (e.target as Element).closest?.("button")) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!g) {
+      g = { mode: null, moved: false, startT: e.timeStamp, sy: e.clientY, armed: false, x0: 0, y0: 0, tx: 0, ty: 0, d0: 1, s0: 1, cx: 0, cy: 0, atMax: false, dy: 0, vy: 0, lastY: null, lastT: 0 };
+      listen(true);
+      img.style.transition = "none";
+    }
+    startGesture();
+  }
+
+  function move(e: PointerEvent) {
+    const p = pointers.get(e.pointerId);
+    if (!p || !g) return;
+    p.x = e.clientX;
+    p.y = e.clientY;
+    const max = parts.maxScale();
+    if (g.mode === "pinch" && pointers.size >= 2) {
+      const [a, b] = [...pointers.values()];
+      const m = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+      const raw = g.s0 * (Math.hypot(a.x - b.x, a.y - b.y) / g.d0);
+      const s = raw < 1 ? 1 - (1 - raw) * 0.4 : raw > max ? max + (raw - max) * 0.4 : raw;
+      if (raw >= max && !g.atMax) buzz(16);
+      g.atMax = raw >= max;
+      t = { s, x: m.x - g.cx * s, y: m.y - g.cy * s };
+      apply(false);
+      parts.onScale(clamp(s, 1, max));
+      return;
+    }
+    const dx = e.clientX - g.x0;
+    const dy = e.clientY - g.y0;
+    if (!g.mode) {
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      g.moved = true;
+      g.mode = t.s > 1.01 ? "pan" : Math.abs(dy) > Math.abs(dx) && parts.canClose() ? "dismiss" : "none";
+    }
+    if (g.mode === "pan") {
+      const b = bounds(t.s);
+      t = { s: t.s, x: resist(g.tx + dx, -b.x, b.x), y: resist(g.ty + dy, -b.y, b.y) };
+      apply(false);
+    } else if (g.mode === "dismiss") {
+      const k = Math.min(1, Math.abs(dy) / (VIEWER_DISMISS * 3));
+      t = { s: 1, x: 0, y: dy };
+      apply(false, ` scale(${1 - k * 0.1})`);
+      backdrop.style.transition = "none";
+      backdrop.style.opacity = String(1 - k * 0.7);
+      const armed = Math.abs(dy) >= VIEWER_DISMISS;
+      if (armed !== g.armed) {
+        g.armed = armed;
+        parts.onArmed(armed);
+        if (armed) buzz();
+      }
+      const dt = e.timeStamp - (g.lastT || g.startT);
+      g.vy = dt > 0 ? (e.clientY - (g.lastY ?? g.sy)) / dt : 0;
+      g.dy = dy;
+      g.lastY = e.clientY;
+      g.lastT = e.timeStamp;
+    }
+  }
+
+  function up(e: PointerEvent, cancelled: boolean) {
+    const p = pointers.get(e.pointerId);
+    if (!p || !g) return;
+    pointers.delete(e.pointerId);
+    const G = g;
+    if (pointers.size) {
+      startGesture();
+      return;
+    }
+    listen(false);
+    g = null;
+    if (G.mode === "dismiss") {
+      parts.onArmed(false);
+      const flick = Math.abs(G.vy) > VIEWER_FLICK && G.vy > 0 === G.dy > 0;
+      if (!cancelled && (G.armed || flick)) {
+        dismissOut(G.dy);
+        return;
+      }
+      t = { s: 1, x: 0, y: 0 };
+      backdrop.style.transition = "opacity var(--pm-settle-dur, 360ms) var(--pm-settle-ease, ease)";
+      backdrop.style.opacity = "";
+      apply(true);
+      return;
+    }
+    if (!G.moved && !cancelled && e.timeStamp - G.startT < 250) {
+      if (lastTap && e.timeStamp - lastTap.t < VIEWER_DOUBLE_TAP && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 24) {
+        lastTap = null;
+        const c = fromCentre(p.x, p.y);
+        if (t.s > 1.01) {
+          t = { s: 1, x: 0, y: 0 };
+          settle();
+        } else zoomTo(Math.min(2.5, parts.maxScale()), c.x, c.y, true);
+        return;
+      }
+      lastTap = { t: e.timeStamp, x: p.x, y: p.y };
+    }
+    settle();
+  }
+
+  const onMove = (e: PointerEvent) => move(e);
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+  function listen(on: boolean) {
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("pointermove", onMove as EventListener, true);
+    window[method]("pointerup", onUp as EventListener, true);
+    window[method]("pointercancel", onCancel as EventListener, true);
+  }
+
+  function wheel(e: WheelEvent) {
+    e.preventDefault();
+    if (e.ctrlKey) {
+      const c = fromCentre(e.clientX, e.clientY);
+      zoomTo(clamp(t.s * Math.exp(-e.deltaY * 0.01), 1, parts.maxScale()), c.x, c.y, false);
+      clearTimeout(wheelTimer);
+      wheelTimer = window.setTimeout(settle, 120);
+    } else if (t.s > 1.01) {
+      const b = bounds(t.s);
+      t = { s: t.s, x: clamp(t.x - e.deltaX, -b.x, b.x), y: clamp(t.y - e.deltaY, -b.y, b.y) };
+      apply(false);
+    }
+  }
+
+  stage.addEventListener("pointerdown", down);
+  stage.addEventListener("wheel", wheel, { passive: false });
+
+  return {
+    zoomBy: (f) => zoomTo(clamp(t.s * f, 1, parts.maxScale()), 0, 0, true),
+    reset: () => {
+      t = { s: 1, x: 0, y: 0 };
+      settle();
+    },
+    keydown: (e) => {
+      const k = e.key;
+      if (k === "+" || k === "=") zoomTo(clamp(t.s * 1.5, 1, parts.maxScale()), 0, 0, true);
+      else if (k === "-" || k === "_") zoomTo(clamp(t.s / 1.5, 1, parts.maxScale()), 0, 0, true);
+      else if (k === "0") {
+        t = { s: 1, x: 0, y: 0 };
+        settle();
+      } else if (t.s > 1.01 && k.startsWith("Arrow")) {
+        const b = bounds(t.s);
+        const dx = k === "ArrowLeft" ? 48 : k === "ArrowRight" ? -48 : 0;
+        const dy = k === "ArrowUp" ? 48 : k === "ArrowDown" ? -48 : 0;
+        t = { s: t.s, x: clamp(t.x + dx, -b.x, b.x), y: clamp(t.y + dy, -b.y, b.y) };
+        apply(true);
+      } else return false;
+      e.preventDefault();
+      return true;
+    },
+    destroy: () => {
+      listen(false);
+      clearTimeout(wheelTimer);
+      stage.removeEventListener("pointerdown", down);
+      stage.removeEventListener("wheel", wheel);
+    },
+  };
+}
+
+// Press anywhere on a bar of equal cells and slide: onScrub follows the finger cell by cell, with a tick at each, and
+// onCommit gets the cell under the finger on release. The click a scrub ends with is swallowed. A press that never
+// moves 10px stays an ordinary click.
+export function wireScrub(bar: HTMLElement, count: () => number, onScrub: (index: number) => void, onCommit: (index: number) => void): () => void {
+  let g: { x: number; id: number; active: boolean; at: number } | null = null;
+  let swallow = false;
+  const indexAt = (x: number) => {
+    const r = bar.getBoundingClientRect();
+    return Math.max(0, Math.min(count() - 1, Math.floor(((x - r.left) / r.width) * count())));
+  };
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || !count()) return;
+    swallow = false;
+    g = { x: e.clientX, id: e.pointerId, active: false, at: -1 };
+  };
+  const move = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    if (!g.active) {
+      if (Math.abs(e.clientX - g.x) < 10) return;
+      g.active = true;
+      try {
+        bar.setPointerCapture(e.pointerId);
+      } catch {
+        // Without capture the scrub ends when the finger leaves the bar.
+      }
+    }
+    const i = indexAt(e.clientX);
+    if (i !== g.at) {
+      if (g.at !== -1) buzz(6);
+      g.at = i;
+      onScrub(i);
+    }
+  };
+  const up = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    const done = g;
+    g = null;
+    if (!done.active) return;
+    swallow = true;
+    onScrub(-1);
+    onCommit(done.at);
+  };
+  const cancel = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    g = null;
+    onScrub(-1);
+  };
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  bar.addEventListener("pointerdown", down);
+  bar.addEventListener("pointermove", move);
+  bar.addEventListener("pointerup", up);
+  bar.addEventListener("pointercancel", cancel);
+  bar.addEventListener("click", click, true);
+  return () => {
+    bar.removeEventListener("pointerdown", down);
+    bar.removeEventListener("pointermove", move);
+    bar.removeEventListener("pointerup", up);
+    bar.removeEventListener("pointercancel", cancel);
+    bar.removeEventListener("click", click, true);
+  };
+}
+
+export interface SwipeParts {
+  row: HTMLElement;
+  canStart: () => boolean;
+  canEnd: () => boolean;
+  onMove: (dx: number, armed: boolean, dragging: boolean) => void;
+  onCommit: (side: "start" | "end") => void;
+}
+
+// Drag a row sideways to reveal its swipe actions. Past `commit` of the row's width the row follows at a third of the
+// speed, the action arms with a tick, and a release commits it; an earlier release springs back. A vertical drag is
+// left to scrolling, and the click a swipe ends with is swallowed. Positive dx is toward the end of the line.
+export function wireSwipe(parts: SwipeParts, commit = 0.4): () => void {
+  const { row } = parts;
+  let d: { x: number; y: number; id: number; axis: "x" | "y" | null; w: number; armed: boolean; dx: number } | null = null;
+  let swallow = false;
+  const rtl = () => getComputedStyle(row).direction === "rtl";
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || (!parts.canStart() && !parts.canEnd())) return;
+    swallow = false;
+    d = { x: e.clientX, y: e.clientY, id: e.pointerId, axis: null, w: row.offsetWidth, armed: false, dx: 0 };
+  };
+  const move = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    const my = e.clientY - d.y;
+    if (!d.axis) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      d.axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (d.axis === "x") {
+        try {
+          row.setPointerCapture(e.pointerId);
+        } catch {
+          // Without capture the swipe still tracks while the finger stays on the row.
+        }
+      }
+    }
+    if (d.axis !== "x") return;
+    const toEnd = rtl() ? mx < 0 : mx > 0;
+    let v = (toEnd && !parts.canStart()) || (!toEnd && !parts.canEnd()) ? 0 : mx;
+    const limit = d.w * commit;
+    if (Math.abs(v) > limit) v = Math.sign(v) * (limit + (Math.abs(v) - limit) * 0.35);
+    const armed = Math.abs(v) >= limit;
+    if (armed !== d.armed) {
+      d.armed = armed;
+      if (armed) buzz();
+    }
+    d.dx = v;
+    parts.onMove(v, armed, true);
+  };
+  const up = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const done = d;
+    d = null;
+    if (done.axis !== "x") return;
+    swallow = true;
+    parts.onMove(0, false, false);
+    const toEnd = rtl() ? done.dx < 0 : done.dx > 0;
+    if (done.armed && done.dx !== 0) parts.onCommit(toEnd ? "start" : "end");
+  };
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  row.addEventListener("pointerdown", down);
+  row.addEventListener("pointermove", move);
+  row.addEventListener("pointerup", up);
+  row.addEventListener("pointercancel", up);
+  row.addEventListener("click", click, true);
+  return () => {
+    row.removeEventListener("pointerdown", down);
+    row.removeEventListener("pointermove", move);
+    row.removeEventListener("pointerup", up);
+    row.removeEventListener("pointercancel", up);
+    row.removeEventListener("click", click, true);
+  };
+}
+
+export interface DismissParts {
+  el: HTMLElement;
+  enabled: () => boolean;
+  // A finger or mouse is on the element; timers pause while it is.
+  onHold?: (held: boolean) => void;
+  onMove: (dx: number, armed: boolean, dragging: boolean) => void;
+  // Past `commit` of the width, or a flick, on release; direction is the sign of the travel.
+  onDismiss: (direction: number) => void;
+}
+
+// Swipe an element sideways to dismiss it: it follows the pointer, arms past `commit` of its width with a tick, and a
+// release there or a quick flick dismisses it. An earlier release springs back. A vertical drag is left to scrolling.
+export function wireDismissSwipe(parts: DismissParts, commit = 0.3): () => void {
+  const { el } = parts;
+  let d: { x: number; y: number; id: number; axis: "x" | "y" | null; w: number; armed: boolean; dx: number; tracker: VelocityTracker } | null = null;
+  let swallow = false;
+  const down = (e: PointerEvent) => {
+    if (e.button > 0 || !parts.enabled()) return;
+    swallow = false;
+    d = { x: e.clientX, y: e.clientY, id: e.pointerId, axis: null, w: el.offsetWidth, armed: false, dx: 0, tracker: new VelocityTracker() };
+    d.tracker.add(e.clientX, e.clientY, e.timeStamp);
+    parts.onHold?.(true);
+  };
+  const move = (e: PointerEvent) => {
+    if (!d || d.id !== e.pointerId) return;
+    const mx = e.clientX - d.x;
+    const my = e.clientY - d.y;
+    d.tracker.add(e.clientX, e.clientY, e.timeStamp);
+    if (!d.axis) {
+      if (Math.abs(mx) < 10 && Math.abs(my) < 10) return;
+      d.axis = Math.abs(mx) > Math.abs(my) ? "x" : "y";
+      if (d.axis === "x") {
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          // Without capture the swipe still tracks while the pointer stays on the element.
+        }
+      }
+    }
+    if (d.axis !== "x") return;
+    const armed = Math.abs(mx) >= d.w * commit;
+    if (armed !== d.armed) {
+      d.armed = armed;
+      if (armed) buzz();
+    }
+    d.dx = mx;
+    parts.onMove(mx, armed, true);
+  };
+  const up = (e: PointerEvent, cancelled: boolean) => {
+    if (!d || d.id !== e.pointerId) return;
+    const done = d;
+    d = null;
+    parts.onHold?.(false);
+    if (done.axis !== "x") return;
+    swallow = true;
+    const v = done.tracker.velocity().x / 1000;
+    const flick = Math.abs(v) > 0.6 && Math.sign(v) === Math.sign(done.dx);
+    if (!cancelled && (done.armed || flick) && done.dx !== 0) parts.onDismiss(Math.sign(done.dx));
+    else parts.onMove(0, false, false);
+  };
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+  const click = (e: MouseEvent) => {
+    if (!swallow) return;
+    swallow = false;
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  el.addEventListener("pointerdown", down);
+  el.addEventListener("pointermove", move);
+  el.addEventListener("pointerup", onUp);
+  el.addEventListener("pointercancel", onCancel);
+  el.addEventListener("click", click, true);
+  return () => {
+    el.removeEventListener("pointerdown", down);
+    el.removeEventListener("pointermove", move);
+    el.removeEventListener("pointerup", onUp);
+    el.removeEventListener("pointercancel", onCancel);
+    el.removeEventListener("click", click, true);
+  };
+}
+
+// Slider on touch: the value model shared by the Svelte and Solid sliders, and the drag on the track.
+
+export interface SliderMark {
+  value: number;
+  label?: string;
+}
+
+export interface SliderModel {
+  min: number;
+  max: number;
+  // 0 snaps to the marks alone.
+  step: number;
+  marks: SliderMark[];
+  range: boolean;
+}
+
+// With step and no more than this many steps, every step is a detent with a dot on the rail.
+const DETENT_MAX = 20;
+// Named marks pull the thumb in when the finger comes this close, in px.
+const MAGNET = 10;
+
+export function sliderMarks(marks: (number | SliderMark)[], min: number, max: number): SliderMark[] {
+  return marks
+    .map((m) => (typeof m === "number" ? { value: m } : m))
+    .filter((m) => m.value >= min && m.value <= max)
+    .sort((a, b) => a.value - b.value);
+}
+
+function decimals(n: number): number {
+  const s = String(n);
+  return s.includes(".") ? s.length - s.indexOf(".") - 1 : 0;
+}
+
+export function sliderDetents(m: SliderModel): number[] {
+  if (m.marks.length) return m.marks.map((k) => k.value);
+  const out: number[] = [];
+  if (m.step > 0 && (m.max - m.min) / m.step <= DETENT_MAX) {
+    for (let v = m.min; v <= m.max + m.step / 2; v += m.step) out.push(Number(v.toFixed(decimals(m.step))));
+  }
+  return out;
+}
+
+export function sliderSnap(m: SliderModel, v: number): number {
+  const c = Math.min(Math.max(v, m.min), m.max);
+  if (m.step > 0 || !m.marks.length) {
+    const step = m.step > 0 ? m.step : 1;
+    return Math.min(m.max, Number((m.min + Math.round((c - m.min) / step) * step).toFixed(decimals(step))));
+  }
+  let best = m.marks[0].value;
+  for (const k of m.marks) if (Math.abs(k.value - c) < Math.abs(best - c)) best = k.value;
+  return best;
+}
+
+export function sliderFraction(m: SliderModel, v: number): number {
+  return m.max > m.min ? (Math.min(Math.max(v, m.min), m.max) - m.min) / (m.max - m.min) : 0;
+}
+
+// A thumb's own limits: in a range each stops at the other.
+export function sliderLimits(m: SliderModel, values: number[], i: number): [number, number] {
+  if (!m.range) return [m.min, m.max];
+  return i === 0 ? [m.min, values[1]] : [values[0], m.max];
+}
+
+// The value after a key press on thumb i, or null for a key the slider does not take.
+export function sliderKey(m: SliderModel, values: number[], i: number, key: string, pageStep: number): number | null {
+  const v = values[i];
+  const [lo, hi] = sliderLimits(m, values, i);
+  const detents = sliderDetents(m);
+  const up = key === "ArrowRight" || key === "ArrowUp";
+  const down = key === "ArrowLeft" || key === "ArrowDown";
+  let next: number | null = null;
+  if (up || down) {
+    if (m.step > 0) next = v + (up ? m.step : -m.step);
+    else {
+      const at = Math.max(0, detents.indexOf(sliderSnap(m, v)));
+      next = detents[Math.min(Math.max(at + (up ? 1 : -1), 0), detents.length - 1)];
+    }
+  } else if (key === "PageUp" || key === "PageDown") {
+    next = v + (key === "PageUp" ? pageStep : -pageStep);
+  } else if (key === "Home") {
+    next = lo;
+  } else if (key === "End") {
+    next = hi;
+  }
+  if (next === null) return null;
+  return Math.min(Math.max(sliderSnap(m, next), lo), hi);
+}
+
+export interface TouchSliderParts {
+  // Takes the pointer; thumbs inside it carry data-thumb="0" or "1".
+  control: HTMLElement;
+  // The rail the fractions are measured along.
+  track: HTMLElement;
+  model: () => SliderModel;
+  values: () => number[];
+  disabled: () => boolean;
+  // The thumb under the finger, or -1 once it lifts.
+  onPress: (i: number) => void;
+  // Where thumb i is drawn while the finger drives it, or null to settle onto its value.
+  onDrag: (i: number, fraction: number | null) => void;
+  onValue: (i: number, value: number) => void;
+  onRelease: () => void;
+}
+
+// Pressing a thumb drags at once; pressing the track drags once the finger moves sideways, and a tap jumps there.
+// A vertical move is left to scrolling. The phone ticks at each detent it crosses and harder at either end.
+export function wireTouchSlider(parts: TouchSliderParts): () => void {
+  const { control, track } = parts;
+  let g: { id: number; i: number; x: number; y: number; rect: DOMRect; active: boolean; last: number } | null = null;
+
+  const fractionAt = (x: number, rect: DOMRect) => Math.min(Math.max((x - rect.left) / (rect.width || 1), 0), 1);
+
+  const tick = (m: SliderModel, from: number, to: number) => {
+    if (from === to) return;
+    if (to === m.min || to === m.max) {
+      buzz(16);
+      return;
+    }
+    if (sliderDetents(m).some((d) => d !== from && (d - from) * (d - to) <= 0)) buzz();
+  };
+
+  const down = (e: PointerEvent) => {
+    if (parts.disabled() || e.button > 0) return;
+    const m = parts.model();
+    const values = parts.values();
+    const rect = track.getBoundingClientRect();
+    const f = fractionAt(e.clientX, rect);
+    const thumb = (e.target as Element).closest?.("[data-thumb]");
+    let i = thumb ? Number(thumb.getAttribute("data-thumb")) : 0;
+    if (!thumb && m.range) {
+      const a = sliderFraction(m, values[0]);
+      const b = sliderFraction(m, values[1]);
+      i = a === b ? (f < a ? 0 : 1) : Math.abs(f - a) <= Math.abs(f - b) ? 0 : 1;
+    }
+    g = { id: e.pointerId, i, x: e.clientX, y: e.clientY, rect, active: !!thumb, last: values[i] };
+    // The thumb takes focus from the press itself, so no keyboard ring shows for a finger or mouse.
+    if (thumb) parts.onPress(i);
+    try {
+      control.setPointerCapture(e.pointerId);
+    } catch {
+      // Without capture the drag still tracks while the pointer stays over the slider.
+    }
+  };
+
+  const move = (e: PointerEvent) => {
+    if (!g || g.id !== e.pointerId) return;
+    if (!g.active) {
+      const mx = Math.abs(e.clientX - g.x);
+      const my = Math.abs(e.clientY - g.y);
+      if (mx < 10 && my < 10) return;
+      if (my > mx) {
+        g = null;
+        return;
+      }
+      g.active = true;
+      parts.onPress(g.i);
+    }
+    const m = parts.model();
+    const [lo, hi] = sliderLimits(m, parts.values(), g.i);
+    const raw = m.min + fractionAt(e.clientX, g.rect) * (m.max - m.min);
+    const v = Math.min(Math.max(sliderSnap(m, raw), lo), hi);
+    let shown = Math.min(Math.max(raw, lo), hi);
+    for (const k of m.marks) {
+      if (Math.abs(sliderFraction(m, k.value) - sliderFraction(m, shown)) * g.rect.width <= MAGNET) shown = k.value;
+    }
+    if (!(m.step > 0) || shown === m.min || shown === m.max) shown = v;
+    parts.onDrag(g.i, sliderFraction(m, shown));
+    if (v !== g.last) {
+      tick(m, g.last, v);
+      g.last = v;
+      parts.onValue(g.i, v);
+    }
+  };
+
+  const up = (e: PointerEvent, cancelled: boolean) => {
+    if (!g || g.id !== e.pointerId) return;
+    const done = g;
+    g = null;
+    parts.onPress(-1);
+    parts.onDrag(done.i, null);
+    if (!done.active && cancelled) return;
+    if (!done.active) {
+      const m = parts.model();
+      const [lo, hi] = sliderLimits(m, parts.values(), done.i);
+      const v = Math.min(Math.max(sliderSnap(m, m.min + fractionAt(e.clientX, done.rect) * (m.max - m.min)), lo), hi);
+      if (v !== parts.values()[done.i]) parts.onValue(done.i, v);
+    }
+    parts.onRelease();
+  };
+  const onUp = (e: PointerEvent) => up(e, false);
+  const onCancel = (e: PointerEvent) => up(e, true);
+
+  control.addEventListener("pointerdown", down);
+  control.addEventListener("pointermove", move);
+  control.addEventListener("pointerup", onUp);
+  control.addEventListener("pointercancel", onCancel);
+  return () => {
+    control.removeEventListener("pointerdown", down);
+    control.removeEventListener("pointermove", move);
+    control.removeEventListener("pointerup", onUp);
+    control.removeEventListener("pointercancel", onCancel);
+  };
+}

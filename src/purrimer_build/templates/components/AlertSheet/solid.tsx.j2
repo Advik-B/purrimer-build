@@ -1,0 +1,70 @@
+// {{ note }}
+// {{ c.summary }}
+import { For, Show } from "solid-js";
+import type { JSX } from "@solidjs/web";
+import { BottomSheet } from "./BottomSheet";
+import { Button } from "./Button";
+
+type Tone = "accent" | "info" | "success" | "attention" | "danger" | "neutral";
+export type AlertButton = { label: string; variant?: "default" | "primary" | "danger" };
+
+// The four message-box icons and the tone each one takes.
+export const alertIcons: Record<string, [string, "info" | "attention" | "danger" | "accent"]> = {
+  information: ["info", "info"],
+  warning: ["alert", "attention"],
+  critical: ["stop", "danger"],
+  question: ["question", "accent"],
+};
+
+export type AlertSheetProps = {
+  open: boolean;
+  title?: string;
+  message?: string;
+  description?: string;
+  icon?: string;
+  tone?: Tone;
+  buttons?: AlertButton[];
+  dismissible?: boolean;
+  inline?: boolean;
+  onButton?: (index: number, button: AlertButton) => void;
+  onClose?: () => void;
+  children?: JSX.Element;
+};
+
+// A button press calls onButton; close the sheet there by setting open to false.
+export function AlertSheet(props: AlertSheetProps): JSX.Element {
+  const known = () => alertIcons[props.icon ?? ""];
+  const buttons = () => props.buttons ?? [];
+
+  return (
+    <BottomSheet
+      open={props.open}
+      title={props.title}
+      description={props.description}
+      icon={known()?.[0] ?? props.icon}
+      tone={props.tone ?? known()?.[1] ?? "accent"}
+      dismissible={props.dismissible}
+      inline={props.inline}
+      onClose={props.onClose}
+      actions={
+        buttons().length ? (
+          <For each={buttons()}>
+            {(button, i) => (
+              <Button
+                variant={button.variant ?? "default"}
+                block
+                label={button.label}
+                onClick={() => props.onButton?.(i(), button)}
+              />
+            )}
+          </For>
+        ) : undefined
+      }
+    >
+      <div class="pm-alert-sheet__body">
+        <Show when={props.message}><p class="pm-alert-sheet__message">{props.message}</p></Show>
+        {props.children}
+      </div>
+    </BottomSheet>
+  );
+}

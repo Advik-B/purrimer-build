@@ -1,0 +1,497 @@
+// {{ note }}
+// {{ c.summary }}
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Collections;
+using Avalonia.Controls;
+using Avalonia.Controls.Documents;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using Avalonia.Metadata;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
+
+namespace {{ ns }};
+
+// One row of a ReorderList.
+public class ReorderItem
+{
+    public string Key { get; set; } = "";
+    public string Headline { get; set; } = "";
+    public string? Supporting { get; set; }
+    public string? IconName { get; set; }
+}
+
+public class ReorderedEventArgs : RoutedEventArgs
+{
+    public ReorderedEventArgs(RoutedEvent routedEvent, int from, int to) : base(routedEvent)
+    {
+        From = from;
+        To = to;
+    }
+
+    public int From { get; }
+    public int To { get; }
+}
+
+// A list people put in their own order. Holding a row, or pressing its handle, lifts it to follow the finger, pen or
+// mouse; the rows it passes slide aside, a ScrollViewer around the list scrolls near its edges, and release settles
+// the row into its gap and raises Reordered. A tap on the handle, or Enter on a focused row, moves it with Move up,
+// Move down and Done buttons instead; the arrow keys, Home and End move it too and Escape puts it back.
+public class ReorderList : Control
+{
+    public static readonly StyledProperty<string> VariantProperty =
+        AvaloniaProperty.Register<ReorderList, string>(nameof(Variant), "inset");
+
+    public static readonly StyledProperty<FontFamily> FontFamilyProperty =
+        TextElement.FontFamilyProperty.AddOwner<ReorderList>();
+
+    public static readonly StyledProperty<BoxShadows> LiftShadowProperty =
+        AvaloniaProperty.Register<ReorderList, BoxShadows>(nameof(LiftShadow));
+
+    public static readonly RoutedEvent<ReorderedEventArgs> ReorderedEvent =
+        RoutedEvent.Register<ReorderList, ReorderedEventArgs>(nameof(Reordered), RoutingStrategies.Bubble);
+
+    private const double OneLine = {{ px("mobile-row-height") | num }};
+    private const double TwoLine = {{ px("mobile-row-height-twoLine") | num }};
+    private const double Gutter = {{ px("mobile-gutter") | num }};
+    private const double Button = 44;
+
+    private readonly List<PurrimerSpring> _shifts = new();
+    private readonly PurrimerSpring _lift = new(1, 0.0005);
+    private readonly PurrimerSpring _dragY = new(0, 0.5);
+    private readonly DispatcherTimer _hold;
+    private readonly DispatcherTimer _auto;
+    private int _dragging = -1;
+    private int _target = -1;
+    private Point? _origin;
+    private double _lastY;
+    private int _pressRow = -1;
+    private bool _pressHandle;
+    private double _travel;
+    private int _moving = -1;
+    private int _movingStart = -1;
+    private int _focus;
+    private bool _keyboard;
+
+    static ReorderList()
+    {
+        AffectsRender<ReorderList>(VariantProperty, LiftShadowProperty);
+        AffectsMeasure<ReorderList>(VariantProperty);
+        FocusableProperty.OverrideDefaultValue<ReorderList>(true);
+    }
+
+    public ReorderList()
+    {
+        Items.CollectionChanged += (_, _) => Rebuild();
+        _lift.Changed += _ => InvalidateVisual();
+        _dragY.Changed += _ => InvalidateVisual();
+        _hold = new DispatcherTimer(TimeSpan.FromMilliseconds(PurrimerMotion.LongPressMs), DispatcherPriority.Input, (_, _) => StartDrag());
+        _auto = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => AutoScroll());
+        _hold.Stop();
+        _auto.Stop();
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
+    }
+
+    [Content]
+    public AvaloniaList<ReorderItem> Items { get; } = new();
+
+    // inset draws a card for settings; plain runs edge to edge.
+    public string Variant { get => GetValue(VariantProperty); set => SetValue(VariantProperty, value); }
+    public FontFamily FontFamily { get => GetValue(FontFamilyProperty); set => SetValue(FontFamilyProperty, value); }
+    public BoxShadows LiftShadow { get => GetValue(LiftShadowProperty); set => SetValue(LiftShadowProperty, value); }
+
+    public event EventHandler<ReorderedEventArgs>? Reordered
+    {
+        add => AddHandler(ReorderedEvent, value);
+        remove => RemoveHandler(ReorderedEvent, value);
+    }
+
+    private bool Inset => Variant == "inset";
+    private double HeightOf(int i) => string.IsNullOrEmpty(Items[i].Supporting) ? OneLine : TwoLine;
+    private double TopOf(int i) => 1 + Enumerable.Range(0, i).Sum(HeightOf);
+    private Rect Card => Inset ? new Rect(Gutter, 0, Math.Max(0, Bounds.Width - 2 * Gutter), Bounds.Height) : new Rect(Bounds.Size);
+    private IBrush? Brush(string key) => this.TryFindResource(key, ActualThemeVariant, out var v) ? v as IBrush : null;
+
+    private void Rebuild()
+    {
+        _shifts.Clear();
+        foreach (var _ in Items)
+        {
+            var spring = new PurrimerSpring(0, 0.5);
+            spring.Changed += _ => InvalidateVisual();
+            _shifts.Add(spring);
+        }
+        InvalidateMeasure();
+        InvalidateVisual();
+    }
+
+    protected override Size MeasureOverride(Size availableSize) =>
+        new(double.IsInfinity(availableSize.Width) ? 360 : availableSize.Width, (Items.Count > 0 ? TopOf(Items.Count) : 0) + 1);
+
+    private int RowAt(double y)
+    {
+        for (var i = 0; i < Items.Count; i++)
+            if (y >= TopOf(i) && y < TopOf(i) + HeightOf(i))
+                return i;
+        return -1;
+    }
+
+    private List<(string Name, Rect Rect)> Buttons(int i)
+    {
+        var names = _moving == i ? new[] { "arrow-up", "arrow-down", "check" } : new[] { "grabber" };
+        var right = Card.Right - 4 - Button * names.Length;
+        var top = TopOf(i) + (HeightOf(i) - Button) / 2;
+        return names.Select((n, k) => (n, new Rect(right + k * Button, top, Button, Button))).ToList();
+    }
+
+    private void Commit(int from, int to)
+    {
+        if (from == to || to < 0 || to >= Items.Count)
+            return;
+        var item = Items[from];
+        Items.RemoveAt(from);
+        Items.Insert(to, item);
+        RaiseEvent(new ReorderedEventArgs(ReorderedEvent, from, to));
+        AutomationProperties.SetHelpText(this, $"{item.Headline}, position {to + 1} of {Items.Count}");
+    }
+
+    private void StartDrag()
+    {
+        _hold.Stop();
+        if (_pressRow < 0 || !IsEnabled)
+            return;
+        _dragging = _pressRow;
+        _target = _pressRow;
+        _dragY.Set(0);
+        _lift.To(1.02);
+        _auto.Start();
+        InvalidateVisual();
+    }
+
+    private void Place(double dy)
+    {
+        var i = _dragging;
+        _dragY.Set(dy);
+        var center = TopOf(i) + HeightOf(i) / 2 + dy;
+        var target = i;
+        for (var j = 0; j < Items.Count; j++)
+        {
+            var mid = TopOf(j) + HeightOf(j) / 2;
+            if (j > i && center > mid)
+                target = j;
+            if (j < i && center < mid && target == i)
+                target = j;
+        }
+        _target = target;
+        var h = HeightOf(i);
+        for (var j = 0; j < _shifts.Count; j++)
+        {
+            if (j == i)
+                continue;
+            var shift = i < j && j <= target ? -h : target <= j && j < i ? h : 0;
+            if (_shifts[j].Target != shift)
+                _shifts[j].To(shift);
+        }
+    }
+
+    private void Drop()
+    {
+        _auto.Stop();
+        var from = _dragging;
+        var to = _target;
+        var offset = to > from ? Enumerable.Range(from + 1, to - from).Sum(HeightOf) : -Enumerable.Range(to, from - to).Sum(HeightOf);
+        _lift.To(1);
+        void Finish()
+        {
+            _dragY.Settled -= Finish;
+            foreach (var s in _shifts)
+                s.Set(0);
+            _dragY.Set(0);
+            _dragging = -1;
+            Commit(from, to);
+            _focus = to;
+            InvalidateVisual();
+        }
+        if (PurrimerMotion.PauseLoops || Math.Abs(_dragY.Value - offset) < 0.5)
+        {
+            Finish();
+            return;
+        }
+        _dragY.Settled += Finish;
+        _dragY.To(offset);
+    }
+
+    private void AutoScroll()
+    {
+        if (_dragging < 0 || _origin is not { } origin || this.FindAncestorOfType<ScrollViewer>() is not { } scroller)
+            return;
+        var y = this.TranslatePoint(new Point(0, _lastY), scroller)?.Y ?? 0;
+        const double zone = 64;
+        var h = scroller.Viewport.Height;
+        var speed = y < zone ? -(zone - y) / 4 : y > h - zone ? (y - (h - zone)) / 4 : 0;
+        if (speed == 0)
+            return;
+        var before = scroller.Offset.Y;
+        scroller.Offset = new Vector(scroller.Offset.X, Math.Clamp(before + speed, 0, Math.Max(0, scroller.Extent.Height - h)));
+        var moved = scroller.Offset.Y - before;
+        _lastY += moved;
+        _origin = origin;
+        Place(_lastY - origin.Y);
+    }
+
+    private void StartMoving(int row)
+    {
+        _moving = row;
+        _movingStart = row;
+        _focus = row;
+        AutomationProperties.SetHelpText(this, $"Moving {Items[row].Headline}, position {row + 1} of {Items.Count}");
+        InvalidateVisual();
+    }
+
+    private void Press(string name)
+    {
+        if (name == "check")
+            _moving = -1;
+        else
+        {
+            var to = _moving + (name == "arrow-up" ? -1 : 1);
+            if (to >= 0 && to < Items.Count)
+            {
+                Commit(_moving, to);
+                _moving = to;
+                _focus = to;
+            }
+        }
+        InvalidateVisual();
+    }
+
+    protected override void OnPointerPressed(PointerPressedEventArgs e)
+    {
+        base.OnPointerPressed(e);
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+        _keyboard = false;
+        var p = e.GetPosition(this);
+        var row = RowAt(p.Y);
+        if (row < 0)
+            return;
+        _focus = row;
+        Focus();
+        if (_moving >= 0)
+        {
+            foreach (var (name, rect) in Buttons(_moving))
+                if (rect.Contains(p))
+                    Press(name);
+            e.Handled = true;
+            return;
+        }
+        _origin = p;
+        _lastY = p.Y;
+        _pressRow = row;
+        _travel = 0;
+        _pressHandle = Buttons(row).Any(b => b.Rect.Contains(p));
+        e.Pointer.Capture(this);
+        if (!IsEnabled)
+            return;
+        if (_pressHandle)
+            StartDrag();
+        else
+            _hold.Start();
+    }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_origin is not { } origin)
+            return;
+        var p = e.GetPosition(this);
+        _lastY = p.Y;
+        _travel = Math.Max(_travel, Math.Abs(p.Y - origin.Y));
+        if (_hold.IsEnabled && Math.Abs(p.X - origin.X) + Math.Abs(p.Y - origin.Y) > PurrimerMotion.Slop)
+        {
+            _hold.Stop();
+            e.Pointer.Capture(null);
+            _origin = null;
+            return;
+        }
+        if (_dragging >= 0)
+            Place(p.Y - origin.Y);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        _hold.Stop();
+        if (_origin == null)
+            return;
+        _origin = null;
+        e.Pointer.Capture(null);
+        if (_dragging >= 0)
+        {
+            if (_pressHandle && _travel < 4)
+            {
+                _auto.Stop();
+                _lift.To(1);
+                _dragging = -1;
+                StartMoving(_pressRow);
+            }
+            else
+                Drop();
+        }
+        _pressRow = -1;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        base.OnKeyDown(e);
+        if (Items.Count == 0)
+            return;
+        _keyboard = true;
+        if (_moving >= 0)
+        {
+            int? to = e.Key switch
+            {
+                Key.Up => _moving - 1,
+                Key.Down => _moving + 1,
+                Key.Home => 0,
+                Key.End => Items.Count - 1,
+                _ => null,
+            };
+            if (to is { } t && t >= 0 && t < Items.Count)
+            {
+                Commit(_moving, t);
+                _moving = t;
+                _focus = t;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Commit(_moving, _movingStart);
+                _focus = _movingStart;
+                _moving = -1;
+            }
+            else if (e.Key is Key.Enter or Key.Space)
+                _moving = -1;
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Up or Key.Down)
+        {
+            _focus = Math.Clamp(_focus + (e.Key == Key.Up ? -1 : 1), 0, Items.Count - 1);
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Space && IsEnabled)
+        {
+            StartMoving(_focus);
+            e.Handled = true;
+        }
+        InvalidateVisual();
+    }
+
+    protected override void OnGotFocus(FocusChangedEventArgs e)
+    {
+        base.OnGotFocus(e);
+        _keyboard = e.NavigationMethod == NavigationMethod.Tab;
+        InvalidateVisual();
+    }
+
+    protected override void OnLostFocus(FocusChangedEventArgs e)
+    {
+        base.OnLostFocus(e);
+        InvalidateVisual();
+    }
+
+    public override void Render(DrawingContext context)
+    {
+        var card = Card;
+        var large = {{ px("borderRadius-large") | num }};
+        var medium = {{ px("borderRadius-medium") | num }};
+        if (Inset)
+            context.DrawRectangle(Brush("PmBgColorDefault"), new Pen(Brush("PmBorderColorDefault"), {{ px("borderWidth-thin") | num }}),
+                card.Deflate(0.5), large, large);
+        var clip = Inset ? new RoundedRect(card, large) : new RoundedRect(card);
+        var order = Enumerable.Range(0, Items.Count).Where(i => i != _dragging).ToList();
+        using (context.PushClip(clip))
+        {
+            foreach (var i in order)
+            {
+                var rect = new Rect(card.X, TopOf(i) + (i < _shifts.Count ? _shifts[i].Value : 0), card.Width, HeightOf(i));
+                if (_moving == i)
+                    context.FillRectangle(Brush("PmBgColorAccentMuted")!, rect);
+                if (i > 0)
+                    context.FillRectangle(Brush("PmBorderColorMuted")!, new Rect(rect.X, rect.Y, rect.Width, 1));
+                PaintRow(context, i, rect);
+            }
+        }
+        if (_dragging >= 0)
+        {
+            var i = _dragging;
+            var rect = new Rect(card.X, TopOf(i) + _dragY.Value, card.Width, HeightOf(i));
+            var c = rect.Center;
+            var s = _lift.Value;
+            using (context.PushTransform(Matrix.CreateTranslation(-c.X, -c.Y) * Matrix.CreateScale(s, s) * Matrix.CreateTranslation(c.X, c.Y)))
+            {
+                context.DrawRectangle(Brush("PmBgColorDefault"), null, new RoundedRect(rect, medium), LiftShadow);
+                PaintRow(context, i, rect);
+            }
+        }
+        if (IsFocused && _keyboard && _focus < Items.Count)
+        {
+            var rect = new Rect(card.X, TopOf(_focus), card.Width, HeightOf(_focus)).Deflate(2);
+            context.DrawRectangle(null, new Pen(Brush("PmFocusOutlineColor"), {{ px("borderWidth-thick") | num }}), rect, medium, medium);
+        }
+    }
+
+    private void PaintRow(DrawingContext context, int i, Rect rect)
+    {
+        var item = Items[i];
+        var x = rect.X + Gutter;
+        if (!string.IsNullOrEmpty(item.IconName))
+        {
+            var tile = new Rect(x, rect.Center.Y - 16, 32, 32);
+            var medium = {{ px("borderRadius-medium") | num }};
+            context.DrawRectangle(Brush("PmBgColorAccentMuted"), null, tile, medium, medium);
+            DrawIcon(context, item.IconName, tile.X + 8, tile.Y + 8, Brush("PmFgColorAccent"));
+            x += 44;
+        }
+        var buttons = IsEnabled || _moving == i ? Buttons(i) : new List<(string Name, Rect Rect)>();
+        var right = buttons.Count > 0 ? buttons[0].Rect.X : rect.Right - Gutter;
+        var width = Math.Max(1, right - x - 4);
+        var headline = Text(item.Headline, 16, Brush("PmFgColorDefault"), width);
+        if (string.IsNullOrEmpty(item.Supporting))
+            context.DrawText(headline, new Point(x, rect.Y + (rect.Height - headline.Height) / 2));
+        else
+        {
+            var supporting = Text(item.Supporting, 14, Brush("PmFgColorMuted"), width);
+            context.DrawText(headline, new Point(x, rect.Y + 8 + (24 - headline.Height) / 2));
+            context.DrawText(supporting, new Point(x, rect.Y + 32 + (20 - supporting.Height) / 2));
+        }
+        var dy = rect.Y - TopOf(i);
+        foreach (var (name, b) in buttons)
+        {
+            var disabled = (name == "arrow-up" && i == 0) || (name == "arrow-down" && i == Items.Count - 1);
+            var ink = Brush(disabled ? "PmFgColorDisabled" : name == "grabber" ? "PmFgColorMuted" : "PmFgColorDefault");
+            DrawIcon(context, name, b.Center.X - 8, b.Center.Y - 8 + dy, ink);
+        }
+    }
+
+    private FormattedText Text(string text, double size, IBrush? brush, double width) =>
+        new(text, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight, new Typeface(FontFamily), size, brush)
+        {
+            MaxTextWidth = width,
+            MaxLineCount = 1,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+
+    private void DrawIcon(DrawingContext context, string? name, double x, double y, IBrush? brush)
+    {
+        if (string.IsNullOrEmpty(name) || !this.TryFindResource(Icon.ResourceKey(name, 16), out var found) || found is not Geometry geometry)
+            return;
+        using (context.PushTransform(Matrix.CreateTranslation(x, y)))
+            context.DrawGeometry(brush, null, geometry);
+    }
+}

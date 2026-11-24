@@ -4,6 +4,63 @@ import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
 
+// A swipe action. icon takes 24px path commands; tone is neutral, accent, success, attention, danger, done or info.
+// Leave label empty for no action on that side.
+export struct ListItemSwipeAction {
+    label: string,
+    icon: string,
+    tone: string,
+}
+
+global ListItemTones {
+    public pure function fg(tone: string) -> brush {
+        return tone == "accent" ? {{ "fgColor-accent" | tok }} : tone == "success" ? {{ "fgColor-success" | tok }} : tone == "attention" ? {{ "fgColor-attention" | tok }} : tone == "danger" ? {{ "fgColor-danger" | tok }} : tone == "done" ? {{ "fgColor-done" | tok }} : tone == "info" ? {{ "fgColor-info" | tok }} : {{ "fgColor-default" | tok }};
+    }
+    public pure function muted(tone: string) -> brush {
+        return tone == "accent" ? {{ "bgColor-accent-muted" | tok }} : tone == "success" ? {{ "bgColor-success-muted" | tok }} : tone == "attention" ? {{ "bgColor-attention-muted" | tok }} : tone == "danger" ? {{ "bgColor-danger-muted" | tok }} : tone == "done" ? {{ "bgColor-done-muted" | tok }} : tone == "info" ? {{ "bgColor-info-muted" | tok }} : {{ "bgColor-neutral-muted" | tok }};
+    }
+    public pure function emphasis(tone: string) -> brush {
+        return tone == "accent" ? {{ "bgColor-accent-emphasis" | tok }} : tone == "success" ? {{ "bgColor-success-emphasis" | tok }} : tone == "attention" ? {{ "bgColor-attention-emphasis" | tok }} : tone == "danger" ? {{ "bgColor-danger-emphasis" | tok }} : tone == "done" ? {{ "bgColor-done-emphasis" | tok }} : tone == "info" ? {{ "bgColor-info-emphasis" | tok }} : {{ "bgColor-neutral-emphasis" | tok }};
+    }
+}
+
+component SwipeTwin inherits FocusScope {
+    in property <string> label;
+    callback activated();
+    width: self.has-focus ? twin-text.preferred-width + 24px : 1px;
+    height: self.has-focus ? 32px : 1px;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-action-default => { root.activated(); }
+    key-pressed(event) => {
+        if event.text == " " || event.text == Key.Return {
+            root.activated();
+            return accept;
+        }
+        reject
+    }
+    if root.has-focus: Rectangle {
+        border-radius: {{ "borderRadius-medium" | tok }};
+        background: {{ "bgColor-accent-muted" | tok }};
+        border-width: {{ "borderWidth-thick" | tok }};
+        border-color: {{ "focus-outlineColor" | tok }};
+    }
+    twin-text := Text {
+        visible: root.has-focus;
+        text: root.label;
+        color: {{ "fgColor-accent" | tok }};
+        font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+        font-size: 14px;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+}
+
+// One row of a mobile list. swipe-start (revealed by dragging toward the end of the line) and swipe-end (toward the
+// start) each take a ListItemSwipeAction: the row follows the pointer over a panel naming the action, and past 40%
+// of the row the panel fills and a release calls swiped("start" | "end"). An earlier release springs back, and a swipe
+// never also counts as a click. Each action is also a button that shows while it has keyboard focus.
 export component ListItem inherits Rectangle {
     in property <string> headline;
     in property <string> supporting;
@@ -11,58 +68,174 @@ export component ListItem inherits Rectangle {
     in property <string> trailing;
     in property <bool> chevron;
     in property <bool> clickable;
+    in property <ListItemSwipeAction> swipe-start;
+    in property <ListItemSwipeAction> swipe-end;
     callback clicked();
+    callback swiped(string);
+    property <bool> swipeable: root.swipe-start.label != "" || root.swipe-end.label != "";
+    property <length> dx;
+    property <bool> armed;
+    property <bool> dragging;
+    property <string> axis;
+    property <length> origin-x;
+    property <length> origin-y;
+    property <ListItemSwipeAction> shown: root.dx > 0 ? root.swipe-start : root.swipe-end;
 
     height: supporting != "" ? {{ "mobile-row-height-twoLine" | tok }} : {{ "mobile-row-height" | tok }};
-    background: touch.pressed ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+    clip: root.swipeable;
     accessible-role: list-item;
     accessible-label: headline;
     accessible-action-default => { if (root.clickable) { root.clicked(); } }
+    animate dx {
+        duration: root.dragging || PurrimerMotion.pause-loops ? 0ms : {{ "duration-slow" | tok }};
+        easing: ease-out;
+    }
 
-    touch := TouchArea { enabled: root.clickable; clicked => { root.clicked(); } }
-
-    HorizontalLayout {
-        padding-left: {{ "mobile-gutter" | tok }};
-        padding-right: {{ "mobile-gutter" | tok }};
-        spacing: 12px;
-        if root.icon != "": VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 32px;
-                height: 32px;
-                border-radius: {{ "borderRadius-medium" | tok }};
-                background: {{ "bgColor-accent-muted" | tok }};
-                Icon { path: root.icon; color: {{ "fgColor-accent" | tok }}; }
+    if root.dx != 0: Rectangle {
+        background: root.armed ? ListItemTones.emphasis(root.shown.tone) : ListItemTones.muted(root.shown.tone);
+        animate background { duration: {{ "duration-fast" | tok }}; }
+        HorizontalLayout {
+            padding-left: {{ "base-size-20" | tok }};
+            padding-right: {{ "base-size-20" | tok }};
+            alignment: root.dx > 0 ? start : end;
+            mark := HorizontalLayout {
+                spacing: {{ "base-size-8" | tok }};
+                Icon {
+                    y: (parent.height - self.height) / 2;
+                    path: root.shown.icon;
+                    box: 24;
+                    size: 24px;
+                    color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : ListItemTones.fg(root.shown.tone);
+                }
+                Text {
+                    text: root.shown.label;
+                    vertical-alignment: center;
+                    color: root.armed ? {{ "fgColor-onEmphasis" | tok }} : ListItemTones.fg(root.shown.tone);
+                    font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+                    font-size: 14px;
+                    font-weight: 600;
+                }
             }
         }
-        VerticalLayout {
-            horizontal-stretch: 1;
-            alignment: center;
-            Text {
-                text: root.headline;
-                overflow: elide;
-                color: {{ "fgColor-default" | tok }};
-                font-family: {{ "text-mobile-body" | tok }}.font-family;
-                font-size: {{ "text-mobile-body" | tok }}.font-size;
+    }
+
+    Rectangle {
+        x: root.dx;
+        width: root.width;
+        background: root.dx != 0 ? {{ "bgColor-default" | tok }} : touch.pressed && root.clickable && root.axis == "" ? {{ "control-transparent-bgColor-hover" | tok }} : transparent;
+
+        HorizontalLayout {
+            padding-left: {{ "mobile-gutter" | tok }};
+            padding-right: {{ "mobile-gutter" | tok }};
+            spacing: 12px;
+            if root.icon != "": VerticalLayout {
+                alignment: center;
+                Rectangle {
+                    width: 32px;
+                    height: 32px;
+                    border-radius: {{ "borderRadius-medium" | tok }};
+                    background: {{ "bgColor-accent-muted" | tok }};
+                    Icon { path: root.icon; color: {{ "fgColor-accent" | tok }}; }
+                }
             }
-            if root.supporting != "": Text {
-                text: root.supporting;
-                overflow: elide;
+            VerticalLayout {
+                horizontal-stretch: 1;
+                alignment: center;
+                Text {
+                    text: root.headline;
+                    overflow: elide;
+                    color: {{ "fgColor-default" | tok }};
+                    font-family: {{ "text-mobile-body" | tok }}.font-family;
+                    font-size: {{ "text-mobile-body" | tok }}.font-size;
+                }
+                if root.supporting != "": Text {
+                    text: root.supporting;
+                    overflow: elide;
+                    color: {{ "fgColor-muted" | tok }};
+                    font-family: {{ "text-mobile-supporting" | tok }}.font-family;
+                    font-size: {{ "text-mobile-supporting" | tok }}.font-size;
+                }
+            }
+            if root.trailing != "": Text {
+                text: root.trailing;
+                vertical-alignment: center;
                 color: {{ "fgColor-muted" | tok }};
                 font-family: {{ "text-mobile-supporting" | tok }}.font-family;
                 font-size: {{ "text-mobile-supporting" | tok }}.font-size;
             }
+            if root.chevron: VerticalLayout {
+                alignment: center;
+                Icon { path: PurrimerIcons.chevron-right-16; color: {{ "fgColor-muted" | tok }}; }
+            }
         }
-        if root.trailing != "": Text {
-            text: root.trailing;
-            vertical-alignment: center;
-            color: {{ "fgColor-muted" | tok }};
-            font-family: {{ "text-mobile-supporting" | tok }}.font-family;
-            font-size: {{ "text-mobile-supporting" | tok }}.font-size;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.clickable ? pointer : default;
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down && event.button == PointerEventButton.left {
+                root.origin-x = self.mouse-x;
+                root.origin-y = self.mouse-y;
+                root.axis = "";
+                root.armed = false;
+            } else if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
+                if root.axis == "x" {
+                    let dx = root.dx;
+                    let armed = root.armed;
+                    root.dragging = false;
+                    root.armed = false;
+                    root.dx = 0;
+                    if armed && dx != 0 {
+                        root.swiped(dx > 0 ? "start" : "end");
+                    }
+                } else if root.axis == "" && root.clickable && self.has-hover {
+                    root.clicked();
+                }
+                root.axis = "";
+            } else if event.kind == PointerEventKind.cancel {
+                root.dragging = false;
+                root.armed = false;
+                root.dx = 0;
+                root.axis = "";
+            }
         }
-        if root.chevron: VerticalLayout {
-            alignment: center;
-            Icon { path: PurrimerIcons.chevron-right-16; color: {{ "fgColor-muted" | tok }}; }
+        moved => {
+            if !root.swipeable || !self.pressed {
+                return;
+            }
+            let mx = self.mouse-x - root.origin-x;
+            let my = self.mouse-y - root.origin-y;
+            if root.axis == "" {
+                if abs(mx) < 10px && abs(my) < 10px {
+                    return;
+                }
+                root.axis = abs(mx) > abs(my) ? "x" : "y";
+            }
+            if root.axis != "x" {
+                return;
+            }
+            root.dragging = true;
+            let v = (mx > 0 && root.swipe-start.label == "") || (mx < 0 && root.swipe-end.label == "") ? 0px : mx;
+            let limit = root.width * 0.4;
+            root.dx = abs(v) > limit ? (v > 0 ? 1 : -1) * (limit + (abs(v) - limit) * 0.35) : v;
+            root.armed = abs(root.dx) >= limit;
+        }
+    }
+
+    // The keyboard and screen-reader twins of the swipe actions, shown only while focused.
+    HorizontalLayout {
+        x: root.width - self.width - {{ "mobile-gutter" | tok }};
+        y: (root.height - self.height) / 2;
+        width: self.preferred-width;
+        height: self.preferred-height;
+        spacing: {{ "base-size-8" | tok }};
+        if root.swipe-start.label != "": SwipeTwin {
+            label: root.swipe-start.label;
+            activated => { root.swiped("start"); }
+        }
+        if root.swipe-end.label != "": SwipeTwin {
+            label: root.swipe-end.label;
+            activated => { root.swiped("end"); }
         }
     }
 }

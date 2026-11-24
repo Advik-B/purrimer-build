@@ -1,0 +1,14 @@
+import { AlertSheet, PurrimerIcons } from "purrimer-components.slint";
+
+export component Example inherits VerticalLayout {
+    alignment: start;
+    // inline draws the sheet in place, for docs; in an app, put it last in an element that covers the screen.
+    AlertSheet {
+        inline: true;
+        icon: PurrimerIcons.stop-16;
+        tone: "danger";
+        title: "Delete 3 photos?";
+        message: "They stay in Recently deleted for 30 days, then they are gone for good.";
+        actions: [{ label: "Cancel" }, { label: "Delete", variant: "danger" }];
+    }
+}

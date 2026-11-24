@@ -30,6 +30,8 @@ class Theme(QObject):
         self._fonts_loaded = False
         # Freezes looping animations (spinners, loading dots, skeletons) on their first frame, for screenshot tests.
         self.pause_loops = False
+        # The default motion kind ("sleepy" or "playful") for springs and touch feedback.
+        self.motion_kind = "sleepy"
 
     @property
     def name(self) -> str:

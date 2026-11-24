@@ -1,0 +1,53 @@
+"""{{ note }}
+{{ c.summary }}
+"""
+
+from __future__ import annotations
+
+from PySide6.QtCore import QTimer
+from PySide6.QtWidgets import QLabel, QWidget
+
+from ..theme import theme
+from .bottom_sheet import BottomSheet
+from .button import Button
+from .icon_button import IconButton
+
+
+class InfoButton(IconButton):
+    """A 44px info button. A tap opens a BottomSheet over the window with the title, the message at 16px and a button
+    that closes it. Add more widgets to `sheet.body` if a sentence is not enough.
+    """
+
+    def __init__(self, title: str, message: str = "", close_label: str = "Got it", icon: str = "info",
+                 default_open: bool = False, parent: QWidget | None = None) -> None:
+        super().__init__(icon, f"About {title.lower()}" if title else "About this", "invisible", parent=parent)
+        self.setFixedSize(44, 44)
+        self._title = title
+        self._message = message
+        self._close_label = close_label
+        self._open_on_show = default_open
+        self.sheet: BottomSheet | None = None
+        self.clicked.connect(self.open_sheet)
+
+    def _build(self) -> BottomSheet:
+        sheet = BottomSheet(self.window(), self._title)
+        note = QLabel(self._message)
+        note.setWordWrap(True)
+        note.setStyleSheet(theme.text_css({{ "text-body-medium" | tok }}) + "font-size: 16px;")
+        note.setVisible(bool(self._message))
+        sheet.body.addWidget(note)
+        done = Button(self._close_label, block=True)
+        done.clicked.connect(sheet.close_sheet)
+        sheet.add_action(done)
+        return sheet
+
+    def open_sheet(self) -> None:
+        if self.sheet is None or self.sheet.parentWidget() is not self.window():
+            self.sheet = self._build()
+        self.sheet.open()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        if self._open_on_show:
+            self._open_on_show = False
+            QTimer.singleShot(0, self.open_sheet)
