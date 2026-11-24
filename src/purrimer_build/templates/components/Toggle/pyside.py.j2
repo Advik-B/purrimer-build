@@ -4,10 +4,11 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Property, QPropertyAnimation, QRectF, QSize, Qt
+from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPen
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
+from ..motion import Tween, controls_for, effective_kind
 from ..theme import theme
 
 TRACK_W = 36
@@ -17,7 +18,10 @@ GAP = 12
 
 
 class Toggle(QAbstractButton):
-    """An on and off switch with an optional label before it."""
+    """An on and off switch with an optional label before it.
+
+    The handle travels on the kind's curve: standard when sleepy, a spring when playful. In a playful scope it also
+    stretches to 120% while held, keeping the edge it rests on."""
 
     def __init__(self, text: str = "", checked: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -27,27 +31,27 @@ class Toggle(QAbstractButton):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._font = (theme.font({{ "text-body-medium" | tok }}))
-        self._pos = 1.0 if checked else 0.0
-        self._anim = QPropertyAnimation(self, b"knob", self)
-        self._anim.setDuration(theme.duration({{ "duration-base" | tok }}))
-        self._anim.setEasingCurve(theme.easing({{ "easing-standard" | tok }}))
+        self._knob = Tween(1.0 if checked else 0.0, self)
+        self._knob.changed.connect(lambda _v: self.update())
+        self._stretch = Tween(0.0, self)
+        self._stretch.changed.connect(lambda _v: self.update())
+        self._stretch_by = 1.0
         self.toggled.connect(self._animate)
+        self.pressed.connect(lambda: self._stretch_to(True))
+        self.released.connect(lambda: self._stretch_to(False))
         theme.changed.connect(self.update)
 
-    def _get_knob(self) -> float:
-        return self._pos
-
-    def _set_knob(self, value: float) -> None:
-        self._pos = value
-        self.update()
-
-    knob = Property(float, _get_knob, _set_knob)
-
     def _animate(self, checked: bool) -> None:
-        self._anim.stop()
-        self._anim.setStartValue(self._pos)
-        self._anim.setEndValue(1.0 if checked else 0.0)
-        self._anim.start()
+        c = controls_for(effective_kind(self))
+        self._knob.to(1.0 if checked else 0.0, c["toggleDur"], c["toggleEase"])
+
+    def _stretch_to(self, down: bool) -> None:
+        c = controls_for(effective_kind(self))
+        if down:
+            if c["stretch"] == 1:
+                return
+            self._stretch_by = c["stretch"]
+        self._stretch.to(1.0 if down else 0.0, c["toggleDur"], c["toggleEase"])
 
     def sizeHint(self) -> QSize:
         text_w = QFontMetrics(self._font).horizontalAdvance(self.text()) + GAP if self.text() else 0
@@ -68,23 +72,27 @@ class Toggle(QAbstractButton):
             painter.drawText(QRectF(x, 0, text_w, self.height()), Qt.AlignmentFlag.AlignVCenter, self.text())
             x += text_w + GAP
         track = QRectF(x, (self.height() - TRACK_H) / 2, TRACK_W, TRACK_H)
+        # The spring can carry the handle a little past either end; the colours stay within on and off.
+        travel = self._knob.value
+        pos = min(1.0, max(0.0, travel))
         on = theme.color({{ "bgColor-accent-emphasis" | tok }})
         off = theme.color({{ "controlTrack-bgColor-rest" | tok }})
         if not enabled:
             fill = theme.color({{ "bgColor-disabled" | tok }})
         else:
             fill = QColor(
-                round(off.red() + (on.red() - off.red()) * self._pos),
-                round(off.green() + (on.green() - off.green()) * self._pos),
-                round(off.blue() + (on.blue() - off.blue()) * self._pos),
-                round(off.alpha() + (on.alpha() - off.alpha()) * self._pos))
-        border = fill if self._pos > 0.5 or not enabled else theme.color({{ "control-borderColor-rest" | tok }})
+                round(off.red() + (on.red() - off.red()) * pos),
+                round(off.green() + (on.green() - off.green()) * pos),
+                round(off.blue() + (on.blue() - off.blue()) * pos),
+                round(off.alpha() + (on.alpha() - off.alpha()) * pos))
+        border = fill if pos > 0.5 or not enabled else theme.color({{ "control-borderColor-rest" | tok }})
         painter.setPen(QPen(border, 1))
         painter.setBrush(fill)
         painter.drawRoundedRect(track.adjusted(0.5, 0.5, -0.5, -0.5), TRACK_H / 2, TRACK_H / 2)
-        knob_x = track.left() + 3 + (TRACK_W - KNOB - 6) * self._pos
-        knob = QRectF(knob_x, track.top() + (TRACK_H - KNOB) / 2, KNOB, KNOB)
-        if self._pos > 0.5:
+        knob_w = KNOB * (1 + (self._stretch_by - 1) * self._stretch.value)
+        knob_x = track.left() + 3 + (TRACK_W - knob_w - 6) * travel
+        knob = QRectF(knob_x, track.top() + (TRACK_H - KNOB) / 2, knob_w, KNOB)
+        if pos > 0.5:
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(theme.color({{ "fgColor-onEmphasis" | tok }}))
         else:

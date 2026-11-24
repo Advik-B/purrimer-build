@@ -3,6 +3,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
+import "PmMotion.js" as PmMotion
 
 T.Switch {
     id: control
@@ -10,6 +11,9 @@ T.Switch {
     implicitHeight: Math.max(implicitContentHeight, implicitIndicatorHeight) + topPadding + bottomPadding
     spacing: 12
     padding: 2
+    // The kind's control timings: the handle travels on a standard curve when sleepy and a spring when playful, and in
+    // a playful scope it stretches to 120% while held, keeping the edge it rests on.
+    readonly property var motionControls: PmMotion.controls(Purrimer.effectiveKind(control, ""))
 
     indicator: Rectangle {
         implicitWidth: 36
@@ -23,15 +27,30 @@ T.Switch {
         Behavior on color { ColorAnimation { duration: {{ "duration-base" | tok }} } }
 
         Rectangle {
-            width: 14
+            width: control.pressed && control.enabled ? 14 * control.motionControls.stretch : 14
             height: 14
             radius: 7
             y: 3
-            x: control.checked ? parent.width - width - 3 : 3
+            // Travel and width ease on their own; x follows both, so the stretched handle keeps the edge it rests on.
+            property real travel: control.checked ? 1 : 0
+            x: 3 + (parent.width - width - 6) * travel
             color: control.checked ? {{ "fgColor-onEmphasis" | tok }} : {{ "controlKnob-bgColor-rest" | tok }}
             border.width: control.checked ? 0 : 1
             border.color: {{ "control-borderColor-rest" | tok }}
-            Behavior on x { NumberAnimation { duration: {{ "duration-base" | tok }}; easing.type: Easing.BezierSpline; easing.bezierCurve: {{ "easing-standard" | tok }} } }
+            Behavior on travel {
+                NumberAnimation {
+                    duration: control.motionControls.toggleDur
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: PmMotion.curve(control.motionControls.toggleEase)
+                }
+            }
+            Behavior on width {
+                NumberAnimation {
+                    duration: control.motionControls.toggleDur
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: PmMotion.curve(control.motionControls.toggleEase)
+                }
+            }
         }
 
         Rectangle {

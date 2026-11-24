@@ -2,6 +2,7 @@
 // {{ c.summary }}
 pragma ComponentBehavior: Bound
 import QtQuick
+import "PmMotion.js" as PmMotion
 
 Rectangle {
     id: root
@@ -14,6 +15,19 @@ Rectangle {
     color: variant === "primary" ? {{ "bgColor-neutral-emphasis" | tok }} : {{ "bgColor-neutral-muted" | tok }}
     Accessible.role: Accessible.StaticText
     Accessible.name: text
+
+    // A changed count hops, in the kind of the closest MotionScope.
+    property bool ready: false
+    Component.onCompleted: ready = true
+    onTextChanged: if (ready) hop.play("hop", Purrimer.effectiveKind(root, ""))
+    PmMotionPlayer { id: hop }
+    transform: Matrix4x4 {
+        matrix: {
+            const e = hop.entry
+            const m = PmMotion.matrix(hop.values, root.width, root.height, e ? e.origin : [0.5, 0.5], e ? e.perspective : 0)
+            return Qt.matrix4x4(m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11], m[12], m[13], m[14], m[15])
+        }
+    }
 
     Text {
         id: label

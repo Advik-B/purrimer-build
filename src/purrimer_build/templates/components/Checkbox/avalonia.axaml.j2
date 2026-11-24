@@ -12,15 +12,16 @@
     <Setter Property="Template">
       <ControlTemplate TargetType="CheckBox">
         <Grid ColumnDefinitions="Auto,*" Background="{TemplateBinding Background}">
-          <Panel Width="16" Height="16" VerticalAlignment="Center">
+          <!-- The mark pops in on the kind's curve; in a playful scope the box presses to 95%. -->
+          <Panel Width="16" Height="16" VerticalAlignment="Center" pm:PurrimerControlMotion.Role="press">
             <Border Name="focusRing" Margin="-4" CornerRadius="8" BorderThickness="2" IsVisible="False"
                     BorderBrush="{{ "focus-outlineColor" | tok }}" />
             <Border Name="box" CornerRadius="{{ "borderRadius-small" | tok }}" Background="{{ "control-bgColor-rest" | tok }}"
                     BorderBrush="{{ "control-borderColor-rest" | tok }}" BorderThickness="{{ "borderWidth-thin" | tokx("Thickness") }}">
               <Panel>
-                <pm:Icon Name="checkMark" IconName="check" Size="12" HorizontalAlignment="Center" VerticalAlignment="Center"
+                <pm:Icon Name="checkMark" IconName="check" Size="12" pm:PurrimerControlMotion.Role="mark" HorizontalAlignment="Center" VerticalAlignment="Center"
                          Foreground="{{ "fgColor-onEmphasis" | tok }}" IsVisible="False" />
-                <pm:Icon Name="indeterminateMark" IconName="dash" Size="12" HorizontalAlignment="Center"
+                <pm:Icon Name="indeterminateMark" IconName="dash" Size="12" pm:PurrimerControlMotion.Role="mark" HorizontalAlignment="Center"
                          VerticalAlignment="Center" Foreground="{{ "fgColor-onEmphasis" | tok }}" IsVisible="False" />
               </Panel>
             </Border>

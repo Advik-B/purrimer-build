@@ -329,8 +329,8 @@ def build_slint(build: Build) -> None:
     build.render(env, "t/styles/slint/icons.slint.j2", "slint/icons.slint", icons=build.icons)
     build.write(
         "slint/motion.slint",
-        f"// {GENERATED_NOTE}\n// The motion catalog: the same keyframes as the web's pm-m-* classes.\n\n"
-        + slint_source(build.motion, t),
+        f"// {GENERATED_NOTE}\n// The motion catalog: the same keyframes as the web's pm-m-* classes.\n"
+        'import { PurrimerMotion } from "purrimer.slint";\n\n' + slint_source(build.motion, t),
     )
     done = []
     for comp in build.components:

@@ -2,6 +2,7 @@
 // {{ c.summary }}
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
+import { PmMotionCatalog, PmMotionControls, PmTween } from "../motion.slint";
 
 export component Toggle inherits Rectangle {
     in property <string> text;
@@ -18,6 +19,10 @@ export component Toggle inherits Rectangle {
     }
 
     callback toggled(bool);
+    // sleepy or playful; empty follows PurrimerMotion.playful. Slint cannot see a MotionScope, so set it by hand.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    property <PmMotionControls> motion: PmMotionCatalog.controls(PmMotionCatalog.kind-index(root.kind, root.reduce));
     out property <bool> has-focus: focus.has-focus;
     min-height: 20px;
     accessible-label: text;
@@ -39,6 +44,20 @@ export component Toggle inherits Rectangle {
             reject
         }
     }
+
+    // The handle travels on a standard curve when sleepy and a spring when playful. In a playful scope it also
+    // stretches to 120% while held, keeping the edge it rests on.
+    travel := PmTween {
+        target: root.checked ? 1 : 0;
+        length: root.motion.toggle-dur;
+        easing: root.motion.toggle-ease;
+    }
+    stretch := PmTween {
+        target: touch.pressed && root.enabled && root.motion.stretch != 1 ? 1 : 0;
+        length: root.motion.toggle-dur;
+        easing: root.motion.toggle-ease;
+    }
+    property <float> stretch-by: root.motion.stretch;
 
     // TouchArea and FocusScope above cover the whole row; only the visible parts are laid out.
     HorizontalLayout {
@@ -63,14 +82,13 @@ export component Toggle inherits Rectangle {
             border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.checked ? self.background : {{ "control-borderColor-rest" | tok }};
             animate background { duration: {{ "duration-base" | tok }}; }
             Rectangle {
-                x: root.checked ? parent.width - self.width - 3px : 3px;
-                width: 14px;
+                x: 3px + (parent.width - self.width - 6px) * travel.value;
+                width: 14px * (1 + (root.stretch-by - 1) * stretch.value);
                 height: 14px;
                 border-radius: 7px;
                 background: root.checked ? {{ "fgColor-onEmphasis" | tok }} : {{ "controlKnob-bgColor-rest" | tok }};
                 border-width: root.checked ? 0px : 1px;
                 border-color: {{ "control-borderColor-rest" | tok }};
-                animate x { duration: {{ "duration-base" | tok }}; easing: {{ "easing-standard" | tok }}; }
             }
             if root.has-focus: Rectangle {
                 x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;

@@ -15,6 +15,10 @@ var STAGGER = {{ {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": moti
 
 var REST = {{ motion.rest | tojson }}
 
+// What the existing controls take from each kind: the press scale and timing, the check mark's pop, the Toggle
+// handle's travel and stretch, and the ProgressBar fill. Durations are ms; easings are easing tokens.
+var CONTROLS = {{ motion.all_controls(tokens) | tojson }}
+
 var CLAMPED = { "opacity": true, "ringO": true, "wash": true, "draw": true }
 
 function tableFor(kind) {
@@ -27,6 +31,26 @@ function has(name) {
 
 function entry(name, kind) {
     return tableFor(kind)[name]
+}
+
+// The control timings for an effective kind ("sleepy", "playful" or "still").
+function controls(kind) {
+    return CONTROLS[kind === "still" ? "reduced" : kind] || CONTROLS.sleepy
+}
+
+// An easing token as an easing.bezierCurve list for Easing.BezierSpline. The springs' piecewise-linear points become
+// straight cubic segments, so a Behavior plays the same curve as the web.
+function curve(token) {
+    var spec = EASINGS[token] || ["linear"]
+    if (spec[0] === "cubic")
+        return [spec[1], spec[2], spec[3], spec[4], 1, 1]
+    var pts = spec[0] === "points" ? spec[1] : [[0, 0], [1, 1]]
+    var out = []
+    for (var i = 1; i < pts.length; i++) {
+        var x0 = pts[i - 1][0], y0 = pts[i - 1][1], x1 = pts[i][0], y1 = pts[i][1]
+        out.push(x0 + (x1 - x0) / 3, y0 + (y1 - y0) / 3, x0 + 2 * (x1 - x0) / 3, y0 + 2 * (y1 - y0) / 3, x1, y1)
+    }
+    return out
 }
 
 function cubicBezier(x1, y1, x2, y2, x) {

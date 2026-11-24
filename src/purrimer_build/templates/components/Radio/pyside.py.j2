@@ -7,11 +7,28 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QRadioButton, QWidget
 
+from ..motion import IndicatorMotion
+
 
 class Radio(QRadioButton):
-    """A radio button; the stylesheet draws it. Radios that share a parent are exclusive."""
+    """A radio button; the stylesheet draws it. Radios that share a parent are exclusive.
+
+    The dot pops in when it is chosen, on the kind's curve, and in a playful scope the circle presses to 95% while
+    held."""
 
     def __init__(self, text: str = "", checked: bool = False, parent: QWidget | None = None) -> None:
         super().__init__(text, parent)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._motion = IndicatorMotion(self, 8, radio=True)
         self.setChecked(checked)
+        self.toggled.connect(self._toggled)
+
+    def _toggled(self, checked: bool) -> None:
+        if checked:
+            self._motion.pop()
+
+    def paintEvent(self, event) -> None:
+        if self._motion.active:
+            self._motion.paint()
+        else:
+            super().paintEvent(event)

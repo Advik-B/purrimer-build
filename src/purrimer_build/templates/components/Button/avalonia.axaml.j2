@@ -19,7 +19,8 @@
     <Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Template">
       <ControlTemplate TargetType="Button">
-        <Panel>
+        <!-- In a playful scope the button presses to 95% and pops back; sleepy keeps the calm chrome. -->
+        <Panel pm:PurrimerControlMotion.Role="press">
           <Border Name="focusRing" Margin="-4" IsVisible="False" IsHitTestVisible="False"
                   BorderThickness="2" BorderBrush="{{ "focus-outlineColor" | tok }}"
                   CornerRadius="{{ "borderRadius-large" | tok }}" />

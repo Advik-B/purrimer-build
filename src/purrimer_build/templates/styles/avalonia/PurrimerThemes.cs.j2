@@ -324,7 +324,7 @@ public sealed class PurrimerMotionEntry
 public static class PurrimerMotionCatalog
 {
     private const string Data = """
-{{ {"tables": {"sleepy": motion.table(tokens, "sleepy"), "playful": motion.table(tokens, "playful"), "reduced": motion.table(tokens, "reduced")}, "easings": motion.easings(tokens), "stagger": {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": motion.stagger_ms(tokens, "playful"), "reduced": 0}} | tojson }}
+{{ {"tables": {"sleepy": motion.table(tokens, "sleepy"), "playful": motion.table(tokens, "playful"), "reduced": motion.table(tokens, "reduced")}, "easings": motion.easings(tokens), "stagger": {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": motion.stagger_ms(tokens, "playful"), "reduced": 0}, "controls": motion.all_controls(tokens)} | tojson }}
 """;
 
     private static readonly Dictionary<string, Dictionary<string, PurrimerMotionEntry>> Tables = new();
@@ -388,7 +388,22 @@ public static class PurrimerMotionCatalog
         }
         foreach (var s in doc.RootElement.GetProperty("stagger").EnumerateObject())
             Staggers[s.Name] = s.Value.GetDouble();
+        foreach (var k in doc.RootElement.GetProperty("controls").EnumerateObject())
+        {
+            var v = k.Value;
+            ControlTable[k.Name] = new PurrimerControlTimings(
+                v.GetProperty("press").GetDouble(), v.GetProperty("pressDur").GetDouble(), v.GetProperty("pressEase").GetString()!,
+                v.GetProperty("checkDur").GetDouble(), v.GetProperty("checkEase").GetString()!,
+                v.GetProperty("toggleDur").GetDouble(), v.GetProperty("toggleEase").GetString()!, v.GetProperty("stretch").GetDouble(),
+                v.GetProperty("progressDur").GetDouble(), v.GetProperty("progressEase").GetString()!);
+        }
     }
+
+    private static readonly Dictionary<string, PurrimerControlTimings> ControlTable = new();
+
+    // The control timings for an effective kind ("sleepy", "playful" or "still").
+    public static PurrimerControlTimings Controls(string kind) =>
+        ControlTable[kind == "still" ? "reduced" : kind == "playful" ? "playful" : "sleepy"];
 
     public static IReadOnlyCollection<string> Names => Tables["sleepy"].Keys;
 
@@ -790,5 +805,224 @@ public static class PurrimerMotionVisual
         target.Clip = f.Reveal < 0.999
             ? new global::Avalonia.Media.RectangleGeometry(new Rect(-64, -64, size.Width + 128, Math.Max(0, f.Reveal * (size.Height + 64))))
             : null;
+    }
+}
+
+// What the existing controls take from a kind: the press scale and its timing, the check mark's pop, the Toggle
+// handle's travel and stretch, and the ProgressBar fill. Durations are ms; easings are easing tokens.
+public sealed record PurrimerControlTimings(double Press, double PressDuration, string PressEasing, double CheckDuration,
+    string CheckEasing, double ToggleDuration, string ToggleEasing, double Stretch, double ProgressDuration,
+    string ProgressEasing);
+
+// An easing token's curve as an Avalonia easing, for transitions. The springs may overshoot.
+public sealed class PurrimerTokenEasing : Easing
+{
+    public string Token { get; set; } = "easing-linear";
+
+    public override double Ease(double progress) => PurrimerMotionCatalog.Ease(Token, progress);
+}
+
+// Eases one value to a target over a duration, on an easing token's curve. Changed fires with every value. A new
+// target starts from the value shown now. While loops are paused (screenshot runs), it jumps.
+public sealed class PurrimerTween
+{
+    private readonly DispatcherTimer _timer;
+    private readonly Stopwatch _clock = new();
+    private double _from;
+    private double _duration;
+    private string _easing = "easing-linear";
+
+    public PurrimerTween(double value = 0)
+    {
+        Value = value;
+        Target = value;
+        _timer = new DispatcherTimer(TimeSpan.FromMilliseconds(16), DispatcherPriority.Render, (_, _) => Step());
+        _timer.Stop();
+    }
+
+    public double Value { get; private set; }
+    public double Target { get; private set; }
+    public bool Moving => _timer.IsEnabled;
+
+    public event Action<double>? Changed;
+
+    public void Set(double value)
+    {
+        _timer.Stop();
+        Value = value;
+        Target = value;
+        Changed?.Invoke(value);
+    }
+
+    public void To(double target, double durationMs, string easing)
+    {
+        if (PurrimerMotion.PauseLoops || durationMs <= 0)
+        {
+            Set(target);
+            return;
+        }
+        _from = Value;
+        Target = target;
+        _duration = durationMs;
+        _easing = easing;
+        _clock.Restart();
+        _timer.Start();
+    }
+
+    private void Step()
+    {
+        var p = Math.Min(1, _clock.Elapsed.TotalMilliseconds / _duration);
+        Value = _from + (Target - _from) * PurrimerMotionCatalog.Ease(_easing, p);
+        if (p >= 1)
+        {
+            _timer.Stop();
+            Value = Target;
+        }
+        Changed?.Invoke(Value);
+    }
+}
+
+// Puts a template part of a stock control on its kind's control motion. Set pm:PurrimerControlMotion.Role on the part:
+//   press     scales the part to the kind's press (95% when playful, still when sleepy) while its button is held
+//   mark      pops the part in on the kind's check curve when it appears
+//   knob      a ToggleSwitch handle: it travels on the kind's curve, and stretches while held when playful
+//   progress  a ProgressBar fill: its width eases on the kind's curve
+// The kind is the part's scope's, read when the motion starts.
+public sealed class PurrimerControlMotion : AvaloniaObject
+{
+    public static readonly AttachedProperty<string> RoleProperty =
+        AvaloniaProperty.RegisterAttached<PurrimerControlMotion, global::Avalonia.Controls.Control, string>("Role", "");
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<global::Avalonia.Controls.Control, object> Hooked = new();
+
+    static PurrimerControlMotion()
+    {
+        RoleProperty.Changed.AddClassHandler<global::Avalonia.Controls.Control>((part, _) =>
+        {
+            if (Hooked.TryGetValue(part, out var _))
+                return;
+            Hooked.Add(part, new object());
+            part.AttachedToVisualTree += (_, _) => Attach(part);
+        });
+    }
+
+    public static string GetRole(global::Avalonia.Controls.Control element) => element.GetValue(RoleProperty);
+    public static void SetRole(global::Avalonia.Controls.Control element, string value) => element.SetValue(RoleProperty, value);
+
+    private static PurrimerControlTimings TimingsFor(global::Avalonia.Controls.Control part) =>
+        PurrimerMotionCatalog.Controls(PurrimerMotion.EffectiveKind(part));
+
+    private static global::Avalonia.Media.ITransform? Scale(double v, bool moving) =>
+        Math.Abs(v - 1) < 1e-4 && !moving ? null : new global::Avalonia.Media.ScaleTransform(v, v);
+
+    private static void Attach(global::Avalonia.Controls.Control part)
+    {
+        switch (GetRole(part))
+        {
+            case "progress":
+                {
+                    var c = TimingsFor(part);
+                    part.Transitions = PurrimerMotion.PauseLoops ? null : new global::Avalonia.Animation.Transitions
+                    {
+                        new global::Avalonia.Animation.DoubleTransition
+                        {
+                            Property = global::Avalonia.Layout.Layoutable.WidthProperty,
+                            Duration = TimeSpan.FromMilliseconds(c.ProgressDuration),
+                            Easing = new PurrimerTokenEasing { Token = c.ProgressEasing },
+                        },
+                    };
+                    break;
+                }
+            case "knob" when part.TemplatedParent is global::Avalonia.Controls.ToggleSwitch sw:
+                {
+                    var c = TimingsFor(part);
+                    sw.KnobTransitions = new global::Avalonia.Animation.Transitions
+                    {
+                        new global::Avalonia.Animation.DoubleTransition
+                        {
+                            Property = global::Avalonia.Controls.Canvas.LeftProperty,
+                            Duration = TimeSpan.FromMilliseconds(c.ToggleDuration),
+                            Easing = new PurrimerTokenEasing { Token = c.ToggleEasing },
+                        },
+                    };
+                    HookOnce(part, () => HookKnob(part, sw));
+                    break;
+                }
+            case "press" when part.TemplatedParent is global::Avalonia.Controls.Button button:
+                HookOnce(part, () => HookPress(part, button));
+                break;
+            case "mark":
+                HookOnce(part, () => HookMark(part));
+                break;
+        }
+    }
+
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<global::Avalonia.Controls.Control, object> Wired = new();
+
+    private static void HookOnce(global::Avalonia.Controls.Control part, Action hook)
+    {
+        if (Wired.TryGetValue(part, out _))
+            return;
+        Wired.Add(part, new object());
+        hook();
+    }
+
+    private static void HookPress(global::Avalonia.Controls.Control part, global::Avalonia.Controls.Button button)
+    {
+        var scale = new PurrimerTween(1);
+        scale.Changed += v => part.RenderTransform = Scale(v, scale.Moving);
+        button.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != global::Avalonia.Controls.Button.IsPressedProperty)
+                return;
+            var c = TimingsFor(part);
+            if (c.Press == 1 && scale.Value == 1 && !scale.Moving)
+                return;
+            scale.To(button.IsPressed && button.IsEnabled ? c.Press : 1, c.PressDuration, c.PressEasing);
+        };
+    }
+
+    private static void HookMark(global::Avalonia.Controls.Control part)
+    {
+        var scale = new PurrimerTween(1);
+        scale.Changed += v => part.RenderTransform = Scale(v, scale.Moving);
+        part.PropertyChanged += (_, e) =>
+        {
+            // Only a mark that appears on a control already on screen pops; the first layout shows it at rest.
+            if (e.Property != Visual.IsVisibleProperty || !part.IsVisible
+                || part.TemplatedParent is not global::Avalonia.Controls.Control { IsLoaded: true })
+                return;
+            var c = TimingsFor(part);
+            scale.Set(0);
+            scale.To(1, c.CheckDuration, c.CheckEasing);
+        };
+    }
+
+    private static void HookKnob(global::Avalonia.Controls.Control part, global::Avalonia.Controls.ToggleSwitch sw)
+    {
+        var rest = part.Width;
+        var by = 1.0;
+        var stretch = new PurrimerTween(0);
+        stretch.Changed += v =>
+        {
+            var w = rest * (1 + (by - 1) * v);
+            part.Width = w;
+            // The handle sits centred in its slot; the stretch keeps the edge it rests on.
+            var dx = sw.IsChecked == true ? (rest - w) / 2 : (w - rest) / 2;
+            part.RenderTransform = Math.Abs(dx) < 1e-4 ? null : new global::Avalonia.Media.TranslateTransform(dx, 0);
+        };
+        sw.PropertyChanged += (_, e) =>
+        {
+            if (e.Property != global::Avalonia.Controls.Button.IsPressedProperty)
+                return;
+            var c = TimingsFor(part);
+            if (sw.IsPressed)
+            {
+                if (c.Stretch == 1)
+                    return;
+                by = c.Stretch;
+            }
+            stretch.To(sw.IsPressed && sw.IsEnabled ? 1 : 0, c.ToggleDuration, c.ToggleEasing);
+        };
     }
 }

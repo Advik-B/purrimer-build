@@ -3,6 +3,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Templates as T
+import "PmMotion.js" as PmMotion
 
 T.RadioButton {
     id: control
@@ -10,6 +11,8 @@ T.RadioButton {
     implicitHeight: Math.max(implicitContentHeight, implicitIndicatorHeight) + topPadding + bottomPadding
     spacing: 8
     padding: 2
+    // The kind's control timings: the dot pops in on the kind's curve, and in a playful scope the circle presses to 95%.
+    readonly property var motionControls: PmMotion.controls(Purrimer.effectiveKind(control, ""))
 
     indicator: Rectangle {
         implicitWidth: 16
@@ -17,6 +20,14 @@ T.RadioButton {
         x: control.leftPadding
         y: (control.height - height) / 2
         radius: width / 2
+        scale: control.pressed && control.enabled ? control.motionControls.press : 1
+        Behavior on scale {
+            NumberAnimation {
+                duration: control.motionControls.pressDur
+                easing.type: Easing.BezierSpline
+                easing.bezierCurve: PmMotion.curve(control.motionControls.pressEase)
+            }
+        }
         color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.checked ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }}
         border.width: {{ "borderWidth-thin" | tok }}
         border.color: !control.enabled ? {{ "bgColor-disabled" | tok }} : control.checked ? color : control.hovered ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }}
@@ -28,7 +39,13 @@ T.RadioButton {
             radius: 3
             color: {{ "fgColor-onEmphasis" | tok }}
             scale: control.checked ? 1 : 0
-            Behavior on scale { NumberAnimation { duration: {{ "duration-fast" | tok }} } }
+            Behavior on scale {
+                NumberAnimation {
+                    duration: control.motionControls.checkDur
+                    easing.type: Easing.BezierSpline
+                    easing.bezierCurve: PmMotion.curve(control.motionControls.checkEase)
+                }
+            }
         }
 
         Rectangle {

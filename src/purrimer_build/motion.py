@@ -412,6 +412,28 @@ class Catalog:
     def stagger_ms(self, tokens: Tokens, kind: str) -> float:
         return _token_ms(tokens, self.kinds[kind]["durations"]["stagger"])
 
+    def controls(self, tokens: Tokens, kind: str) -> dict:
+        """What the existing controls take from a kind: the press scale and its timing (Button, IconButton and the
+        Checkbox and Radio boxes), the check and radio mark's pop, the Toggle handle's travel and stretch, and the
+        ProgressBar fill. Durations are ms; easings are easing tokens."""
+        k = self.kinds[kind]
+        playful = kind == "playful"
+        return {
+            "press": k["control"],
+            "pressDur": _token_ms(tokens, k["durations"]["press"]),
+            "pressEase": k["easings"]["pop"],
+            "checkDur": _token_ms(tokens, "duration-playful-press" if playful else "duration-fast"),
+            "checkEase": "easing-playful-pop" if playful else "easing-standard",
+            "toggleDur": _token_ms(tokens, "duration-playful-short" if playful else "duration-base"),
+            "toggleEase": "easing-playful-spring" if playful else "easing-standard",
+            "stretch": k["stretch"],
+            "progressDur": _token_ms(tokens, k["durations"]["medium"]),
+            "progressEase": k["easings"]["enter"],
+        }
+
+    def all_controls(self, tokens: Tokens) -> dict[str, dict]:
+        return {kind: self.controls(tokens, kind) for kind in KINDS}
+
     def easings(self, tokens: Tokens) -> dict[str, list]:
         """Every easing a kind can name, as ["cubic", x1, y1, x2, y2], ["points", [[x, y], ...]] or ["linear"]."""
         names = set(FIXED_EASES.values())
@@ -435,24 +457,16 @@ class Catalog:
         for p in "dist far scale peak rot spin blur sx sy amp n lift breath ring".split():
             out.append((f"pm-m-{p}", f"{num(k[p])}{units.get(p, '')}"))
         out.append(("pm-m-press-scale", num(k["press"])))
-        out.append(("pm-m-control-press", num(k["control"])))
-        out.append(("pm-m-toggle-stretch", num(k["stretch"])))
-        if kind == "playful":
-            out += [
-                ("pm-m-check-dur", f"{num(_token_ms(tokens, 'duration-playful-press'))}ms"),
-                ("pm-m-check-ease", "var(--easing-playful-pop)"),
-                ("pm-m-toggle-dur", f"{num(_token_ms(tokens, 'duration-playful-short'))}ms"),
-                ("pm-m-toggle-ease", "var(--easing-playful-spring)"),
-                ("pm-m-dash", "pm-chase-dash"),
-            ]
-        else:
-            out += [
-                ("pm-m-check-dur", f"{num(_token_ms(tokens, 'duration-fast'))}ms"),
-                ("pm-m-check-ease", "var(--easing-standard)"),
-                ("pm-m-toggle-dur", f"{num(_token_ms(tokens, 'duration-base'))}ms"),
-                ("pm-m-toggle-ease", "var(--easing-standard)"),
-                ("pm-m-dash", "none"),
-            ]
+        c = self.controls(tokens, kind)
+        out.append(("pm-m-control-press", num(c["press"])))
+        out.append(("pm-m-toggle-stretch", num(c["stretch"])))
+        out += [
+            ("pm-m-check-dur", f"{num(c['checkDur'])}ms"),
+            ("pm-m-check-ease", f"var(--{c['checkEase']})"),
+            ("pm-m-toggle-dur", f"{num(c['toggleDur'])}ms"),
+            ("pm-m-toggle-ease", f"var(--{c['toggleEase']})"),
+            ("pm-m-dash", "pm-chase-dash" if kind == "playful" else "none"),
+        ]
         for anim in self.anims.values():
             if anim.per_kind:
                 out.append((f"pm-m-p-{anim.name}", f"pm-{anim.source(base)}"))
@@ -745,6 +759,12 @@ def slint_source(catalog: Catalog, tokens: Tokens) -> str:
         " fill-both: bool, reverse: bool, decorative: bool, perspective: float, ease: string }"
     )
     w("")
+    w(
+        "export struct PmMotionControls { press: float, press-dur: duration, press-ease: string, check-dur: duration,"
+        " check-ease: string, toggle-dur: duration, toggle-ease: string, stretch: float, progress-dur: duration,"
+        " progress-ease: string }"
+    )
+    w("")
     w("export global PmMotionCatalog {")
     w("    // One Newton step towards the curve parameter whose x is `x`.")
     w("    pure function newton(ax: float, bx: float, cx: float, x: float, t: float) -> float {")
@@ -855,8 +875,73 @@ def slint_source(catalog: Catalog, tokens: Tokens) -> str:
         f" : {num(stagger['sleepy'])}ms;"
     )
     w("    }")
+    w("")
+    w("    // What the existing controls take from a kind: press, mark pop, Toggle handle and ProgressBar fill.")
+    w("    public pure function controls(kind: int) -> PmMotionControls {")
+    rows = []
+    for kind in KINDS:
+        c = catalog.controls(tokens, kind)
+        rows.append(
+            f'{{ press: {_sf(c["press"])}, press-dur: {num(c["pressDur"])}ms, press-ease: "{c["pressEase"]}",'
+            f' check-dur: {num(c["checkDur"])}ms, check-ease: "{c["checkEase"]}",'
+            f' toggle-dur: {num(c["toggleDur"])}ms, toggle-ease: "{c["toggleEase"]}", stretch: {_sf(c["stretch"])},'
+            f' progress-dur: {num(c["progressDur"])}ms, progress-ease: "{c["progressEase"]}" }}'
+        )
+    w(f"        return kind == 1 ? {rows[1]} : kind == 2 ? {rows[2]} : {rows[0]};")
+    w("    }")
+    w("")
+    w("    // The kind index (0 sleepy, 1 playful, 2 reduced) for a component's kind and reduce flag. An empty kind")
+    w("    // follows PurrimerMotion.playful; under reduced motion playful plays as sleepy.")
+    w("    public pure function kind-index(kind: string, reduce: bool) -> int {")
+    w('        let playful = kind == "" ? PurrimerMotion.playful : kind == "playful";')
+    w("        return reduce || PurrimerMotion.reduce ? (playful ? 0 : 2) : (playful ? 1 : 0);")
+    w("    }")
     w("}")
+    w("")
+    w(SLINT_TWEEN)
     return "\n".join(out) + "\n"
+
+
+# Eases one value towards `target` on an easing token's curve, which may overshoot. Place it outside layouts and read
+# `value`. It ticks only while it moves, and jumps while PurrimerMotion.pause-loops is on.
+SLINT_TWEEN = """export component PmTween {
+    in property <float> target;
+    in property <duration> length: 200ms;
+    in property <string> easing: "easing-standard";
+    out property <float> value: self.active ? self.from + (self.to - self.from) * self.eased : self.to;
+    out property <bool> moving: self.active;
+
+    // Not bound to target: when target changes, `to` must still hold the old value until the handler runs.
+    property <float> from;
+    property <float> to;
+    property <bool> active;
+    property <duration> started;
+    property <float> eased: self.active ? PmMotionCatalog.ease(self.easing,
+        Math.clamp((animation-tick() - self.started) / Math.max(1ms, self.length), 0, 1)) : 1;
+
+    init => {
+        self.from = self.target;
+        self.to = self.target;
+    }
+
+    // It starts from the value shown now, so a change part-way through turns smoothly.
+    changed target => {
+        self.from = self.value;
+        self.to = self.target;
+        self.started = animation-tick();
+        self.active = !PurrimerMotion.pause-loops && self.length > 0ms;
+    }
+
+    Timer {
+        interval: 16ms;
+        running: root.active;
+        triggered => {
+            if PurrimerMotion.pause-loops || animation-tick() - root.started >= root.length {
+                root.active = false;
+            }
+        }
+    }
+}"""
 
 
 def _token_ms(tokens: Tokens, src) -> float:

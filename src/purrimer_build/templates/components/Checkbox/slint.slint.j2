@@ -3,6 +3,7 @@
 import { Purrimer, PurrimerMotion } from "../purrimer.slint";
 import { PurrimerIcons } from "../icons.slint";
 import { Icon } from "icon.slint";
+import { PmMotionCatalog, PmMotionControls, PmTween } from "../motion.slint";
 
 export component Checkbox inherits Rectangle {
     in property <string> text;
@@ -10,6 +11,10 @@ export component Checkbox inherits Rectangle {
     in property <bool> indeterminate;
     in property <bool> enabled: true;
     property <bool> on: checked || indeterminate;
+    // sleepy or playful; empty follows PurrimerMotion.playful. Slint cannot see a MotionScope, so set it by hand.
+    in property <string> kind: "";
+    in property <bool> reduce: false;
+    property <PmMotionControls> motion: PmMotionCatalog.controls(PmMotionCatalog.kind-index(root.kind, root.reduce));
     accessible-role: checkbox;
     accessible-checkable: true;
     accessible-checked: checked;
@@ -43,6 +48,18 @@ export component Checkbox inherits Rectangle {
         }
     }
 
+    // The mark pops in on the kind's curve; in a playful scope the box presses to 95% while held.
+    press := PmTween {
+        target: touch.pressed && root.enabled ? root.motion.press : 1;
+        length: root.motion.press-dur;
+        easing: root.motion.press-ease;
+    }
+    mark := PmTween {
+        target: root.on ? 1 : 0;
+        length: root.motion.check-dur;
+        easing: root.motion.check-ease;
+    }
+
     // TouchArea and FocusScope above cover the whole row; only the visible parts are laid out.
     HorizontalLayout {
         spacing: 8px;
@@ -53,10 +70,12 @@ export component Checkbox inherits Rectangle {
             height: 16px;
             y: (parent.height - self.height) / 2;
             border-radius: {{ "borderRadius-small" | tok }};
+            transform-scale-x: press.value;
+            transform-scale-y: press.value;
             background: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? {{ "bgColor-accent-emphasis" | tok }} : {{ "control-bgColor-rest" | tok }};
             border-width: {{ "borderWidth-thin" | tok }};
             border-color: !root.enabled ? {{ "bgColor-disabled" | tok }} : root.on ? self.background : touch.has-hover ? {{ "borderColor-emphasis" | tok }} : {{ "control-borderColor-rest" | tok }};
-            if root.on: Icon { size: 12px; path: root.indeterminate ? PurrimerIcons.dash-16 : PurrimerIcons.check-16; color: {{ "fgColor-onEmphasis" | tok }}; }
+            if root.on: Icon { size: 12px * mark.value; path: root.indeterminate ? PurrimerIcons.dash-16 : PurrimerIcons.check-16; color: {{ "fgColor-onEmphasis" | tok }}; }
             if root.has-focus: Rectangle {
                 x: -4px; y: -4px; width: parent.width + 8px; height: parent.height + 8px;
                 border-radius: parent.border-radius + 4px;

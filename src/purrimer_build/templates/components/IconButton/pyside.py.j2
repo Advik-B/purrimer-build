@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QPushButton, QWidget
 
 from ..icons import icon
+from ..motion import ControlPress
 from ..theme import theme
 
 
@@ -18,7 +19,8 @@ def _repolish(widget: QWidget) -> None:
 
 
 class IconButton(QPushButton):
-    """A square button with one icon; the label is the tooltip and the accessible name."""
+    """A square button with one icon; the label is the tooltip and the accessible name. In a playful scope it presses
+    to 95% and pops back."""
 
     def __init__(self, icon_name: str, label: str, variant: str = "default", size: str = "medium",
                  parent: QWidget | None = None) -> None:
@@ -27,6 +29,7 @@ class IconButton(QPushButton):
         self.setToolTip(label)
         self.setAccessibleName(label)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._press = ControlPress(self)
         self.setProperty("iconOnly", "true")
         self.setProperty("variant", variant)
         # "size" would shadow QWidget.size, so the stylesheet reads pmSize.

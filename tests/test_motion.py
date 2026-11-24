@@ -118,3 +118,33 @@ def test_native_targets_carry_the_catalog(built: Path, catalog: Catalog) -> None
             assert f'"{name}"' in text or f"'{name}'" in text, (rel, name)
     assert "PmMotionPlayer 1.0 PmMotionPlayer.qml" in (built / "qtquick/Purrimer/qmldir").read_text(encoding="utf-8")
     assert "PmMotionCatalog" in (built / "slint/purrimer-components.slint").read_text(encoding="utf-8")
+
+
+def test_controls_follow_the_kind(catalog: Catalog, tokens: Tokens) -> None:
+    sleepy, playful, reduced = (catalog.controls(tokens, k) for k in ("sleepy", "playful", "reduced"))
+    # Only playful presses, pops and stretches; sleepy and reduced keep the calm chrome.
+    assert (sleepy["press"], sleepy["stretch"]) == (1, 1)
+    assert (reduced["press"], reduced["stretch"]) == (1, 1)
+    assert (playful["press"], playful["stretch"]) == (0.95, 1.2)
+    assert (playful["checkEase"], playful["toggleEase"]) == ("easing-playful-pop", "easing-playful-spring")
+    assert (sleepy["checkEase"], sleepy["toggleEase"]) == ("easing-standard", "easing-standard")
+    easings = catalog.easings(tokens)
+    for c in (sleepy, playful, reduced):
+        for key in ("pressEase", "checkEase", "toggleEase", "progressEase"):
+            assert c[key] in easings, key
+    # The web reads the same values from its kind variables.
+    css = dict(catalog.css_vars(tokens, "playful"))
+    assert css["pm-m-control-press"] == "0.95"
+    assert css["pm-m-check-ease"] == "var(--easing-playful-pop)"
+
+
+def test_native_targets_carry_the_controls(built: Path) -> None:
+    files = {
+        "qtwidgets/purrimer_qt/motion.py": "CONTROLS = {",
+        "qtquick/Purrimer/PmMotion.js": "var CONTROLS = {",
+        "avalonia/Purrimer/PurrimerThemes.cs": '"controls":',
+        "slint/motion.slint": "public pure function controls(kind: int)",
+    }
+    for rel, marker in files.items():
+        assert marker in (built / rel).read_text(encoding="utf-8"), rel
+    assert "export component PmTween" in (built / "slint/motion.slint").read_text(encoding="utf-8")

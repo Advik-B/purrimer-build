@@ -199,6 +199,10 @@ EASINGS = {{ motion.easings(tokens) | py }}
 STAGGER = {{ {"sleepy": motion.stagger_ms(tokens, "sleepy"), "playful": motion.stagger_ms(tokens, "playful"), "reduced": 0} | py }}
 
 REST = {{ motion.rest | py }}
+
+# What the existing controls take from each kind: the press scale and timing, the check mark's pop, the Toggle
+# handle's travel and stretch, and the ProgressBar fill. Durations are ms; easings are easing tokens.
+CONTROLS = {{ motion.all_controls(tokens) | py }}
 CLAMPED = ("opacity", "ringO", "wash", "draw")
 NAMES = tuple(CATALOG["sleepy"])
 
@@ -289,6 +293,181 @@ def ease(spec: list, p: float) -> float:
                 return y1 if x1 == x0 else y0 + (y1 - y0) * (p - x0) / (x1 - x0)
         return pts[-1][1]
     return cubic_bezier(spec[1], spec[2], spec[3], spec[4], p)
+
+
+def ease_token(token: str, p: float) -> float:
+    """An easing token's curve at p."""
+    return ease(EASINGS.get(token, ["linear"]), p)
+
+
+def controls_for(kind: str) -> dict:
+    """The control timings for an effective kind ("sleepy", "playful" or "still")."""
+    return CONTROLS["reduced" if kind == "still" else kind]
+
+
+class Tween(QObject):
+    """Eases one value to a target over a duration, on an easing token's curve (which may overshoot). `changed`
+    fires with every value. A new target starts from the value shown now. While the theme pauses loops, it jumps."""
+
+    changed = Signal(float)
+
+    def __init__(self, value: float = 0.0, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self.value = value
+        self.target = value
+        self._from = value
+        self._duration = 0.0
+        self._easing = "easing-linear"
+        self._timer = QTimer(self)
+        self._timer.setTimerType(Qt.TimerType.PreciseTimer)
+        self._timer.setInterval(16)
+        self._timer.timeout.connect(self._tick)
+        self._clock = QElapsedTimer()
+
+    @property
+    def moving(self) -> bool:
+        return self._timer.isActive()
+
+    def set(self, value: float) -> None:
+        self._timer.stop()
+        self.value = self.target = value
+        self.changed.emit(value)
+
+    def to(self, target: float, duration: float, easing: str) -> None:
+        if theme.pause_loops or duration <= 0:
+            self.set(target)
+            return
+        self._from = self.value
+        self.target = target
+        self._duration = duration
+        self._easing = easing
+        self._clock.start()
+        self._timer.start()
+
+    def _tick(self) -> None:
+        p = min(1.0, self._clock.elapsed() / self._duration)
+        self.value = self._from + (self.target - self._from) * ease_token(self._easing, p)
+        if p >= 1.0:
+            self._timer.stop()
+            self.value = self.target
+        self.changed.emit(self.value)
+
+
+class ControlPress(QObject):
+    """Presses a button in its kind: in a playful scope it scales to 95% while held and pops back; sleepy keeps the
+    calm chrome. It draws through a MotionEffect only while the scale is away from 1, so a resting button is
+    untouched."""
+
+    def __init__(self, button) -> None:
+        super().__init__(button)
+        self._button = button
+        self._scale = Tween(1.0, self)
+        self._scale.changed.connect(self._draw)
+        button.pressed.connect(lambda: self._to(True))
+        button.released.connect(lambda: self._to(False))
+
+    def _to(self, down: bool) -> None:
+        c = controls_for(effective_kind(self._button))
+        if c["press"] == 1 and self._scale.value == 1 and not self._scale.moving:
+            return
+        self._scale.to(c["press"] if down else 1.0, c["pressDur"], c["pressEase"])
+
+    def _draw(self, value: float) -> None:
+        effect = self._button.graphicsEffect()
+        if abs(value - 1) < 1e-4 and not self._scale.moving:
+            if isinstance(effect, MotionEffect):
+                self._button.setGraphicsEffect(None)
+            return
+        if not isinstance(effect, MotionEffect):
+            if effect is not None:
+                return
+            effect = MotionEffect(self._button)
+            self._button.setGraphicsEffect(effect)
+        effect.set_frame({**REST, "sx": value, "sy": value})
+
+
+class IndicatorMotion(QObject):
+    """The Checkbox and Radio box in its kind. In a playful scope the box presses to 95% while held; in every kind the
+    mark pops in when it is checked, on the kind's check curve. The stylesheet draws the resting control. While
+    either one moves, `active` is true and the widget calls paint() in its paintEvent instead."""
+
+    def __init__(self, button, radius: float, radio: bool = False) -> None:
+        super().__init__(button)
+        self._button = button
+        self._radius = radius
+        self._radio = radio
+        self._press = Tween(1.0, self)
+        self._mark = Tween(1.0, self)
+        self._press.changed.connect(lambda _v: button.update())
+        self._mark.changed.connect(lambda _v: button.update())
+        button.pressed.connect(lambda: self._press_to(True))
+        button.released.connect(lambda: self._press_to(False))
+
+    @property
+    def active(self) -> bool:
+        return self._press.moving or self._mark.moving or abs(self._press.value - 1) > 1e-4
+
+    def _press_to(self, down: bool) -> None:
+        c = controls_for(effective_kind(self._button))
+        if c["press"] == 1 and not self.active:
+            return
+        self._press.to(c["press"] if down else 1.0, c["pressDur"], c["pressEase"])
+
+    def pop(self) -> None:
+        """Pops the mark in from nothing. Call it when the box turns on."""
+        if not self._button.isVisible():
+            return
+        c = controls_for(effective_kind(self._button))
+        self._mark.set(0.0)
+        self._mark.to(1.0, c["checkDur"], c["checkEase"])
+
+    def paint(self) -> None:
+        from PySide6.QtWidgets import QStyle, QStyleOptionButton, QStylePainter
+
+        from .icons import paint_icon
+
+        b = self._button
+        style = b.style()
+        S = QStyle
+        if self._radio:
+            se_ind, se_text = S.SubElement.SE_RadioButtonIndicator, S.SubElement.SE_RadioButtonContents
+            ce_label, pe_ind = S.ControlElement.CE_RadioButtonLabel, S.PrimitiveElement.PE_IndicatorRadioButton
+        else:
+            se_ind, se_text = S.SubElement.SE_CheckBoxIndicator, S.SubElement.SE_CheckBoxContents
+            ce_label, pe_ind = S.ControlElement.CE_CheckBoxLabel, S.PrimitiveElement.PE_IndicatorCheckBox
+        opt = QStyleOptionButton()
+        b.initStyleOption(opt)
+        painter = QStylePainter(b)
+        label = QStyleOptionButton(opt)
+        label.rect = style.subElementRect(se_text, opt, b)
+        style.drawControl(ce_label, label, painter, b)
+        box = QStyleOptionButton(opt)
+        box.rect = style.subElementRect(se_ind, opt, b)
+        rect = QRectF(box.rect)
+        centre = rect.center()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.translate(centre)
+        painter.scale(self._press.value, self._press.value)
+        painter.translate(-centre)
+        style.drawPrimitive(pe_ind, box, painter, b)
+        on = bool(opt.state & (S.StateFlag.State_On | S.StateFlag.State_NoChange))
+        mark = self._mark.value
+        if not on or abs(mark - 1) < 1e-4:
+            return
+        # Cover the mark the stylesheet drew with the box's fill, then draw it again at the mark's scale.
+        edge = 2 if b.hasFocus() else 1
+        inner = rect.adjusted(edge, edge, -edge, -edge)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(theme.color("bgColor-accent-emphasis" if b.isEnabled() else "bgColor-disabled"))
+        r = inner.width() / 2 if self._radio else max(0.0, self._radius - edge)
+        painter.drawRoundedRect(inner, r, r)
+        painter.translate(centre)
+        painter.scale(mark, mark)
+        painter.translate(-centre)
+        name = "dot-fill" if self._radio else ("dash" if opt.state & S.StateFlag.State_NoChange else "check")
+        side = min(inner.width(), inner.height())
+        paint_icon(painter, QRectF(centre.x() - side / 2, centre.y() - side / 2, side, side), name,
+                   theme.color("fgColor-onEmphasis"))
 
 
 def _track_at(track: list, p: float, default: list) -> float:
