@@ -2,6 +2,7 @@
 // {{ c.summary }}
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Effects
 import QtQuick.Templates as T
 
 T.Popup {
@@ -89,6 +90,18 @@ T.Popup {
         topRightRadius: {{ "borderRadius-xlarge" | tok }}
         border.width: {{ "borderWidth-thin" | tok }}
         border.color: {{ "borderColor-default" | tok }}
+
+        RectangularShadow {
+            readonly property var key: (control.inline ? {{ "shadow-floating-small" | tok }} : {{ "shadow-floating-large" | tok }})[0]
+            anchors.fill: parent
+            z: -1
+            radius: {{ "borderRadius-xlarge" | tok }}
+            offset.x: key.x
+            offset.y: key.y
+            blur: key.blur
+            spread: key.spread
+            color: key.color
+        }
     }
 
     contentItem: Column {
